@@ -48,7 +48,9 @@ from .project_result_app import (
     install_ui_read_origin,
     read_mcp_app_html,
 )
+from .plan_request import register_plan_request
 from .tool_logging import ToolCallLoggingMiddleware
+from .video_production_tool import FILMS_PATH, film_file, register_video_production
 from .workflow_guidance import register_workflow_guidance
 
 ProjectType = Literal["video", "image", "audio"]
@@ -183,6 +185,8 @@ def create_mcp() -> FastMCP:
 
 def register_custom_tools(mcp: FastMCP) -> None:
     register_workflow_guidance(mcp)
+    register_plan_request(mcp)
+    register_video_production(mcp)
 
     @mcp.tool(
         name="upload_chatgpt_image",
@@ -873,6 +877,12 @@ async def favicon(_: Request) -> FileResponse:
     return FileResponse(FAVICON_PATH, media_type="image/x-icon")
 
 
+async def film_download(request: Request) -> FileResponse | PlainTextResponse:
+    """A film that join_production_clips made on this machine."""
+    file = film_file(request.path_params["name"])
+    return FileResponse(file, media_type="video/mp4") if file else PlainTextResponse("Not found", status_code=404)
+
+
 async def mcp_app_http_view(_: Request) -> HTMLResponse:
     return HTMLResponse(
         read_mcp_app_html(),
@@ -928,6 +938,7 @@ app = create_oauth_compatibility_app(
     public_routes=[
         Route("/app/events", app_events, methods=["POST", "OPTIONS"]),
         Route("/favicon.ico", favicon, methods=["GET"]),
+        Route(FILMS_PATH + "/{name}", film_download, methods=["GET"]),
         Route(MCP_APP_VIEW_PATH, mcp_app_http_view, methods=["GET"]),
         Mount(MCP_APP_ASSET_PATH, app=mcp_app_assets),
         Route(MCP_SERVER_CARD_PATH, mcp_server_card, methods=["GET"]),

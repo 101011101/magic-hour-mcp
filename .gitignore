@@ -9,3 +9,9 @@ throwaway
 magic hour testing/
 web/node_modules/
 mcp_magichour/static/project-result/
+
+# local benchmark media and chat exports
+Benchmark/
+claude-chat-bundle.zip
+.DS_Store
+notes.md

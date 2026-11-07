@@ -1,0 +1,135 @@
+# Tickets
+
+- One line for each ticket. Details are in the ticket file, if there is one.
+- "Proposed" = not from the user. Confirm or delete.
+- Nothing is committed. Nothing is deployed.
+- Updated: 2026-11-05.
+
+## To do
+
+- [ ] **MCP-01 · Conversation: derive the parameters, ask only for the rest.** [Ticket](MCP-01-conversation.md). [Spec](../prd/MCP-01-conversation.md).
+  - [x] PRD, spec, 40 contract tests: `tests/test_plan_request.py`.
+  - [x] Build `plan_request`: `mcp_magichour/plan_request.py`. All 40 pass.
+  - [x] Harness for a local build: `run.mjs --local --mcp-url <address> [--hide a,b]` (agent repo).
+  - [x] Benchmark, 13 vague briefs, paid calls refused. Results: see Done.
+  - [ ] Benchmark, 13 full briefs (expected: 0 questions).
+  - [ ] Confirm: the host model fills the sheet, server code checks it.
+  - [ ] Answer the 28 open questions in the spec.
+- [ ] **MCP-02 · Clip split: find the best rule.**
+  - [x] Splitter with 5 rules (`one`, `time`, `idea`, `event`, `shot`): `mcp_magichour/video_production.py`.
+  - [x] One reference for each clip: last frame / picture / own still / none.
+  - [x] 5 test stories: `tests/fixtures/stories/`. Unit tests: `tests/test_video_production.py`.
+  - [x] Bench runner: `scripts/split_bench.py`.
+  - [x] Paid run 1: C4 (B2) and C5 (B1). 5 films, 3,092 credits. Films and checklists: `Benchmark/split/`.
+  - [x] Rule chosen from run 1: cut at a new idea, and at 15 s.
+  - [ ] Paid run 2: C1, C2, C3 (about 2,832 credits). Waits for the user's OK.
+  - [x] Split rule (user, 2026-11-05). Strategy `person`, the tool's rule.
+    - Ideas come first. The same person is an idea: their beats stay in one clip, also when the place changes, while the clip fits.
+    - Limit: 15 s. For a person with a picture: 30 s (`minimax-h3`).
+    - An idea that is cut is chained: the clip ends on the person, and the next clip starts from that last frame.
+    - A person who comes back after other clips starts from the last clip that showed them.
+    - If the place is new: the clip ends close on the person, and the next clip pulls back to show the new place.
+    - A new idea with no person from before: new clip, no reference (or its picture).
+  - [ ] References for people (pictures). Later (user, 2026-11-05). For now: people in words only, the measure is that they stay the same between clips.
+  - [ ] New place, same person: give the last frame as a named reference (`minimax-h3`), not as the start frame. Proposed. Test on C7: about 240 credits.
+  - [ ] Change the ending line: no "face visible" when the person faces away. Proposed. Test on C8: about 288 credits.
+  - [ ] Clips that do not depend on each other can be made at the same time. The bench makes them one after the other. Proposed.
+  - [ ] Second run of each film. One run for each is not enough to be sure.
+- [ ] **MCP-03 · Video production tool in the MCP.**
+  - [x] `plan_video_production`: story in, ordered calls out. `mcp_magichour/video_production_tool.py`. Tests: `tests/test_video_production_tool.py`.
+  - [ ] A host cannot complete the plan yet: see MCP-06.
+  - [ ] Run B1 and B2 through the GPT driver with the tool.
+  - [x] Before payment: story adds up, each clip fits the model, prompt is 2,000 characters or less, order of calls.
+  - [x] After generation: clip length, clip size.
+  - [x] Join: the film is silent when the story has no sound (`minimax-h3` adds music with audio off).
+  - [ ] After generation: shots in order, no shot repeats, same people in all clips. Scored by eye at this time.
+- [ ] **MCP-05 · When to call the video production tool.** Instructions to the host agent, or code that reads the request and decides. Later (user, 2026-11-05).
+- [ ] **MCP-06 · Last frame, join and storage on the deployed server.**
+  - [x] 2026-11-06 · ffmpeg: the server uses the ffmpeg on its PATH, else the one the `imageio-ffmpeg` package ships; ffprobe is no longer needed (`media_tools.probe` reads ffmpeg's own report). Install: `pip install -e ".[production]"`.
+  - [x] 2026-11-06 · Storage: `media_tools.store`. With `BLOB_READ_WRITE_TOKEN` set, the film goes to Vercel Blob and its public address is returned; else it is kept on the server and served at `/films/<name>`. The Blob path is written against the REST API and is NOT tested against Vercel yet.
+  - [ ] Deploy with the `production` extras and the token, then run B2 through the hosted server once.
+- [ ] **MCP-04 · Gates and checks.**
+  - [x] 2026-11-06 · Checklist: `plan_video_production` returns `checklist` (what the story promises). `join_production_clips` returns `checked` (length, shape, card lengths, narration placed, music, captions, sound present or silent, measured on the file), `unchecked` (lines for the host to confirm by eye) and `not_met`. The host is told to report unmet lines, not to present them as done.
+- [ ] **MCP-07 · State manager.** Read what is in each clip. Later (user, 2026-11-05). Until then: assume each clip shows what its story text says.
+- [ ] **MCP-08 · Voice-over, captions, music on a multi-clip film.** Proposed. B1 needs them. Not in MCP-02.
+  - A1 on v1 was silent for this reason. `generate_music` is on the server; `join_production_clips` cannot take its track.
+- [ ] **MCP-09 · Todo list from the request, checked at the end.** User, 2026-11-05: break the prompt into a todo list, then check that each line is done, at least the easy checks.
+  - [ ] Decision: check only, or also fix (music track in the join, words drawn in the join).
+  - [ ] Decision: films through the join only, or all videos.
+
+## Done
+
+- [x] 2026-11-05 · V1 on A1 to A4, GPT driver, local build, same caps as the old MCP runs. 1,368 credits. Page: `Benchmark/report.html` (old MCP, v1, Replicate, 6 items).
+  - A1: old 4 / 2 / 0, 103 s. V1 3 / 2 / 1, 228 s. Silent.
+  - A2: old 4 / 0 / 1, 62 s. V1 4 / 0 / 1, 112 s. One clip: the story fits in one call.
+  - A3: old 5 / 0 / 2, 136 s. V1 3 / 1 / 3, 177 s. New tools not used.
+  - A4: old 4 / 1 / 0, 228 s. V1 4 / 1 / 0, 345 s, 422 credits. Captions exact.
+  - B1 on all 10 lines: old 2 / 6 / 2. V1 6 / 1 / 3.
+- [x] 2026-11-05 · Conversation benchmark, 13 vague briefs, paid calls refused, 0 credits. Page: `Benchmark/upgrade.html`.
+  - Current MCP: 9 of 17 wanted values correct, 8 wrong guesses, a question on 3 of 13 briefs.
+  - With `plan_request`, run 1: 17 of 17 correct, a question on 12 of 13 briefs, 14 question rounds.
+  - With `plan_request`, run 2, after 4 fixes: 16 of 17 correct, a question on 11 of 13 briefs, 12 question rounds.
+  - The 1 wrong value in run 2: "a short clip" is read as 8 s and not asked. The user wanted 6 s. Decision necessary: ask, or keep the guess.
+  - The host called `plan_request` on 13 of 13 briefs from the tool description only.
+- [x] 2026-11-05 · Replicate, paid model (`lightricks/ltx-2.5-fast`, 720p), GPT driver. Price from the user's bill: about $0.40 for 28 s of video.
+  - B2: 311 s, about $0.40, 6 / 1 / 0. One joined 30 s file; the line is said once. V1: 5 / 1 / 1. Old MCP: 3 / 3 / 1.
+  - B1: 245 s, about $0.45, 7 / 3 / 0. One joined 30 s file with sound made inside the clips; wrong letters on the bottle, the end card and the captions. V1: 8 / 2 / 0. Old MCP: 2 / 6 / 2.
+  - Pages (public, by the user's word): B1 https://magic-hour-mcp-b1-report.vercel.app (`scripts/report_b1.py`), B2 https://magic-hour-mcp-b2-report.vercel.app (`scripts/report_b2.py`). Publish: `vercel deploy --prod --yes` in `Benchmark/report-b1` or `Benchmark/report-b2`, from the main session.
+- [x] 2026-11-05 · Report published: https://magic-hour-mcp-v1-report.vercel.app (Vercel project `magic-hour-mcp-v1-report`). Build: `python3 scripts/report_page.py`. Publish: `cd Benchmark/report-v1 && vercel deploy --prod --yes`. No B1 video on it (the presenter picture is a stock photo of a real person).
+- [x] 2026-11-05 · Sound on a multi-clip film (was MCP-08): option E, chosen by the user. `says` on each beat, `narrator`, `music`, `captions`; tool `create_production_sound`; the join places each part of the narration, mixes the music, draws the captions.
+  - B1 on v1 with sound, GPT driver: 353 s, 1,218 credits, 8 / 2 / 0 (all 10 lines). Old MCP: 221 s, 720 credits, 2 / 6 / 2.
+  - Timing of the narration parts uses pauses, not a speech model. A part can start late or early by about 0.5 s.
+  - Captions need Pillow on the server (not in `pyproject.toml`).
+  - Not used: the API's voice generator. Its voices are real people.
+- [x] 2026-11-05 · Replicate, free account (`minimax/video-01`, 6 s silent clips), GPT driver, 3 requests with no reference picture. $0.
+  - S2: declined, no video (18 s). S3: one 6 s clip, 3 / 1 / 1 (221 s). B2: four 6 s clips, not joined, 0 / 2 / 5 (293 s).
+  - Not run: S1 and B1 (the reference pictures must be at a public address; the user's word is necessary).
+- [x] 2026-11-05 · Seasons and door requests, old MCP against v1, GPT driver, same 3 briefs (`V2/bench/mcp/dense/items-seasons`). 2,736 credits. Report: `Benchmark/report-v1/`.
+  - S1 bottle in four seasons. Old: 146 s, 480 credits, 2 / 1 / 2 (the four seasons play 2 times). V1: 243 s, 480 credits, 4 / 1 / 0.
+  - S2 two people, four seasons. Old: 146 s, 480 credits, 4 / 2 / 0 (seasons correct, people are look-alikes). V1: 181 s, 480 credits, 4 / 0 / 2 (people exact, winter stays spring).
+  - S3 through the door. Old: 74 s, 408 credits, 4 / 1 / 0. V1: 112 s, 408 credits, 4 / 1 / 0.
+  - V1 fault seen: the host changed the `production` value 2 times on S1 and had to plan again (no credits lost).
+- [x] 2026-11-05 · Modified MCP against the old MCP, GPT driver, local build (`run.mjs --local`). Page: `Benchmark/upgrade.html`.
+  - Tools: `plan_video_production`, `create_production_clip`, `join_production_clips` (`mcp_magichour/video_production_tool.py`, `media_tools.py`). The join needs ffmpeg on the server.
+  - B1, picture only, 5 lines. Old: 0 / 4 / 1. Modified: 4 / 1 / 0. 730 credits, 417 s. The host edited one picture (presenter with the bottle) and used it as the one reference.
+  - B2, 7 lines. Old: 3 / 3 / 1. Modified run 1: 3 / 2 / 2 (two women, title text in the scene). Modified run 2, after 2 prompt fixes: 5 / 1 / 1. 672 credits, 181 s. The line is not spoken.
+  - 13 vague briefs: old 9 of 17 values correct, modified 16 of 17.
+  - Faults found and corrected: the ending line described the person again (a second person appeared); a pictured person who entered a scene lost their picture; the story field let the host put title text in every clip.
+  - Lost: 428 credits. The harness counted the charge of each wait call again and refused the last clip of one run.
+- [x] 2026-11-05 · Split run 3: people in words only. 7 films, 2,472 credits. Hand-scored, one run for each film.
+  - Two people, four seasons (C7), 6 lines.
+    - The rule (same person in one clip, last frame for the person who comes back): 4 / 0 / 2. People exact. Winter stays spring. Summer and autumn mix.
+    - One clip for each season, chained by last frame: 4 / 0 / 2. People exact. Winter stays spring. The sea stays in autumn.
+    - One clip for each season, words only: 4 / 2 / 0. Seasons correct. Each person is a look-alike, not the same person.
+  - Through the door (C8), 12 s, 5 lines.
+    - No cut: 5 / 0 / 0.
+    - Cut before the door opens: 4 / 1 / 0. A second Mara is in the frame for 5 s.
+    - Cut in the open doorway: 3 / 1 / 1. After the cut the door is closed and the beach is gone.
+    - Hard cut, no chain: 1 / 3 / 1. A different woman and a different door.
+  - User, 2026-11-05 (watched from 0 s): on C7 the rule and the chained film are both pretty good; which is better depends on the request. Words only is solid, but identity is a concern with no references. On C8, no cut is the best.
+  - Door, then the beach (C9), 17 s: the no-cut door clip plus a 5 s clip from its last frame. 3 / 2 / 0. 120 credits. The second clip stays on the beach; hair, glasses and coat hold; no jump.
+  - Results:
+    - A last-frame start keeps the person and the place. It cannot go to a new place.
+    - To take a person to a new place with no reference: change the place inside a shot (a door), then chain from the end of that shot.
+    - Words only gives the correct place and a different face.
+    - If the change of place is inside the shot (a door) and the shot fits in one call: do not cut.
+    - The line "end on the person, face visible" can make a second person when the action faces away from the camera.
+- [x] 2026-11-05 · Split run 2: four seasons (C6), one pictured bottle in 4 places, 20 s, 5 lines. 960 credits.
+  - One 20 s call: 2 / 0 / 3. Summer, autumn and winter play 2 times. The seasons mix (petals in the snow, leaves on the beach). 96 s.
+  - One clip for each season, each with the bottle's picture: 5 / 0 / 0. 132 s, made one after the other.
+  - Result: rule 2 (a new idea is a new clip) holds. The bottle is the same in all clips.
+  - User, 2026-11-05: one clip for each season is better.
+- [x] 2026-11-05 · Split run 1, hand-scored, one run for each film (yes / partly / no).
+  - B2 story (C4), 7 lines. Current MCP, one call: 3 / 3 / 1.
+    - Scene in one 26 s call: 4 / 2 / 1. The line is said 2 to 3 times. No close shot.
+    - Two 13 s clips, last frame between them: 7 / 0 / 0.
+    - One clip for each shot: 5 / 2 / 0. No close shot. Colour drifts. Half of the film is silent.
+    - User, 2026-11-05: two 13 s clips is "very good" (the line does not repeat, the cut is seamless). One clip for each shot is OK, but the picture quality is bad.
+    - Time, generation only: one 26 s call 108 s, two 13 s clips 115 s, one clip for each shot 156 s. Current MCP, whole request: 151 s.
+  - B1 story (C5), 5 lines, picture only (no voice, captions, music). Current MCP, one call, same 5 lines: 0 / 4 / 1.
+    - Presenter's two shots in one 18 s call: 3 / 1 / 1. The two shots play 2 times.
+    - One clip for each shot: 2 / 3 / 0. Nothing repeats. Shot 3 starts from the last frame: her face changes, no spray is seen.
+    - User, 2026-11-05: presenter's two shots in one call is the best of the three. In one clip for each shot the presenter's identity changes.
+    - Time: one 18 s call 166 s, one clip for each shot 147 s. Current MCP, whole request: 221 s.
+- [x] 2026-11-04 · Baseline: 6 dense items on the current MCP. Pages: `Benchmark/index.html`. B1: 2 yes, 6 partly, 2 no. B2: 3 yes, 3 partly, 1 no.
+- [x] 2026-11-03 · Baseline: 13 vague briefs on the current MCP, paid calls refused. Understood 5, partly 7, missed 1.
