@@ -153,13 +153,14 @@ ITEMS = [
      {"motion": ("she smiles", GUESS), "seconds": (5, "default"), "aspect": ("1:1", GUESS),
       "sound": ("none", GUESS), "keep": ("her face", "default")},
      ["motion", "aspect", "sound"], {"seconds": 8}),
-    # The full brief gives no shape. V4 reads "portrait" as 9:16 and does not ask. Open question in the PRD.
+    # The full brief gives no shape. "this portrait" is the photo, not a shape (2026-11-07: reading it as 9:16 made A3 tall
+    # when its clip is square), so the shape is asked, as for any animated picture.
     ("S09", "full", "create_video_from_image",
      "Animate this portrait for 6 seconds: she smiles and looks around a little, nothing dramatic; keep her face exactly like her; silent.",
      ["woman"],
      {"motion": ("she smiles and looks around a little, nothing dramatic", "user"), "seconds": (6, "user"),
       "sound": ("none", "user"), "keep": ("her face exactly like her", "user")},
-     [], {"seconds": 6, "sound": "none"}),
+     ["aspect"], {"seconds": 6, "sound": "none"}),
 
     # The item file says create_video_from_image. V4 chose create_video_from_text (intent.js RULES, line 39).
     ("S10", "vague", "create_video_from_text", "a video of this car driving across this bridge", ["car", "bridge"],

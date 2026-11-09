@@ -83,7 +83,7 @@ CHANGE_VERB = re.compile(
     r"blur|sharpen|colou?r|retouch|convert|extend|fill|move|cut|take out|get rid)", _I)
 OPTIONAL_QUIET = {"look", "keep", "language", "exact_words"}  # never asked just because the host left them open
 PLATFORMS = [
-    (r"tiktok|reels?\b|stories|story\b|\bshorts\b|vertical|portrait|phone", "9:16"),
+    (r"tiktok|reels?\b|stories|story\b|\bshorts\b|vertical|portrait (?:video|format|mode|orientation|reel)|in portrait\b|phone", "9:16"),
     (r"youtube|landscape|widescreen|tv\b|wide\b|banner|presentation|desktop", "16:9"),
     (r"instagram post|square|feed|profile pic", "1:1"),
     (r"instagram", "1:1"),

@@ -359,7 +359,7 @@ class PlanTests(unittest.TestCase):
         s["beats"][1]["subjects"] = ["nobody"]
         s["aspect"] = "4:3"
         problems = validate_story(s)
-        self.assertIn("beat 1: a card needs exact_words", problems)
+        self.assertIn("beat 1: a card needs exact_words, or `picture` (a picture to hold unchanged, such as a logo)", problems)
         self.assertIn("beat 2: unknown subject nobody", problems)
         self.assertTrue(any(p.startswith("aspect must be") for p in problems))
 

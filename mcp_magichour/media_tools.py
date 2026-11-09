@@ -47,16 +47,17 @@ def probe(file: Path) -> dict:
         raw = subprocess.check_output(["ffprobe", "-v", "error", "-show_entries", "format=duration:stream=codec_type,width,height",
                                        "-of", "json", str(file)])
         data = json.loads(raw)
-        video = next(s for s in data["streams"] if s["codec_type"] == "video")
-        return {"seconds": float(data["format"]["duration"]), "width": video["width"], "height": video["height"],
+        video = next((s for s in data["streams"] if s["codec_type"] == "video"), {})   # a voice track has no picture
+        return {"seconds": float(data["format"]["duration"]), "width": video.get("width", 0), "height": video.get("height", 0),
                 "audio": any(s["codec_type"] == "audio" for s in data["streams"])}
     report = _ffmpeg(["-i", str(file)], capture=True)
     duration = re.search(r"Duration: (\d+):(\d+):(\d+\.?\d*)", report)
     size = re.search(r"Video: .*? (\d{2,5})x(\d{2,5})", report)
-    if not duration or not size:
+    if not duration or not (size or "Audio:" in report):
         raise RuntimeError(f"ffmpeg could not read {file.name}")
     h, m, sec = duration.groups()
-    return {"seconds": int(h) * 3600 + int(m) * 60 + float(sec), "width": int(size[1]), "height": int(size[2]), "audio": "Audio:" in report}
+    return {"seconds": int(h) * 3600 + int(m) * 60 + float(sec), "width": int(size[1]) if size else 0,
+            "height": int(size[2]) if size else 0, "audio": "Audio:" in report}
 
 
 def loudness_db(file: Path) -> float | None:
@@ -212,6 +213,48 @@ def have_captions() -> bool:
 
 FONTS = ("/System/Library/Fonts/Supplemental/Arial.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
          "/usr/share/fonts/dejavu/DejaVuSans.ttf", "C:/Windows/Fonts/arial.ttf")
+
+
+def draw_card(words: list[str], background: str, size: tuple[int, int], out: Path) -> Path:
+    """A flat card: the background colour exactly, the words centred in white, one item on each line, the first larger."""
+    from PIL import Image, ImageDraw, ImageFont
+
+    width, height = size
+    image = Image.new("RGB", size, background)
+    draw = ImageDraw.Draw(image)
+    sizes = [round(min(width, height) * (0.09 if i == 0 else 0.055)) for i in range(len(words))]
+    fonts = [next((ImageFont.truetype(f, s) for f in FONTS if Path(f).exists()), None) or ImageFont.load_default(s) for s in sizes]
+    for i, (line, font) in enumerate(zip(words, fonts)):   # shrink a line that is too wide
+        while draw.textlength(line, font=font) > width * 0.86 and font.size > 10:
+            font = font.font_variant(size=font.size - 2)
+        fonts[i] = font
+    gaps = [round(f.size * 1.35) for f in fonts]
+    y = (height - sum(gaps)) / 2
+    for line, font, gap in zip(words, fonts, gaps):
+        draw.text(((width - draw.textlength(line, font=font)) / 2, y), line, font=font, fill="white")
+        y += gap
+    image.save(out)
+    return out
+
+
+def fit_picture(source: Path, background: str, size: tuple[int, int], out: Path) -> Path:
+    """The picture unchanged, scaled to fit inside the frame (never cropped), centred on `background`."""
+    from PIL import Image
+
+    picture = Image.open(source).convert("RGBA")
+    scale = min(size[0] * 0.8 / picture.width, size[1] * 0.8 / picture.height, 1.0 if picture.width <= size[0] else 10)
+    picture = picture.resize((max(1, round(picture.width * scale)), max(1, round(picture.height * scale))), Image.LANCZOS)
+    frame = Image.new("RGBA", size, background)
+    frame.alpha_composite(picture, ((size[0] - picture.width) // 2, (size[1] - picture.height) // 2))
+    frame.convert("RGB").save(out)
+    return out
+
+
+def still_video(image: Path, seconds: float, out: Path) -> Path:
+    """A picture held still for `seconds`, silent, at 24 frames a second."""
+    _ffmpeg(["-loop", "1", "-i", str(image), "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo", "-t", f"{seconds:.2f}",
+             "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2,fps=24,format=yuv420p", "-c:v", "libx264", "-c:a", "aac", "-shortest", str(out)])
+    return out
 
 
 def _caption_png(text: str, size: tuple[int, int], out: Path) -> Path:

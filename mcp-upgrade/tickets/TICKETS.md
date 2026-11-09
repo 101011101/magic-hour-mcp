@@ -7,6 +7,17 @@
 
 ## To do
 
+- [ ] **MCP-11 · Voice-over by the voice cloner. BLOCKED AT PUSH: needs upstream approval.**
+  - Why: the video-model narration read A4's script 2 times in 8. The voice cloner read it exactly, for 17 credits (`Benchmark/voice.html`, 2026-11-08).
+  - Block: upstream hides the voice tools on purpose. `openapi_policies.py` removes `/v1/ai-voice-cloner` always, and `/v1/ai-voice-generator` while `APPROVED_VOICE_NAMES` is empty (commit 2e6d659, #109). The user (2026-11-08): approval is pending on the other side.
+  - Our branch may have the feature. Before a push or a PR, verify that upstream main allows it:
+    - `git fetch upstream && git rebase upstream/main`.
+    - Check that `apply_magic_hour_policies` keeps `/v1/ai-voice-cloner` (or `APPROVED_VOICE_NAMES` is not empty).
+    - Not allowed: do not push the feature on. Push it off, or hold the push.
+  - [ ] Build the feature behind a switch, off by default.
+  - [ ] A release-gate test that fails while the feature is on and upstream still hides the tool.
+  - [ ] Fix found by the test, done: `media_tools.probe` reads a file with no picture (a voice track).
+
 - [ ] **MCP-01 · Conversation: derive the parameters, ask only for the rest.** [Ticket](MCP-01-conversation.md). [Spec](../prd/MCP-01-conversation.md).
   - [x] PRD, spec, 40 contract tests: `tests/test_plan_request.py`.
   - [x] Build `plan_request`: `mcp_magichour/plan_request.py`. All 40 pass.
@@ -54,8 +65,31 @@
 - [ ] **MCP-08 · Voice-over, captions, music on a multi-clip film.** Proposed. B1 needs them. Not in MCP-02.
   - A1 on v1 was silent for this reason. `generate_music` is on the server; `join_production_clips` cannot take its track.
 - [ ] **MCP-09 · Todo list from the request, checked at the end.** User, 2026-11-05: break the prompt into a todo list, then check that each line is done, at least the easy checks.
+  - [x] 2026-11-06 · From the story: see MCP-04. Covers only what the host put in the story.
+  - [ ] From the brief: a line for each thing the request asks for, made at `plan_request` time, so a line the host left out of the story (A2's end words, A1's music) still shows as not met.
   - [ ] Decision: check only, or also fix (music track in the join, words drawn in the join).
   - [ ] Decision: films through the join only, or all videos.
+- [x] 2026-11-06 · Approach tests, one attempt each, 1,940 credits. Page: `Benchmark/approach.html` (`scripts/approach_bench.py`, `scripts/approach_page.py`, scores in `Benchmark/approach/scores.json`).
+  - User picks, 2026-11-07: Words W5 (scene, then a card) and W2 (minimax-h3 asked for the words). Not W4 (drawn by code). Continue C2 (last frame, ltx-2.5) and C3 (last frame, minimax-h3). C6 bottle: one call per season and medium-only (10 + 10) both good. C7 two people: the person rule and one call per season, words only, both good; medium-only rejected.
+  - 2026-11-07 · C10 perfume + two people in words, four seasons, bottle picture in every call, 1,680 credits. One call: seasons play twice. One per season, person rule, medium-only (10 + 10): all four seasons in order, bottle and letters right in all three. People: the same inside one call, a look-alike across calls (Theo exact under the person rule; Mara a look-alike everywhere).
+  - User picks, 2026-11-07: C10 one call per season, person rule and medium-only all good; one call rejected.
+  - Defaults from the picks: (1) words: a card after the scene when the words can stand alone; minimax-h3 over the scene when they must sit on the picture, with a spelling check; never ltx-2.5. (2) Continue a clip: keep the file, last frame, ltx-2.5 (minimax-h3 the alternative), silent join. (3) Split: cut on a change of medium and at the cap; with a picture reference, two places in one call is fine; without one, cut at every change of place; a person in words stays in one call where it fits (person rule).
+- [x] 2026-11-07 · Gates test (user's design: broad gates, the model reasons). `mcp_magichour/gates.py`, `gates_docs.py` (findings-only tool notes), `media_helpers_tool.py` (get_last_frame, join_videos), `MAGIC_HOUR_GATES=off|warn|refuse`. Page: `Benchmark/gates.html`.
+  - 7 requests (B1, B2, C10, A2, A3, A4, J55a). Old MCP 27 yes · 10 partly · 8 no. v1 38 · 5 · 2. Gates warn 35 · 6 · 4. Refuse: not valid (plan_token rejected by the argument check; fixed in `mcp_errors.py`, rerun about 3,500 credits).
+  - Breaks: the review gate approved every plan (0 conflicts in about 30 reviews over the dry and paid runs). Long tokens were mis-copied (fixed: short ids, state on the server). The brief extractor read "portrait" (a photo) as 9:16 (fixed in plan_request too).
+  - Wins of the gated side: A2 exact end words by a method nobody gave it (last frame, image edit with the words, animate to it).
+  - Faults found in our tools: a silent narration passed join_production_clips's check (check speech, not placement). A joined film has only a local 127.0.0.1 link, so the host gave the user a part instead (A4 warn). (I first reported a broken join; the join was fine, my frame sheet misread it.)
+  - Spend: 11,414 credits on 2026-11-07 for this test (159,381 to 147,967), 3,060 of them lost to a shell mistake (arguments in a zsh variable did not split; 152 wrong items ran) and rate limits (harness now retries).
+- [x] 2026-11-07 · Spoken-line test (B2's "You came back."), 480 credits. Inside a 12 s clip with a second beat, ltx-2.5: 0 of 3 runs. Alone in a 4 s close-up: ltx-2.5 3 of 3 word for word; minimax-h3 heard 2 of 2, word for word 1 of 2 ("He came back."). Same model and words: the line was lost because the call carried too much else. Page: `Benchmark/approach.html`, first section.
+- [x] 2026-11-07 · Agent groups, MCP asks (user's design). Beat fields `clip`, `spoken`, `reference`, `in_scene_words`, `background`, `picture`, `model`; `questions` + `answers` (words over a scene: card / model / still / accept; a spoken line with another beat: split / keep; colour codes: words / keep), plan held until answered; `advice` for the rest; `request` tracked; drawn and held cards made by code at the join; narration speech measured. 218 tests. Paid run of A2, B2, B1, A4: 2,677 credits.
+  - Same four on v1 (7 Nov): 22 yes · 3 partly · 2 no. New: 21 · 4 · 2. Fixed: B2 line said (own clip), B1 9 yes, cards and logo exact. New faults: ltx-2.5 narration spoke nonsense (A4); minimax-h3 clips run ~0.3 s long each (B2 31.8 s); minimax-h3 put A2's words at the start.
+  - Next: voice-over from Magic Hour's voice generator, not a video model; the join trims each clip to its planned length; the "model" words option warns that the moment is not controlled.
+- [ ] **MCP-10 · A1 to A4 again on the current build.** The v1 runs on the page are from 2026-11-05 04:45 to 04:56, before the sound tools, the checklist and the ending-line fixes. One run each, after the fixes below.
+  - [ ] A2 · words over the last shot: `exact_words` on a scene beat are drawn by code in the join (as captions are), not asked of the model (old MCP "walk anway", v1 none; ltx-2.5 cannot spell).
+  - [ ] A3 · continue a given clip: a plan whose first piece is the user's file, one clip from its last frame, silent join. The host had no such tool and regenerated all 12 s with minimax-h3 (music came back with audio off; she slides out of frame facing the camera, no turn). 144 credits, not 288.
+  - [ ] A4, S3 · too eager a split: a single continuous scene of 15 s or less stays one call; an end card is appended, not a reason to split the rest. Count ideas by place and people, not by beats.
+  - [ ] B1 · the label: the letters are lost in the host's edited reference (640 px, bottle about 60 px wide) and 480p cannot hold them in the hand shots. Options: a tighter crop of the bottle as a second named reference on `minimax-h3`, or 720p for shots where the bottle is small.
+  - [ ] B2 · the spoken line: "You came back." was in the prompt as prose; ltx-2.5 did not speak it (the old MCP's one call spoke it 10 times; Replicate's ltx-2.5-fast once). Put it in `says` on the beat so `compose_prompt` writes it as a dialogue line, and add a "line spoken once" check (speech spans).
 
 ## Done
 

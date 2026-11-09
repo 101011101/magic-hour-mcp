@@ -20,9 +20,10 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from upgrade_page import BENCH, CLASS, RESULTS, STYLE, conversations  # noqa: E402
 
 ITEMS_DIR = ROOT.parent / "magic-agent-video-generator" / "V2" / "bench" / "mcp" / "dense" / "items"
+SEASON_ITEMS = ITEMS_DIR.parent / "items-seasons"
 e = html.escape
 DOLLARS_PER_CREDIT = 19 / 12000          # $19 for 12,000 credits
-REPLICATE_PER_SECOND = 0.09              # estimate, not confirmed: the plugin shows no price and no balance
+REPLICATE_PER_SECOND = 0.40 / 28         # from the account's bill: about $0.40 for the 28 s B2 run on ltx-2.5-fast at 720p
 
 # item: the old MCP's record folder and film, v1's run folder under Benchmark/modified/<item>/, Replicate's records and films.
 ITEMS = [
@@ -35,11 +36,15 @@ ITEMS = [
      "replicate": [{"name": "Replicate", "sub": "paid, matched model", "dir": "comp-c3-replicate", "video": "A3/run3-01-replicate.mp4", "row": "Replicate, paid", "generated": 6}]},
     {"id": "A4", "old": ("mcp-dense-2-A4", "A4", "A4/run1-01-create_video_from_text.mp4"), "v1": "run1",
      "replicate": [{"name": "Replicate", "sub": "paid, matched model", "dir": "comp-c4-replicate", "video": "A4/run3-01-replicate.mp4", "row": "Replicate, paid", "generated": 14}]},
-    {"id": "B1", "old": ("mcp-dense-1b", "B1b", "B1/run2-01-create_video_from_text.mp4"), "v1": "run1", "replicate": [],
-     "no_replicate": "Not run: the brief has a stock photo of a real person"},
+    # "local": a Replicate run recorded under Benchmark/replicate/<folder>/ (side.json with its cost as text, checks.json, film.mp4)
+    {"id": "B1", "old": ("mcp-dense-1b", "B1b", "B1/run2-01-create_video_from_text.mp4"), "v1": "run2",
+     "replicate": [{"name": "Replicate", "sub": "paid, matched model, 6 November", "local": "B1"}]},
     {"id": "B2", "old": ("mcp-dense-2-B2", "B2", "B2/run1-01-create_video_from_text.mp4"), "v1": "run2",
-     "replicate": [{"name": "Replicate", "sub": "paid, matched model", "dir": "comp-c5-replicate", "video": "B2/run3-02-replicate.mp4", "row": "Replicate, paid", "generated": 20}]},
+     "replicate": [{"name": "Replicate", "sub": "paid, matched model, 6 November", "local": "B2-paid"},
+                   {"name": "Replicate, free model", "sub": "minimax/video-01", "local": "B2"}]},
 ]
+# The season and door requests, made for the split rule: Benchmark/seasons/<id>/{old,v1,replicate}/ with side.json, checks.json, film.mp4.
+SEASONS = [("S1", "old"), ("S2", "old"), ("S3", "old")]
 
 
 def load(path: Path):
@@ -76,6 +81,16 @@ def sides_of(item: dict) -> list[dict]:
     else:
         out.append({"name": "V1", "sub": "", "video": None, "time": None, "cost": "", "gen": "", "checks": None, "flag": "Not run"})
     for rep in item["replicate"]:
+        if "local" in rep:
+            folder = BENCH / "replicate" / rep["local"]
+            side, checks = load(folder / "side.json"), load(folder / "checks.json")
+            film = folder / "film.mp4"
+            clips = sorted(folder.glob("clip-*.mp4"))
+            out.append({"name": rep["name"], "sub": rep["sub"], "video": f"replicate/{rep['local']}/film.mp4" if film.exists() else None,
+                        "poster": f"replicate/{rep['local']}/film.poster.jpg", "clips": [str(c.relative_to(BENCH)) for c in clips],
+                        "time": side["time"], "cost": side.get("cost") or side.get("credits", ""), "gen": side["gen"], "checks": checks["checks"],
+                        "flag": "" if film.exists() else f"{len(clips)} clips, not joined"})
+            continue
         r, checks = row(rep["row"]), load(RESULTS / rep["dir"] / f"{item['id']}.checks.json")
         cost = f"about ${rep['generated'] * REPLICATE_PER_SECOND:.2f} (estimate)" if rep["generated"] else "0 (free model)"
         out.append({"name": rep["name"], "sub": rep["sub"], "video": rep["video"], "poster": rep["video"] + ".poster.jpg", "time": r["seconds"], "cost": cost,
@@ -84,6 +99,34 @@ def sides_of(item: dict) -> list[dict]:
     if not item["replicate"]:
         out.append({"name": "Replicate", "sub": "", "video": None, "time": None, "cost": "", "gen": "", "checks": None, "flag": item["no_replicate"]})
     return out
+
+
+def season_sides(item_id: str) -> list[dict]:
+    """The sides of a season or door item: old, v1 and Replicate when that folder has a checklist."""
+    out = []
+    for key, name in (("old", "Old MCP"), ("v1", "V1"), ("replicate", "Replicate")):
+        folder = BENCH / "seasons" / item_id / key
+        side, checks = load(folder / "side.json"), load(folder / "checks.json")
+        if not side or not checks:
+            out.append({"name": name, "sub": "", "video": None, "time": None, "cost": "", "gen": "", "checks": None, "flag": "Not run"})
+            continue
+        film = (folder / "film.mp4").exists()
+        cost = credits(side["credits"]) if isinstance(side["credits"], int) else str(side["credits"])
+        out.append({"name": name, "sub": "free model" if key == "replicate" else "", "video": f"seasons/{item_id}/{key}/film.mp4" if film else None,
+                    "poster": f"seasons/{item_id}/{key}/film.poster.jpg", "time": side["time"], "cost": cost, "gen": side["gen"], "checks": checks["checks"],
+                    "flag": "" if film else side["gen"]})
+    return out
+
+
+def spec_of(item_id: str) -> dict:
+    file = ITEMS_DIR / f"{item_id}.json"
+    return json.loads((file if file.exists() else SEASON_ITEMS / f"{item_id}.json").read_text())
+
+
+def picture(item_id: str, name: str) -> str:
+    """The attached file as the page links it: the item's own copy, else B1's (the season items reuse B1's bottle picture)."""
+    own = f"{item_id}/in-{name}"
+    return own if (BENCH / own).exists() else f"B1/in-{name}"
 
 
 def cell(side: dict) -> str:
@@ -100,17 +143,19 @@ def media(name: str) -> str:
 
 
 def section(item: dict, sides: list[dict]) -> str:
-    spec = json.loads((ITEMS_DIR / f"{item['id']}.json").read_text())
+    spec = spec_of(item["id"])
     turn = spec["turns"][0]
-    pics = "".join(f"<figure>{media(item['id'] + '/in-' + m)}<figcaption>{e(m)}</figcaption></figure>" for m in turn["materials"])
+    pics = "".join(f"<figure>{media(picture(item['id'], m))}<figcaption>{e(m)}</figcaption></figure>" for m in turn.get("materials", []))
     inputs = f'<div class=in><div class="pre brief">{e(turn["text"])}</div><div class=pics>{pics}</div></div>' if pics else f'<div class="pre brief">{e(turn["text"])}</div>'
     ran = [s for s in sides if s["checks"] is not None]
     stats = "<table><tr><th>Side</th><th>How it was made</th><th class=n>Time</th><th class=n>Cost</th><th>Checklist</th></tr>" + "".join(
         f"<tr><td class=nw>{e(s['name'])}<br><span class=mut>{e(s['sub'])}</span></td><td>{s['gen']}</td><td class=n>{s['time']} s</td><td class=n>{e(s['cost'])}</td>"
         f"<td class=nw>{tally(s['checks'])}{'<br><span class=mut>' + e(s['flag']) + '</span>' if s['flag'] else ''}</td></tr>" for s in ran) + "</table>"
-    shown = [s for s in ran if s["video"]]
-    videos = "".join(f'<figure><video controls preload=metadata poster="{e(s["poster"])}" src="{e(s["video"])}"></video><figcaption><b>{e(s["name"])}</b>'
-                     f'{" · " + e(s["flag"]) if s["flag"] else ""}</figcaption></figure>' for s in shown)
+    shown = [s for s in ran if s["video"] or s.get("clips")]
+    videos = "".join(
+        (f'<figure><video controls preload=metadata poster="{e(s["poster"])}" src="{e(s["video"])}"></video>' if s["video"] else
+         '<figure><div class=four>' + "".join(f'<video controls preload=metadata poster="{e(c[:-4])}.poster.jpg" src="{e(c)}"></video>' for c in s["clips"]) + "</div>")
+        + f'<figcaption><b>{e(s["name"])}</b>{" · " + e(s["flag"]) if s["flag"] else ""}</figcaption></figure>' for s in shown)
     # The checklist lines are the old MCP's. A side scored on its own numbering says which line each of its lines answers ("line").
     reference = sides[0]["checks"]
     body = ""
@@ -129,16 +174,18 @@ def section(item: dict, sides: list[dict]) -> str:
 
 
 def main() -> None:
-    all_sides = {item["id"]: sides_of(item) for item in ITEMS}
+    all_items = ITEMS + [{"id": sid} for sid, _ in SEASONS]
+    all_sides = {item["id"]: sides_of(item) for item in ITEMS} | {sid: season_sides(sid) for sid, _ in SEASONS}
     rows = ""
-    for item in ITEMS:
-        spec = json.loads((ITEMS_DIR / f"{item['id']}.json").read_text())
+    for item in all_items:
+        spec = spec_of(item["id"])
         sides = [s for s in all_sides[item["id"]] if s["name"] != "Replicate, free model"]
         rows += f'<tr><td class=nw><a href="#{item["id"]}">{item["id"]}</a><br><span class=mut>{e(spec["case_name"])}</span></td>' + "".join(cell(s) for s in sides) + "</tr>"
     summary = "<table><tr><th>Item</th><th>Old MCP</th><th>V1</th><th>Replicate</th></tr>" + rows + "</table>"
     note = ("Time: the whole request, from the brief to the reply · Cost: credits charged; dollars at $19 for 12,000 credits · "
-            "Replicate cost: generated seconds at $0.09, an estimate that is not confirmed · Checklist: one line for each thing the brief asked for, "
-            "scored by eye, one run for each film")
+            "Replicate cost: the account's bill where there is one, else generated seconds at about $0.014 (the rate that bill shows) · "
+            "Checklist: one line for each thing the brief asked for, scored by eye, one run for each film · "
+            "A1 to A4 and B1, B2: the dense benchmark items · S1 to S3: the season and door requests made for the split rule")
     notes = load(BENCH / "report-notes.json") or {}
     changed = "".join(f"<li>{e(x)}</li>" for x in notes.get("changed", []))
     found = "".join(f"<li>{e(x)}</li>" for x in notes.get("found", []))
@@ -147,14 +194,14 @@ def main() -> None:
         '<meta name="robots" content="noindex"><title>Old MCP, v1, Replicate</title>' + STYLE +
         "<style>body{max-width:1240px}.vids{display:grid;gap:14px;margin:18px 0;align-items:start}.vids.tall{max-width:820px}"
         "figcaption{margin-top:6px}.conv td{width:33%}.conv .pre{margin:0 0 6px}h2{margin-top:44px}.in{margin-bottom:14px}.pics img,.pics video{width:auto}"
-        "ul{margin:4px 0 16px;padding-left:22px;font-size:14px}"
+        "ul{margin:4px 0 16px;padding-left:22px;font-size:14px}.four{display:grid;grid-template-columns:1fr 1fr;gap:4px}"
         "@media(max-width:720px){.vids{grid-template-columns:1fr 1fr!important}}</style>"
         '<nav><a href="index.html">Dense benchmark</a><a href="upgrade.html">Upgrade</a><a href="report.html" class="on">Report</a></nav>'
-        "<h1>Old MCP, v1, Replicate</h1><p class=mut>5 November 2026 · driver gpt-6.1-sol, medium · v1 is a local build, not deployed</p>"
+        "<h1>Old MCP, v1, Replicate</h1><p class=mut>4 to 6 November 2026 · driver gpt-6.1-sol, medium · v1 is a local build, not deployed</p>"
         + (f"<h2>What v1 adds</h2><ul>{changed}</ul>" if changed else "")
         + "<h2>Results</h2>" + summary + f"<p class=mut>{e(note)}</p>"
         + (f"<h2>What the runs show</h2><ul>{found}</ul>" if found else "")
-        + "".join(section(item, all_sides[item["id"]]) for item in ITEMS)
+        + "".join(section(item, all_sides[item["id"]]) for item in all_items)
         + "<h2>Vague requests: questions and values</h2>" + conversations("mcp-intent-mod" if (RESULTS / "mcp-intent-mod").exists() else "mcp-intent-new2", "mcp-intent-new")
         + "</html>"
     )

@@ -90,7 +90,7 @@ class VideoProductionToolTests(unittest.IsolatedAsyncioTestCase):
         p = data(await self.caller.call_tool("plan_video_production", {"story": bad}))
         self.assertFalse(p["ok"])
         self.assertEqual(p["clips"], [])
-        self.assertIn("beat 1: a card needs exact_words", p["problems"])
+        self.assertIn("beat 1: a card needs exact_words, or `picture` (a picture to hold unchanged, such as a logo)", p["problems"])
         self.assertIn("beat 2: unknown subject nobody", p["problems"])
 
     async def test_a_story_with_a_wrong_shape_is_refused_by_the_schema(self):
@@ -212,7 +212,7 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ToolError):   # the plan has sound: the join asks for it
             await self.call("join_production_clips", production=p["production"], made=made)
         film = await self.call("join_production_clips", production=p["production"], made=made, sound={"narration": "n", "music": "m"})
-        self.assertEqual(film["sound"], {"narration": True, "music": True, "captions": True})
+        self.assertEqual(film["sound"], {"narration": True, "music": True, "captions": True, "speech_seconds": 8.8})
         self.assertEqual((self.sound["narration"], self.sound["music"]), ("narration.mp4", "music"))
         self.assertEqual(len(self.sound["parts"]), 4)
         starts = [part["at"] for part in self.sound["parts"]]
@@ -225,6 +225,17 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([c["result"] for c in film["checked"]], ["yes"] * len(film["checked"]))
         self.assertEqual(film["not_met"], [])
         self.assertTrue(any("looks the same" in line for line in film["unchecked"]))
+
+    async def test_a_narration_with_no_speech_is_not_met(self):
+        # B1, 7 November: the narration call came back silent and the join counted it as placed.
+        p = await self.planned_with_voice()
+        with patch("mcp_magichour.media_tools.speech_spans", lambda audio, **k: [(0.0, 0.3)]):
+            film = await self.call("join_production_clips", production=p["production"], made={"1": "a", "2": "b", "3": "c"},
+                                   sound={"narration": "n", "music": "m"})
+        voice = next(c for c in film["checked"] if c["want"].startswith("Voice-over"))
+        self.assertEqual(voice["result"], "no")
+        self.assertIn("no voice was made", voice["got"])
+        self.assertIn(voice["want"], film["not_met"])
 
     async def test_the_plan_carries_a_checklist_and_the_join_reports_what_is_not_met(self):
         p = await self.planned("c4")   # Walk Anyway: scene sound wanted, no narration

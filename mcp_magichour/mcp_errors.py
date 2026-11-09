@@ -10,6 +10,8 @@ from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
 from fastmcp.tools.base import ToolResult
 from mcp.shared.exceptions import McpError
 
+from . import gates
+
 
 class APIErrorRecoveryMiddleware(Middleware):
     """Give canonical API rejections a recovery action without retrying requests."""
@@ -114,6 +116,9 @@ def install_structured_tool_errors(mcp: FastMCP, tool_name_replacements: dict[st
         # OpenAPI-generated schemas omit additionalProperties; an unknown arg on a
         # parameterless GET would otherwise be sent upstream as a request body.
         schema = {"additionalProperties": False, **tool.parameters}
+        if gates.MODE in ("warn", "refuse") and request.params.name in gates.SPENDING:
+            # The gates add plan_token to the listed schema; the gate middleware removes it before the tool runs.
+            schema["properties"] = {**schema.get("properties", {}), "plan_token": {"type": "string"}}
         try:
             jsonschema.validate(request.params.arguments or {}, schema)
         except jsonschema.ValidationError as error:
