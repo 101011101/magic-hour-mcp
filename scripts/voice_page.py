@@ -20,6 +20,9 @@ HOW = {
     "D": "One ltx-2.5 black-screen narration call per sentence; the three tracks are put end to end, then placed.",
     "E": "The three scenes are made again with a presenter on screen who says each sentence (ltx-2.5, sound on).",
     "F": "No voice. The captions are drawn on each beat.",
+    "MCP": ("The whole A4 request run by the agent through the MCP, the voice switch on, a recording attached: the MCP asked "
+            "`voice`, the agent answered sample, the voice cloner read the agent's script, the join's word check heard 100%. "
+            "New scenes, so the picture differs from A-F."),
 }
 
 
@@ -33,7 +36,7 @@ def verdict(r: dict) -> tuple[str, str]:
 
 
 def main() -> None:
-    records = [json.loads(p.read_text()) for p in sorted(FOLDER.glob("*/record.json"))]
+    records = [json.loads(p.read_text()) for p in sorted(FOLDER.glob("*/record.json"), key=lambda p: (p.parent.name == "MCP", p.parent.name))]
     script = records[0]["script"] if records else ""
     rows, films = "", ""
     for r in records:

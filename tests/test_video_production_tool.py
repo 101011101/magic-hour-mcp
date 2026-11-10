@@ -1,6 +1,7 @@
 """plan_video_production through the MCP server, and the answer parsers of plan_request. No network, no credits."""
 
 import json
+import os
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -157,6 +158,7 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
             ("mcp_magichour.media_tools.have_captions", lambda: True),
             ("mcp_magichour.media_tools.loudness_db", lambda file: -18.0),
             ("mcp_magichour.video_production_tool.FILMS_DIR", self.films),
+            ("mcp_magichour.video_production_tool._transcribe", self.fake_transcribe),
         ]:
             p = patch(target, side_effect=value) if callable(value) else patch(target, value)
             p.start()
@@ -164,6 +166,10 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
         self.caller = await self.enterAsyncContext(Client(create_mcp()))
 
     film_size = (854, 480)   # the size the fake probe reports; a 9:16 story sets it
+    heard = None   # what the fake transcriber hears; None = no transcriber on the server
+
+    async def fake_transcribe(self, audio):
+        return self.heard
 
     def fake_add_sound(self, film, out, narration=None, parts=None, music=None):
         self.sound = {"narration": narration.name if narration else None, "music": music.name if music else None, "parts": parts}
@@ -199,6 +205,48 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(narration["style"]["prompt"], p["sound"]["narration"]["prompt"])
         self.assertEqual((music_path, music["duration"], music["style"]), ("/v1/ai-music-generator", 32, {"prompt": "soft piano", "instrumental": True}))
         self.assertEqual((made["narration"], made["music"]), ("job-1", "job-2"))
+
+    async def test_with_the_switch_on_and_a_sample_the_voice_cloner_reads_the_script(self):
+        # MCP-11, 2026-11-08: the cloner read A4 exactly; the video model 2 in 8. Off in what we ship until upstream approves.
+        with patch.dict(os.environ, {"MAGIC_HOUR_VOICE_OVER": "cloner"}):
+            s = story("c5")
+            for beat, says in zip(s["beats"], [["Some scents fade by noon."], ["It starts soft."], ["One spray is enough."], ["Mockup Fragrance."]]):
+                beat["says"] = says
+            s.update(narrator="a calm voice", captions=True, voice_sample="https://example.com/voice.mp3")
+            self.film_size = (480, 858)
+            p = await self.call("plan_video_production", story=s)
+            self.assertEqual(p["sound"]["narration"]["tool"], "voice_cloner")
+            made = await self.call("create_production_sound", production=p["production"])
+            (path, body), = self.posts
+            self.assertEqual(path, "/v1/ai-voice-cloner")
+            self.assertEqual(body["assets"], {"audio_file_path": "https://example.com/voice.mp3"})
+            self.assertEqual(body["style"]["prompt"], "Some scents fade by noon. It starts soft. One spray is enough. Mockup Fragrance.")
+            self.assertIn("wait_for_audio_project", made["next"])
+            film = await self.call("join_production_clips", production=p["production"], made={"1": "a", "2": "b", "3": "c"},
+                                   sound={"narration": made["narration"]})
+        self.assertEqual(self.sound["narration"], "narration")   # fetched as an audio project
+        self.assertTrue(film["sound"]["narration"])
+
+    async def test_a_narration_that_says_other_words_is_not_met(self):
+        # A4, 8 November: the narration said made-up words and the speech check passed it.
+        p = await self.planned_with_voice()
+        self.heard = "What Van Holtz of TMO Experience called the Mewmaw"
+        film = await self.call("join_production_clips", production=p["production"], made={"1": "a", "2": "b", "3": "c"},
+                               sound={"narration": "n", "music": "m"})
+        voice = next(c for c in film["checked"] if c["want"].startswith("Voice-over"))
+        self.assertEqual(voice["result"], "no")
+        self.assertIn("Van Holtz", voice["got"])
+        self.assertIn(voice["want"], film["not_met"])
+
+    async def test_a_narration_that_says_the_script_passes_the_word_check(self):
+        p = await self.planned_with_voice()
+        self.heard = "Some scents fade by noon. This one stays. It starts soft. One spray is enough. Mockup fragrance."
+        film = await self.call("join_production_clips", production=p["production"], made={"1": "a", "2": "b", "3": "c"},
+                               sound={"narration": "n", "music": "m"})
+        voice = next(c for c in film["checked"] if c["want"].startswith("Voice-over"))
+        self.assertEqual(voice["result"], "yes")
+        self.assertIn("100%", voice["got"])
+        self.assertEqual(film["sound"]["words_match"], 1.0)
 
     async def test_a_plan_with_no_sound_has_no_sound_to_make(self):
         p = await self.planned("c4")

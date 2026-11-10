@@ -70,7 +70,14 @@ YOUR_CALL_VALUES = {"aspect": "16:9", "seconds": 10, "sound": "none"}
 MAX_QUESTIONS = 3
 
 _I = re.ASCII | re.IGNORECASE
-YOUR_CALL = re.compile(r"your call|you decide|whatever|up to you|don'?t care|anything|surprise me|dealer'?s choice", _I)
+# The plain ways a person hands the choice over. The dry persona sweep of 2026-11-09 found "you pick", "wherever you pick"
+# and "idk just make it" unrecognised, so the shape question was asked again and again (57 of 163 cases under the casual user).
+YOUR_CALL = re.compile(r"your call|you (decide|pick|choose)|pick (one|something|anything|whatever)|whatever|wherever|whichever"
+                       r"|up to you|don'?t care|doesn'?t matter|no preference|anything|surprise me|dealer'?s choice"
+                       r"|i don'?t know|idk|dunno|just (make|do) it|you know best|i trust you", _I)
+# The user ends the questions: "just make it". Every open choice with a default then takes it, whatever was asked last.
+GIVE_UP = re.compile(r"just (make|do) (it|something|whatever|the cheapest)|\bmake it\W*$|stop asking|your call on anything else"
+                     r"|whatever you think is best|go ahead and make it", _I)
 YOU_WRITE = re.compile(r"you write (them|it)|write (them|it) for me", _I)
 DESIGNED_PIECE = re.compile(r"\b(post|poster|flyer|banner|card|ad|advert|announcement|invite|invitation)\b", _I)
 DESTINATION = re.compile(r"\b(website|web ?site|web|social|socials|online|site|homepage|ad|advert)\b", _I)
@@ -242,11 +249,21 @@ def plan_sheet(messages: list[dict], tool: str, params: list[dict], attachments:
             if unsafe:
                 missing("aspect", ask=True)
 
-    # 7. "Your call" answers a question that was asked. It is not a default for a question that was not.
+    # 7. "Your call" answers a question that was asked. It is not a default for a question that was not. A question asked
+    #    twice without a usable answer takes the default too: asking a third time is the loop the dry sweep found.
+    #    For a video made from one picture, the shape handed to us is the picture's own.
+    picture_shape = next((a["aspect"] for a in attachments if a["kind"] in ("image", "video") and a.get("aspect")), None)
+    gave_up = bool(GIVE_UP.search(newest))
     open_rows = [name for name in uses if name in sheet and sheet[name]["source"] == "missing"]
     for name in list(open_rows):
-        if name in YOUR_CALL_VALUES and our_call(name):
-            fill(name, YOUR_CALL_VALUES[name], "default", "the user said it is our call")
+        if name not in YOUR_CALL_VALUES:
+            continue
+        asked_twice = sum(QUESTIONS[name] in text for text in asked) >= 2
+        if our_call(name) or asked_twice or gave_up:
+            value = picture_shape if name == "aspect" and picture_shape else YOUR_CALL_VALUES[name]
+            why = ("the user said it is our call" if our_call(name) else "the user said to just make it" if gave_up
+                   else "asked twice without an answer")
+            fill(name, value, "default", why)
             open_rows.remove(name)
 
     # 8. One question for each open row, required parameters first, three at most.

@@ -30,6 +30,10 @@ Questions (user, 2026-11-07: the model decides; the MCP asks at the known risks,
 
 A voice-over is one track for the whole film, not a sound inside each clip: `says` holds the narrator's lines
 for a beat. One call reads all the lines in one voice; the join puts each beat's lines on that beat.
+    voice_sample  a URL of a short recording of a voice the user owns or has rights to. With the voice-over switch on
+                  (MAGIC_HOUR_VOICE_OVER=cloner), the voice cloner reads the script in that voice. Else a video model
+                  reads it over a black screen (2 right in 8, 2026-11-08).
+    The switch is off in what we ship until upstream approves the voice cloner (MCP-11; tests/test_release_gates.py).
 
 A beat is the smallest unit: one action. `link` says how a beat relates to the beat before it:
     continues   the same shot goes on (no cut wanted)
@@ -40,6 +44,7 @@ A beat is the smallest unit: one action. `link` says how a beat relates to the b
 
 from __future__ import annotations
 
+import os
 import re
 from copy import deepcopy
 from typing import Any
@@ -58,6 +63,27 @@ CREDITS_PER_SECOND = 24
 STILL_CREDITS = 10
 PROMPT_LIMIT = 2000
 TRIGGER_SECONDS = 15
+VOICE_OVER_DEFAULT = "video"   # what we ship. "cloner" only after upstream approves the voice cloner (MCP-11)
+VOICE_OVER_MODES = ("video", "cloner")
+CLONER_CREDITS_PER_10_LETTERS = 1   # 0.1 credits a character, rounded up
+
+
+def word_match(heard: str, script: str) -> float:
+    """The share of the script's words that a transcript has, in order (longest common subsequence). 1.0 = all."""
+    a = re.findall(r"[a-z0-9']+", script.lower().replace("\u2019", "'"))
+    b = re.findall(r"[a-z0-9']+", heard.lower().replace("\u2019", "'"))
+    row = [0] * (len(b) + 1)
+    for x in a:
+        prev = 0
+        for j, y in enumerate(b, 1):
+            prev, row[j] = row[j], (prev + 1 if x == y else max(row[j], row[j - 1]))
+    return round(row[-1] / (len(a) or 1), 2)
+
+
+def voice_over_mode() -> str:
+    """How a voice-over is made: "video" (a video model over a black screen) or "cloner" (the voice cloner)."""
+    mode = os.getenv("MAGIC_HOUR_VOICE_OVER", VOICE_OVER_DEFAULT).strip().lower()
+    return mode if mode in VOICE_OVER_MODES else VOICE_OVER_DEFAULT
 TRIGGER_IDEAS = 3
 
 # Where each strategy cuts between two scene beats. Every strategy also cuts when the
@@ -492,13 +518,20 @@ def plan_sound(story: dict, clips: list[dict]) -> dict | None:
     if parts:
         script = " ".join(line for part in parts for line in part["lines"])
         seconds = min(MODEL_MAX_SECONDS[TEXT_MODEL], max(5, -(-len(script.split()) // NARRATION_WORDS_PER_SECOND) + 3))
-        voice = (story.get("narrator") or "a calm, warm narrator").strip().rstrip(".")
-        sound["narration"] = {
-            "parts": parts, "seconds": int(seconds), "model": TEXT_MODEL, "resolution": RESOLUTION, "credits": int(seconds) * CREDITS_PER_SECOND,
-            "prompt": (f"A plain black screen for the whole clip; nothing appears and nothing moves. Sound only: an off-camera narrator, {voice}. "
-                       f"The narrator reads these words once, exactly, at a relaxed pace, with a clear pause after each sentence, and then stays silent: "
-                       f"\"{script}\" No music, no other sound."),
-        }
+        if voice_over_mode() == "cloner" and story.get("voice_sample"):
+            sound["narration"] = {
+                "parts": parts, "tool": "voice_cloner", "sample": story["voice_sample"], "script": script,
+                "credits": -(-len(script) // 10) * CLONER_CREDITS_PER_10_LETTERS,
+            }
+        else:
+            voice = (story.get("narrator") or "a calm, warm narrator").strip().rstrip(".")
+            sound["narration"] = {
+                "tool": "video",
+                "parts": parts, "seconds": int(seconds), "model": TEXT_MODEL, "resolution": RESOLUTION, "credits": int(seconds) * CREDITS_PER_SECOND,
+                "prompt": (f"A plain black screen for the whole clip; nothing appears and nothing moves. Sound only: an off-camera narrator, {voice}. "
+                           f"The narrator reads these words once, exactly, at a relaxed pace, with a clear pause after each sentence, and then stays silent: "
+                           f"\"{script}\" No music, no other sound."),
+            }
     if story.get("music"):
         seconds = max(MUSIC_MIN_SECONDS, film_seconds + 2)
         sound["music"] = {"seconds": seconds, "prompt": story["music"].strip(), "credits": seconds * MUSIC_CREDITS_PER_SECOND}
@@ -569,7 +602,7 @@ def check_plan(story: dict, planned: dict) -> list[str]:
     if sorted(set(covered)) != list(range(1, len(story["beats"]) + 1)) or covered != sorted(covered):
         problems.append("every beat must be in a clip, in story order")
     narration = (planned.get("sound") or {}).get("narration")
-    if narration and len(narration["prompt"]) > PROMPT_LIMIT:
+    if narration and len(narration.get("prompt", "")) > PROMPT_LIMIT:
         problems.append(f"the narration is {len(narration['prompt'])} characters with its instructions, the limit is {PROMPT_LIMIT}")
     for part in (narration or {}).get("parts", []):
         if len(" ".join(part["lines"]).split()) > part["seconds"] * 3.2:
@@ -592,6 +625,7 @@ def check_plan(story: dict, planned: dict) -> list[str]:
 
 
 HEX = re.compile(r"#[0-9A-Fa-f]{6}\b")
+NAMED_HEX = re.compile(r"(\b[A-Za-z]+ )?(#[0-9A-Fa-f]{6})\b")   # "teal #0E7C86": the word before a code, if any
 
 
 def advise(story: dict, planned: dict, request: str | None = None) -> list[dict]:
@@ -696,6 +730,17 @@ def questions(story: dict, planned: dict) -> list[dict]:
                     "options": {"split": "Give beat {0} a clip of its own.".format(n), "keep": "Keep the clip. The line may not be said."},
                     "recommend": "split",
                 })
+    if (voice_over_mode() == "cloner" and any(b.get("says") for b in beats) and not story.get("voice_sample")
+            and story.get("voice_route") != "video"):
+        out.append({
+            "id": "voice", "beat": None,
+            "ask": ("The film has a voice-over. A video model reading it over a black screen said the script right 2 times in 8 "
+                    "(nonsense or silence otherwise). The voice cloner read it exactly, for about 0.1 credit a letter, but it "
+                    "needs a short recording (10-30 s) of a voice the user owns or has rights to. How should the voice be made?"),
+            "options": {"sample": "Ask the user for the recording; put its URL in the story's `voice_sample`. Never a voice of someone else without their consent.",
+                        "video": "A video model reads it. Tell the user the voice-over may come out wrong or silent."},
+            "recommend": "sample",
+        })
     texts = [story.get("setting", "")] + [b.get("text", "") for b in beats if b.get("kind", "scene") == "scene"]
     codes = sorted({c for t in texts for c in HEX.findall(t)})
     if codes and not story.get("colour_codes"):
@@ -719,12 +764,21 @@ def apply_answers(story: dict, answers: dict[str, str]) -> tuple[dict, list[str]
         kind, _, num = key.partition("-")
         if key == "colour-codes":
             if choice == "words":
-                swap = lambda text: HEX.sub(lambda m: colour_name(m.group(0)), text)
+                swap = lambda text: NAMED_HEX.sub(lambda m: m.group(1).rstrip() if m.group(1) and m.group(1).strip().lower() == colour_name(m.group(2)) else (m.group(1) or "") + colour_name(m.group(2)), text)
                 story["setting"] = swap(story.get("setting", ""))
                 for b in beats:
                     if b.get("kind", "scene") == "scene":
                         b["text"] = swap(b["text"])
             story["colour_codes"] = choice
+            continue
+        if key == "voice":
+            if choice == "video":
+                story["voice_route"] = "video"
+            elif choice == "sample":
+                if not story.get("voice_sample"):
+                    problems.append("voice: put the recording's URL in the story's `voice_sample`")
+            else:
+                problems.append("voice: choose sample or video")
             continue
         if not num.isdigit() or not 1 <= int(num) <= len(beats):
             problems.append(f"no question {key}")

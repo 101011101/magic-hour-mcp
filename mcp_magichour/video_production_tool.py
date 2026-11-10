@@ -26,7 +26,7 @@ from mcp.types import ToolAnnotations
 from pydantic import BaseModel, Field
 
 from . import media_tools
-from .video_production import TRIGGER_IDEAS, TRIGGER_SECONDS, advise, apply_answers, host_cuts, plan, questions
+from .video_production import word_match, TRIGGER_IDEAS, TRIGGER_SECONDS, advise, apply_answers, host_cuts, plan, questions
 
 FILMS_PATH = "/films"
 FILMS_DIR = Path(os.getenv("MAGIC_HOUR_FILMS_DIR", Path(tempfile.gettempdir()) / "magic-hour-films"))
@@ -40,6 +40,25 @@ SPLIT_STRATEGY = "person"
 SPLIT_MAX_SECONDS = 15
 CARD_SIZES = {"16:9": (854, 480), "9:16": (480, 854), "1:1": (640, 640)}
 SPEECH_MIN_SECONDS = 1.0   # less sound than this in a narration track: no voice was made
+WORDS_MIN_MATCH = 0.8      # the share of the script's words a transcript must have, in order (A4: nonsense was 0.04)
+TRANSCRIBE_URL = "https://api.openai.com/v1/audio/transcriptions"
+
+
+async def _transcribe(audio: Path) -> str | None:
+    """What a narration says, by Whisper, when the server has OPENAI_API_KEY. None when it cannot be checked."""
+    key = os.getenv("OPENAI_API_KEY")
+    if not key or not media_tools.have_ffmpeg():
+        return None
+    wav = audio.with_name(audio.stem + "-16k.wav")
+    try:
+        await asyncio.to_thread(media_tools._ffmpeg, ["-i", str(audio), "-vn", "-ac", "1", "-ar", "16000", str(wav)])
+        async with httpx.AsyncClient(timeout=httpx.Timeout(120.0)) as client:
+            response = await client.post(TRANSCRIBE_URL, headers={"Authorization": f"Bearer {key}"},
+                                         data={"model": "whisper-1", "language": "en"}, files={"file": (wav.name, wav.read_bytes(), "audio/wav")})
+            response.raise_for_status()
+            return response.json().get("text", "")
+    except Exception:   # the check is extra: a failed check leaves the words to the ear, it does not fail the join
+        return None
 
 
 class Subject(BaseModel):
@@ -114,6 +133,10 @@ class Story(BaseModel):
     narrator: str | None = Field(default=None, description="For a voice-over: how the narrator sounds, for example 'a calm, warm woman's voice'.")
     music: str | None = Field(default=None, description="Music under the whole film: its mood and instruments. Leave empty for no music.")
     captions: bool = Field(default=False, description="Draw the narrator's sentences on the picture when they are spoken.")
+    voice_sample: str | None = Field(default=None, description=(
+        "For a voice-over read by the voice cloner: a short recording (10-30 s) of a voice the user owns or has rights to, "
+        "as its Magic Hour file_path or a URL. Only when the plan's `voice` question asks for it."))
+    voice_route: str | None = Field(default=None, description="Set by the answer to the `voice` question. Leave empty.")
 
 
 def register_video_production(mcp: FastMCP) -> None:
@@ -180,7 +203,8 @@ def register_video_production(mcp: FastMCP) -> None:
         name="create_production_sound",
         title="Make the voice-over and music of a planned video",
         description=(
-            "Makes the sound of a plan from plan_video_production that has a `sound` part: one narration that reads "
+            "Makes the sound of a plan from plan_video_production that has a `sound` part: one narration (a video model, or the "
+            "voice cloner when the story has `voice_sample`) that reads "
             "all the narrator's sentences in one voice, and one music track. Returns `narration` (a video project id: "
             "wait with wait_for_video_project) and `music` (an audio project id: wait with wait_for_audio_project). "
             "Pass both to join_production_clips as `sound`. Spends credits: 24 for each second of narration, 1 for "
@@ -342,7 +366,14 @@ async def make_sound(story: dict) -> dict:
     if not sound:
         raise ToolError("This plan has no sound. Put the narrator's sentences in `says`, or set `music`, and plan again.")
     out: dict[str, Any] = {"credits_charged": 0}
-    if "narration" in sound:
+    if "narration" in sound and sound["narration"].get("tool") == "voice_cloner":
+        n = sound["narration"]
+        created = await _api("POST", "/v1/ai-voice-cloner", {
+            "name": f"{story.get('title', 'Video')} · narration", "assets": {"audio_file_path": n["sample"]},
+            "style": {"prompt": n["script"]}})
+        out["narration"] = created["id"]
+        out["credits_charged"] += int(created.get("credits_charged", 0))
+    elif "narration" in sound:
         n = sound["narration"]
         created = await _api("POST", "/v1/text-to-video", {
             "name": f"{story.get('title', 'Video')} · narration", "end_seconds": n["seconds"], "aspect_ratio": story["aspect"],
@@ -355,7 +386,8 @@ async def make_sound(story: dict) -> dict:
             "name": f"{story.get('title', 'Video')} · music", "duration": m["seconds"], "style": {"prompt": m["prompt"], "instrumental": True}})
         out["music"] = created["id"]
         out["credits_charged"] += int(created.get("credits_charged", 0))
-    out["next"] = ("wait_for_video_project with `narration`, wait_for_audio_project with `music`; then pass "
+    cloned = sound.get("narration", {}).get("tool") == "voice_cloner"
+    out["next"] = (f"wait_for_{'audio' if cloned else 'video'}_project with `narration`, wait_for_audio_project with `music`; then pass "
                    "{narration, music} to join_production_clips as `sound`")
     return out
 
@@ -430,10 +462,13 @@ async def join_clips(story: dict, made: dict[str, str], sound: dict[str, str] | 
         joined = Path(folder) / "joined.mp4" if sound_plan else FILMS_DIR / name
         await asyncio.to_thread(media_tools.join, files, joined, bool(story.get("audio")))
         if sound_plan:
-            narration = await _finished("video", sound["narration"], Path(folder) / "narration.mp4") if "narration" in sound_plan else None
+            cloned = (sound_plan.get("narration") or {}).get("tool") == "voice_cloner"
+            narration = (await _finished("audio" if cloned else "video", sound["narration"], Path(folder) / ("narration" if cloned else "narration.mp4"))
+                         if "narration" in sound_plan else None)
             if narration is not None:
                 spans = await asyncio.to_thread(media_tools.speech_spans, narration)
                 speech_seconds = round(sum(end - start for start, end in spans), 1)
+                heard_words = await _transcribe(narration)
             music = await _finished("audio", sound["music"], Path(folder) / "music") if "music" in sound_plan else None
             starts, at = {}, 0.0
             for n in planned["join"]:
@@ -442,6 +477,10 @@ async def join_clips(story: dict, made: dict[str, str], sound: dict[str, str] | 
             result["sound"] = await asyncio.to_thread(_add_sound, sound_plan, joined, narration, music, FILMS_DIR / name, starts)
             if narration is not None:
                 result["sound"]["speech_seconds"] = speech_seconds
+                if heard_words is not None:
+                    script = " ".join(line for part in sound_plan["narration"]["parts"] for line in part["lines"])
+                    result["sound"]["heard"] = heard_words
+                    result["sound"]["words_match"] = word_match(heard_words, script)
     film = FILMS_DIR / name
     measured = await asyncio.to_thread(media_tools.probe, film)
     loud = await asyncio.to_thread(media_tools.loudness_db, film)
@@ -474,6 +513,12 @@ def _check_film(planned: dict, story: dict, measured: dict, loud: float | None, 
             elif heard is not None and heard < SPEECH_MIN_SECONDS:
                 # B1, 7 November: a narration call came back silent and was counted as placed. Speech is measured now.
                 checked.append({"want": want, "got": f"the narration track has {heard:.1f} s of sound in it: no voice was made; make the sound again", "result": "no"})
+            elif done.get("words_match") is not None and done["words_match"] < WORDS_MIN_MATCH:
+                # A4, 8 November: a narration said made-up words and passed the speech check. The words are compared now.
+                checked.append({"want": want, "got": f"the narration says other words ({round(done['words_match'] * 100)}% of the script): "
+                                f"\"{done['heard'][:200]}\"; make the sound again or tell the user", "result": "no"})
+            elif done.get("words_match") is not None:
+                checked.append({"want": want, "got": f"narration placed on its beats; a transcript has {round(done['words_match'] * 100)}% of the script's words, in order", "result": "yes"})
             else:
                 checked.append({"want": want, "got": f"narration placed on its beats, {heard or 0:.1f} s of speech; the words are checked by ear", "result": "yes"})
         elif kind == "music":

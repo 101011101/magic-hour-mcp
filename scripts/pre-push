@@ -1,0 +1,10 @@
+#!/bin/sh
+# Release gates before a push (MCP-11). Install: ln -sf ../../scripts/pre-push .git/hooks/pre-push
+# Checks against upstream's policy as it is in this checkout: rebase on upstream/main first.
+cd "$(git rev-parse --show-toplevel)" || exit 1
+PY=.venv/bin/python; [ -x "$PY" ] || PY=python3
+if ! git merge-base --is-ancestor upstream/main HEAD 2>/dev/null; then
+  echo "pre-push: this branch is not rebased on upstream/main; the gate may read an old upstream policy."
+  echo "          run: git fetch upstream && git rebase upstream/main"
+fi
+"$PY" -m pytest -q tests/test_release_gates.py -s || { echo "pre-push: a release gate is red (see above). Push refused."; exit 1; }

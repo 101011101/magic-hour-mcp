@@ -387,6 +387,39 @@ class PlanRequestTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result["ready"])
         self.assertEqual(result["questions"], [])
 
+    # --- the loop the dry persona sweep found (2026-11-09): plain delegation words, a give-up, a question asked twice ---
+
+    async def test_you_pick_hands_the_shape_over_and_a_video_from_one_picture_takes_the_pictures_shape(self):
+        for answer in ["wherever you pick", "idk", "you choose", "doesn't matter"]:
+            with self.subTest(answer=answer):
+                result, sheet = await self.plan(
+                    ["make a 6 second video of the bottle in this pic turning slowly in place, no sound", assistant(QUESTIONS["aspect"]), answer], "create_video_from_image",
+                    {"motion": ("the bottle turns slowly in place", "user"), "seconds": (6, "user"), "sound": ("none", "user"),
+                     "aspect": (None, "missing")}, ["woman"])
+                self.assertEqual((sheet["aspect"]["value"], sheet["aspect"]["source"]), ("1:1", "default"))
+                self.assertTrue(result["ready"])
+                self.assertEqual(result["questions"], [])
+
+    async def test_just_make_it_ends_the_questions_with_the_defaults(self):
+        for answer in ["idk just make it", "stop asking. make it.", "Your call on anything else. Go ahead and make it."]:
+            with self.subTest(answer=answer):
+                result, sheet = await self.plan(
+                    ["make a video about a kind gesture at a park bench", assistant(QUESTIONS["seconds"] + " " + QUESTIONS["aspect"] + " " + QUESTIONS["sound"]), answer],
+                    "create_video_from_text",
+                    {"subject": ("a kind gesture at a park bench", "user"), "seconds": (None, "missing"), "aspect": (None, "missing"), "sound": (None, "missing")})
+                self.check(result, sheet, [], YOUR_CALL_DEFAULTS)
+                self.assertEqual({sheet[name]["source"] for name in YOUR_CALL_DEFAULTS}, {"default"})
+
+    async def test_a_question_asked_twice_without_an_answer_takes_the_default(self):
+        result, sheet = await self.plan(
+            ["make a video about a kind gesture at a park bench", assistant(QUESTIONS["seconds"] + " " + QUESTIONS["aspect"]), "15 seconds",
+             assistant(QUESTIONS["aspect"]), "silent"],
+            "create_video_from_text",
+            {"subject": ("a kind gesture at a park bench", "user"), "seconds": (15, "user"), "aspect": (None, "missing"), "sound": ("none", "user")})
+        self.assertEqual((sheet["aspect"]["value"], sheet["aspect"]["source"]), (YOUR_CALL_DEFAULTS["aspect"], "default"))
+        self.assertTrue(result["ready"])
+        self.assertEqual(result["questions"], [])
+
     async def test_edit_of_one_attached_picture_gives_no_question_for_shape(self):
         item = next(i for i in ITEMS if i[:2] == ("S05", "vague"))
         result, sheet = await self.plan([item[3]], item[2], item[5], item[4])

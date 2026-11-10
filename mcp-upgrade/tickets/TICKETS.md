@@ -14,9 +14,16 @@
     - `git fetch upstream && git rebase upstream/main`.
     - Check that `apply_magic_hour_policies` keeps `/v1/ai-voice-cloner` (or `APPROVED_VOICE_NAMES` is not empty).
     - Not allowed: do not push the feature on. Push it off, or hold the push.
-  - [ ] Build the feature behind a switch, off by default.
-  - [ ] A release-gate test that fails while the feature is on and upstream still hides the tool.
-  - [ ] Fix found by the test, done: `media_tools.probe` reads a file with no picture (a voice track).
+  - [x] Switch: `MAGIC_HOUR_VOICE_OVER=cloner`; shipped default `VOICE_OVER_DEFAULT = "video"` (`video_production.py`).
+  - [x] Switch on, no `voice_sample`: the plan asks question `voice` (sample / video), recommends sample.
+  - [x] Switch on, with `voice_sample`: `create_production_sound` calls `/v1/ai-voice-cloner`; the join fetches an audio project.
+  - [x] Gate: `tests/test_release_gates.py` fails while the shipped default or a shipped config turns the cloner on and upstream still hides it.
+  - [x] Hook file: `scripts/pre-push`. Not installed (the user installs it): `ln -sf ../../scripts/pre-push .git/hooks/pre-push`.
+  - [x] Fix found by the test: `media_tools.probe` reads a file with no picture (a voice track).
+  - [x] Fix: the "colour words" answer no longer makes "teal teal".
+  - [x] Paid check (2026-11-08, 334 credits): A4 with a recording attached (item `A4v`), through a local MCP with the switch on. The MCP asked `voice`; the agent answered sample with the recording's file_path; the cloner read the script (22 credits); the word check heard 100%. Film: `Benchmark/voice/A4/MCP/`.
+  - [x] Word check: the join transcribes the narration (Whisper, only when the server has `OPENAI_API_KEY`) and reports "no" under 80% of the script's words. Without the key: the speech check only, as before.
+- Facing-away speaker test (2026-11-08, 576 credits, `Benchmark/facing.html`): the line was said word for word 6 of 6 (back to the camera, profile, far away, two people where the one facing away speaks; ltx-2.5 and minimax-h3). The listener kept her mouth closed in all 3 two-person clips. ltx-2.5 put "back to the camera" as three-quarters away, side by side (S1).
 
 - [ ] **MCP-01 · Conversation: derive the parameters, ask only for the rest.** [Ticket](MCP-01-conversation.md). [Spec](../prd/MCP-01-conversation.md).
   - [x] PRD, spec, 40 contract tests: `tests/test_plan_request.py`.

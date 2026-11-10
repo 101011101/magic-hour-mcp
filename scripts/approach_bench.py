@@ -221,13 +221,61 @@ def run_line(budget: Budget) -> list[dict]:
     return records
 
 
+MAN = "an older man with a grey beard and a green coat under a black umbrella"
+WOMAN_RED = "a woman with a silver bob in a red raincoat"
+STOP = "A 4-second 16:9 clip. Rainy night, a city bus stop. "
+TAIL = " Rain sound. No music, no other speech."
+FACING = {
+    "S1": ("ltx-2.5", "Back to the camera",
+           STOP + f"Seen from behind: {MAN} stands with his back to the camera, facing {WOMAN_RED} who faces him. "
+           f"He keeps his back to the camera the whole time and says out loud, clearly: \"{LINE}\"" + TAIL),
+    "S2": ("ltx-2.5", "Side view, to someone off screen",
+           STOP + f"A side view of {MAN}, in profile, looking to the right at someone off screen. He stays in profile "
+           f"and says out loud, clearly: \"{LINE}\"" + TAIL),
+    "S3": ("ltx-2.5", "Far away, small in the frame",
+           STOP + f"A wide shot: {MAN} is small and far away across the street. He says out loud, clearly: \"{LINE}\"" + TAIL),
+    "S4": ("ltx-2.5", "Two people: the one facing away speaks",
+           STOP + f"{MAN} stands with his back to the camera; {WOMAN_RED} faces the camera, looking at him. Only the man speaks: "
+           f"he says out loud, clearly: \"{LINE}\" The woman does not speak; her mouth stays closed." + TAIL),
+    "S5": ("minimax-h3", "Back to the camera",
+           STOP + f"Seen from behind: {MAN} stands with his back to the camera, facing {WOMAN_RED} who faces him. "
+           f"He keeps his back to the camera the whole time and says out loud, clearly: \"{LINE}\"" + TAIL),
+    "S6": ("minimax-h3", "Two people: the one facing away speaks",
+           STOP + f"{MAN} stands with his back to the camera; {WOMAN_RED} faces the camera, looking at him. Only the man speaks: "
+           f"he says out loud, clearly: \"{LINE}\" The woman does not speak; her mouth stays closed." + TAIL),
+}
+
+
+def run_facing(budget: Budget) -> list[dict]:
+    """A spoken line when the speaker does not face the camera. Is it said, does he stay turned away, does the right one speak."""
+    root = OUT / "facing"
+    records = []
+    for key, (model, name, prompt) in FACING.items():
+        folder = root / key
+        if (folder / "record.json").exists():
+            records.append(json.loads((folder / "record.json").read_text()))
+            continue
+        folder.mkdir(parents=True, exist_ok=True)
+        record = {"id": key, "name": f"{name}, {model}", "how": f"4 s {model} text-to-video, sound on", "prompt": prompt, "steps": []}
+        try:
+            record["steps"].append(t2v(model, prompt, 4, "16:9", folder / "film.mp4", budget, audio=True))
+            record["film"] = probe(folder / "film.mp4")
+        except Exception as error:   # one attempt
+            record["failed"] = str(error)
+            print(f"  {key} FAILED: {error}", flush=True)
+        record["credits"] = sum(s["credits"] for s in record["steps"])
+        (folder / "record.json").write_text(json.dumps(record, indent=2))
+        records.append(record)
+    return records
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("job", choices=["words", "continue", "line"])
+    parser.add_argument("job", choices=["words", "continue", "line", "facing"])
     parser.add_argument("--limit", type=int, required=True, help="the most credits this command may spend")
     args = parser.parse_args()
     budget = Budget(args.limit)
-    records = {"words": run_words, "continue": run_continue, "line": run_line}[args.job](budget)
+    records = {"words": run_words, "continue": run_continue, "line": run_line, "facing": run_facing}[args.job](budget)
     for r in records:
         print(f"{r['id']} {r['name']} · {r['credits']} credits · {r.get('failed') or 'made'}")
     print(f"spent {budget.spent} of {args.limit} credits")
