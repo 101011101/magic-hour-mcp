@@ -44,7 +44,7 @@ Output
   - `aspect`: `16:9`, `9:16`, `1:1`.
   - `seconds`: number.
   - `sound`: `none`, `ambient`, `music`, `narration`, `dialogue`.
-  - `exact_words`: list of strings. Empty list = no words.
+  - `exact_words`: list of strings. Empty list = no words. A string is read as one line each; a dict of text slots (`top`, `bottom`) as its values; "No text" as `[]` (2026-11-10).
   - Other parameters: string.
   - Source `missing`: `null`.
   - (`catalogue.js` 33.)
@@ -137,11 +137,13 @@ Example 2: complete brief (V4 item V01, full).
 | 3 | The server removes a row if the tool does not use the parameter. No question for it. | `intent.js` 75; ticket | code |
 | 4 | The server adds a `missing` row for each required parameter that has no row. The server adds a `missing` row for `aspect` if the tool uses `aspect`. | `intent.js` 52, 75 | code |
 | 5 | Source `default` is permitted only for: look, position, transition, voice, language, keep. On a different parameter, the row becomes `missing`. Exception: rule 6, rule 9. | `intent.js` 33; ticket | model |
-| 6 | "Your call" = the newest user message has one of: your call, you decide, whatever, up to you, don't care, anything, surprise me, dealer's choice. (a) The server keeps a `default` from the host on each parameter. (b) If only one row is `missing`: the server fills aspect `16:9`, or seconds `10`, or sound `none`, source `default`. | `questions.js` 33; `intent.js` 38, 59 | (a) model, (b) code |
-| 7 | Exact words, source `user`: each string must be in the user's messages, word for word. If not, the row becomes `missing`. | `intent.js` 36; ticket | model |
-| 8 | Exact words, source `derived`: only the empty list is permitted. If the list has words, the row becomes `missing`. | `intent.js` 35, 36 | model |
-| 9 | Exact words, source `default`: permitted only if the newest user message has "you write them" or a phrase of rule 6. "The usual stuff" is not permission. | `intent.js` 36; ticket | model |
-| 10 | A designed piece needs exact words. Conditions: the tool is `generate_image`; the user's words have post, poster, flyer, banner, card, ad, advert, announcement, invite or invitation; no assistant message has the word "word" or "words"; the user's words have no quote mark. Then `exact_words` becomes `missing`. | `intent.js` 70, 71 | code |
+| 6 | "Your call" = a user message has one of: your call, you decide, whatever, up to you, don't care, anything, surprise me, dealer's choice. (a) The server keeps a `default` from the host on each parameter. (b) If only one row is `missing`: the server fills aspect `16:9`, or seconds `10`, or sound `none`, source `default`. (c) "Your call" answers each parameter that the assistant message before it asked about (rule 10b). It stays true to the end of the chat. A "your call" with no assistant message before it answers nothing. (Changed 2026-11-10, proposed: was only the newest message. Answers open question 17.) | `questions.js` 33; `intent.js` 38, 59 | (a) model, (b) code, (c) code |
+| 7 | Exact words, source `user`: each string must be in the user's messages, compared without case, quotes, punctuation or a list number ("1 Clear your desk" = "Clear your desk"), or be words the assistant just proposed and the user approved ("Yes, use that"; a bare "yes" is not approval). If not, the row becomes `missing`, unless rule 9 permits. (Changed 2026-11-10: was "word for word".) | `intent.js` 36; ticket | model |
+| 8 | Exact words, source `derived`: only the empty list is permitted. If the list has words, the row becomes `missing`, unless rule 9 permits. | `intent.js` 35, 36 | model |
+| 9 | Exact words handed over: any user message says "you write them", "you pick the words", "the exact words are your call" or "choose a headline yourself", or the newest message is "your call" to the words question. Then the host may write the words (source `default`, `derived` or `user`). "The usual stuff" is not permission. (Changed 2026-11-10: was only the newest message.) | `intent.js` 36; ticket | model |
+| 10 | A designed piece needs exact words. Conditions: the tool is `generate_image`; the user's words have post, poster, flyer, banner, card, ad, advert, announcement, invite or invitation; no assistant message has the word "word" or "words"; the user's words have no quote mark; the user did not say "no text"; the user did not hand the words over (rule 9). Then `exact_words` becomes `missing`. | `intent.js` 70, 71 | code |
+| 10a | The user says "no text" ("no text", "no added text", "no words", "without any text", "don't include any words"): `exact_words` = `[]`, source `user`. No question. "No idea what words" is not "no text". The host's `[]`, `"No text"` or `"none"` give the same result. (Added 2026-11-10.) | persona dry sweep p2 | code |
+| 10b | A question counts as asked when the assistant's message has it word for word or a question sentence about the same thing (shape: shown, posted, vertical, wide; length: how long, seconds; words: words, text, caption, headline; sound: sound, music, silent; motion: move, movement, motion, animate, camera). This decides whether "your call" answers it and whether it was asked twice. A suggestion that only mentions "vertical" is not a question. (Added 2026-11-10.) | persona dry sweep p2 | code |
 | 11 | Tool `edit_image`: if `edit` has a source that is not `user`, the row becomes `missing`. | `intent.js` 73; ticket | code |
 | 12 | Length and sound, source `user` or `derived`: the server parses all user messages. If the parser finds no value, the row becomes `missing`. If the parser finds a value, the server keeps the value from the host. | `intent.js` 34; `questions.js` 31, 32 | model |
 | 13 | Length and sound, source `missing`: the server parses the newest user message. If the parser finds a value: that value, source `derived`. | `intent.js` 57 | code |
@@ -274,7 +276,7 @@ Gaps of code that checks a host
 14. Free-text parameters (subject, edit, motion, range, which_face, look, keep, mood, script, language): the server cannot check that the user gave the value. Is a check necessary?
 15. Order of the questions. Ticket: "The most blocking question is first." V4: the model gives the order. Code needs a fixed order. Which order?
 16. Strange answer. Ticket: "Ask again with simpler words." The set has one text for each parameter. Is a second text necessary? Who writes it? Spec 3.2 says "asked once".
-17. "Your call": code cannot tell which parameter the user means. The tests use the newest user message. Does the permission stay in later turns?
+17. "Your call": code cannot tell which parameter the user means. The tests use the newest user message. Does the permission stay in later turns? (Code on 2026-11-10, proposed, not your answer: yes, to the end of the chat, for the parameters the question before it asked about. Rule 6c. Confirm or reverse.)
 18. Exact words, rule 7: must capital letters and spaces be the same?
 19. Exact words that the host reads from an attached picture (V4 run of S11: the words on the poster, source `derived`). Rule 8 makes them `missing`. Must the host not send them?
 20. The host does not know the shape of an attached picture. Rule 16 has no value; the row stays `missing`; rule 18 asks. OK? (`edit_image` has `aspect_ratio: auto`.)

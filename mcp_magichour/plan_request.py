@@ -78,7 +78,29 @@ YOUR_CALL = re.compile(r"your call|you (decide|pick|choose)|pick (one|something|
 # The user ends the questions: "just make it". Every open choice with a default then takes it, whatever was asked last.
 GIVE_UP = re.compile(r"just (make|do) (it|something|whatever|the cheapest)|\bmake it\W*$|stop asking|your call on anything else"
                      r"|whatever you think is best|go ahead and make it", _I)
-YOU_WRITE = re.compile(r"you write (them|it)|write (them|it) for me", _I)
+# The user handed the wording over, in the brief or later: "you write them", "you pick the words", "the exact words are your call",
+# "choose a headline yourself". The host may then write the words itself.
+YOU_WRITE = re.compile(
+    r"you write (them|it)|write (them|it) for me"
+    r"|you (?:pick|choose|decide|come up with|write|invent)\b(?:\s+\w+){0,4}\s+(?:words?|headline|tagline|slogan|caption|text|wording)\b"
+    r"|\b(?:words?|headline|tagline|slogan|caption|text|wording)\b(?:\s+(?:is|are|will be|to be))?\s*[-:,—]?\s*(?:your call|you pick|up to you|you choose|you decide)"
+    r"|\b(?:choose|pick|write|come up with)\b[^.\n]{0,40}\b(?:headline|tagline|slogan|caption)\b[^.\n]{0,25}\byourself", _I)
+# The user approves the words the assistant just proposed. A bare "yes" does not: it may only answer "should any words appear?".
+AFFIRM = re.compile(r"\b(?:use (?:that|it|those|them)|go with (?:that|it|those)|sounds good|looks good|that works|that one|those are fine|perfect)\b", _I)
+# "No text" in the user's words. "No idea what words" is not it.
+NO_TEXT = re.compile(
+    r"\b(?:no|without|zero)\s+(?:(?:added|extra|any|on-?screen|visible|overlaid|written|printed)\s+){0,3}(?:text|words?|captions?|lettering|writing)\b"
+    r"|\b(?:don'?t|do not|never)\s+(?:want|need|include|add|put|use|have|show)\s+(?:any\s+)?(?:text|words?|captions?|lettering|writing)\b"
+    r"|\btext[- ]free\b", _I)
+NONE_VALUE = re.compile(r"\W*(?:none|nothing|n/?a)\W*", _I)
+# What each question is about, so "your call" answers a question the host reworded (a host rarely repeats the set word for word).
+ASKED_ABOUT = {
+    "aspect": r"shown|posted|vertical|square|wide|shape|platform|instagram|tiktok|youtube",
+    "seconds": r"how long|seconds|length|duration",
+    "exact_words": r"\bwords?\b|\btext\b|captions?|headline|wording|lettering",
+    "sound": r"\bsound\b|music|silent|voice|audio",
+    "motion": r"\bmov(?:e|es|ing|ement)\b|motion|animat|camera",
+}
 DESIGNED_PIECE = re.compile(r"\b(post|poster|flyer|banner|card|ad|advert|announcement|invite|invitation)\b", _I)
 DESTINATION = re.compile(r"\b(website|web ?site|web|social|socials|online|site|homepage|ad|advert)\b", _I)
 PRINT_WORDS = re.compile(r"\b(poster|flyer|print|a4|letter)\b", _I)
@@ -149,6 +171,45 @@ def _first(parser, texts: list[str]):
     return next((value for value in map(parser, texts) if value is not None), None)
 
 
+def as_word_list(value: Any) -> list[str] | None:
+    """exact_words arrives as a list, as one string, or as "No text". Always a list of lines; [] means the user wants no words."""
+    if value is None:
+        return None
+    items = [value] if isinstance(value, str) else list(value.values()) if isinstance(value, dict) else list(value) if isinstance(value, (list, tuple)) else [value]   # a dict is text slots: {"top": ..., "bottom": ...}
+    words: list[str] = []
+    for item in items:
+        for line in str(item).splitlines():
+            line = line.strip()
+            if line and not ((NO_TEXT.search(line) and len(line.split()) <= 10) or NONE_VALUE.fullmatch(line)):
+                words.append(line)
+    return words
+
+
+def _plain(text: Any) -> str:
+    """Words compared without case, quotes, punctuation or a list number in front: "1 Clear your desk" is "Clear your desk"."""
+    text = re.sub(r"^\s*(?:\d+[.)]?|[-•*])\s+", "", str(text))
+    return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
+
+
+def asked_about(name: str, message: str) -> bool:
+    """The message put this parameter's question: word for word, or in other words (a question sentence about the same thing)."""
+    questions = " ".join(re.findall(r"[^.!?\n]*\?", message))   # a suggestion that mentions "vertical" is not a question about shape
+    return QUESTIONS[name] in message or bool(re.search(ASKED_ABOUT.get(name, r"(?!)"), questions, _I))
+
+
+def handed_over(messages: list[dict]) -> set[str]:
+    """The parameters the user answered with "your call", at any point in the conversation. Said once, it holds to the end:
+    asking again after "you pick" is the loop the dry sweep found. A "your call" that follows no question hands over nothing."""
+    names: set[str] = set()
+    last_asked = ""
+    for message in messages:
+        if message["role"] == "assistant":
+            last_asked = message["text"]
+        elif last_asked and YOUR_CALL.search(ATTACHED.sub(" ", message["text"])):
+            names |= {name for name in QUESTIONS if asked_about(name, last_asked)}
+    return names
+
+
 def plan_sheet(messages: list[dict], tool: str, params: list[dict], attachments: list[dict] | None = None) -> dict:
     """Check the sheet. Returns {tool, ready, params, questions}."""
     if tool not in TOOLS:
@@ -161,10 +222,11 @@ def plan_sheet(messages: list[dict], tool: str, params: list[dict], attachments:
     your_call = bool(YOUR_CALL.search(newest))
 
     last_asked = asked[-1] if asked else ""
+    handed = handed_over(messages)
 
     def our_call(name: str) -> bool:
-        """The user said "your call" in answer to this parameter's question."""
-        return your_call and QUESTIONS[name] in last_asked
+        """The user said "your call" in answer to this parameter's question, now or earlier."""
+        return name in handed
 
     sheet: dict[str, dict] = {}
     for p in params:
@@ -173,6 +235,8 @@ def plan_sheet(messages: list[dict], tool: str, params: list[dict], attachments:
         value = p.get("value")
         if name == "sound" and isinstance(value, bool):
             value = "ambient" if value else "none"
+        if name == "exact_words":
+            value = as_word_list(value)
         if name in uses and name not in sheet:
             sheet[name] = {"name": name, "value": value, "source": p["source"], "from": p.get("from") or ""}
     must_ask: set[str] = set()
@@ -192,22 +256,32 @@ def plan_sheet(messages: list[dict], tool: str, params: list[dict], attachments:
         if name not in sheet:
             missing(name)
 
+    # 1b. The user said "no text": that is the answer for the words. Nothing to ask, nothing to draw.
+    if "exact_words" in uses and NO_TEXT.search(all_user) and (
+            "exact_words" not in sheet or sheet["exact_words"]["source"] in ("missing", "default") or not sheet["exact_words"]["value"]):
+        fill("exact_words", [], "user", "the user asked for no text")
+
     # 2. A default is permitted only for a few parameters, or when the user said it is our call.
+    delegated = bool(YOU_WRITE.search(all_user))   # the user handed the wording over, in the brief or later
     for name, row in list(sheet.items()):
         if row["source"] == "default" and name not in DEFAULT_ALLOWED:
-            permitted = our_call(name) or (name == "exact_words" and YOU_WRITE.search(newest))
+            permitted = our_call(name) or (name == "exact_words" and delegated)
             if not permitted:
                 missing(name, ask=True)
 
-    # 3. Exact words are never invented: they are in the user's messages, or the user let us write them.
+    # 3. Exact words are never invented: they are in the user's messages (compared without case, punctuation or a list number),
+    #    they are the words the assistant proposed and the user approved, or the user let us write them.
     words = sheet.get("exact_words")
     if words and words["source"] != "missing" and words["value"]:
-        not_said = words["source"] == "user" and not all(str(w) in all_user for w in words["value"])
-        if words["source"] == "derived" or not_said:
+        said = _plain(all_user)
+        if last_asked and (AFFIRM.search(newest) or your_call):
+            said += " " + _plain(last_asked)
+        not_said = words["source"] == "user" and not all(_plain(w) in said for w in words["value"])
+        if (words["source"] == "derived" or not_said) and not delegated:
             missing("exact_words", ask=True)
     designed = tool == "generate_image" and DESIGNED_PIECE.search(all_user)
     already_asked = any(re.search(r"\bwords?\b", text, _I) for text in asked)
-    if designed and not already_asked and not re.search("[\"“”']", all_user):
+    if designed and not already_asked and not re.search("[\"“”']", all_user) and not NO_TEXT.search(all_user) and not delegated:
         missing("exact_words", ask=True)
 
     # 4. An edit that the user did not state is asked, not assumed. The host's paraphrase of a stated change is kept.
@@ -258,7 +332,7 @@ def plan_sheet(messages: list[dict], tool: str, params: list[dict], attachments:
     for name in list(open_rows):
         if name not in YOUR_CALL_VALUES:
             continue
-        asked_twice = sum(QUESTIONS[name] in text for text in asked) >= 2
+        asked_twice = sum(asked_about(name, text) for text in asked) >= 2
         if our_call(name) or asked_twice or gave_up:
             value = picture_shape if name == "aspect" and picture_shape else YOUR_CALL_VALUES[name]
             why = ("the user said it is our call" if our_call(name) else "the user said to just make it" if gave_up
@@ -300,15 +374,17 @@ def register_plan_request(mcp: FastMCP) -> None:
         name="plan_request",
         title="Check the request before creating",
         description=(
-            "Call this before a create or edit tool. Pass the user's messages word for word, the tool you plan to "
+            "Call this before a create or edit tool. Pass the whole conversation so far, in order: each user message "
+            "word for word and each message you sent the user, your questions included. Pass the tool you plan to "
             "call, and one row for each parameter you know: value and source (user = the user said it, derived = it "
             "follows from the user's words, default = your choice, missing = unknown). Row names: subject, edit, keep, "
             "motion, seconds, aspect, sound, exact_words, look, mood, script, language, which_face, range. Returns the "
             "checked sheet and "
             "up to 3 questions. If ready is false, ask the user the returned questions word for word and call again "
-            "with the answer added to messages. If ready is true, create with the returned values. A value the user "
-            "did not give comes back missing: do not guess shape, length, sound or on-screen words. Read-only; "
-            "spends no credits and creates nothing."
+            "with your question and the user's answer added to messages. If ready is true, create with the returned values. A value the user "
+            "did not give comes back missing: do not guess shape, length, sound or on-screen words. exact_words is a "
+            "list of strings, one for each line of text to show, exactly as the user wrote it; send [] when the user "
+            "wants no text. Read-only; spends no credits and creates nothing."
         ),
         annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False),
     )

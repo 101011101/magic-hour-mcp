@@ -483,6 +483,167 @@ class PlanRequestTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["questions"], [])
 
 
+    # --- the words and "your call" bugs the dry persona sweep p2 found (2026-11-10), recorded plan_request calls replayed ---
+    # The host sent "No text" as a string. The code read it letter by letter, found an "N" the user never typed, and asked about words.
+
+    async def test_no_text_as_a_string_is_no_words_not_a_missing_value(self):
+        brief = "Put this bottle on a light stone kitchen counter, with a tidy modern kitchen behind it. Keep the bottle exactly as it is. Square photo, no text."
+        for sent in ["No text", "no text", "No on-screen text", "none", [], ["no text"]]:
+            with self.subTest(sent=sent):
+                result, sheet = await self.plan([brief], "edit_image", {
+                    "edit": ("put the bottle on a light stone kitchen counter", "user"),
+                    "keep": ("the bottle exactly as it is", "user"), "exact_words": (sent, "user")}, ["perfume"])
+                self.assertEqual(result["questions"], [])
+                self.assertEqual((sheet["exact_words"]["value"], sheet["exact_words"]["source"]), ([], "user"))
+                self.assertTrue(result["ready"])
+
+    async def test_words_sent_as_text_slots_are_read_from_the_slots(self):   # {"top": ..., "bottom": ...}, seen in the meme case B11c
+        brief = "Turn this cat pic into a meme, square. Top text: WHEN YOU THINK IT'S FRIDAY. Bottom text: BUT IT'S ONLY MONDAY."
+        result, sheet = await self.plan([brief], "edit_image", {
+            "edit": ("make it a meme", "user"), "exact_words": ({"top": "WHEN YOU THINK IT'S FRIDAY", "bottom": "BUT IT'S ONLY MONDAY"}, "user")}, ["woman"])
+        self.assertEqual(result["questions"], [])
+        self.assertEqual(sheet["exact_words"]["value"], ["WHEN YOU THINK IT'S FRIDAY", "BUT IT'S ONLY MONDAY"])
+
+    async def test_the_user_saying_no_text_is_the_answer_whatever_the_host_sends(self):
+        brief = "A poster of a sunset over the sea, vertical, no text."
+        for sent, source in [(None, "missing"), ([], "default"), ("No text", "default")]:
+            with self.subTest(sent=sent, source=source):
+                result, sheet = await self.plan([brief], "generate_image", {
+                    "subject": ("a sunset over the sea", "user"), "aspect": ("9:16", "user"), "exact_words": (sent, source)})
+                self.assertEqual(result["questions"], [])
+                self.assertEqual((sheet["exact_words"]["value"], sheet["exact_words"]["source"]), ([], "user"))
+
+    async def test_dont_include_any_words_is_no_text(self):
+        result, sheet = await self.plan(
+            ["Make a square product shot of a scented candle. Make it look premium.", assistant(QUESTIONS["exact_words"]),
+             "No, please don't include any words on it."], "generate_image",
+            {"subject": ("a scented candle, premium", "user"), "aspect": ("1:1", "user"), "exact_words": ("No words, no branding or label text", "user")})
+        self.assertEqual(result["questions"], [])
+        self.assertEqual(sheet["exact_words"]["value"], [])
+
+    async def test_no_idea_what_words_is_not_no_text(self):
+        result, sheet = await self.plan(
+            ["Make a poster for my bake sale, vertical. I have no idea what words to put on it."], "generate_image",
+            {"subject": ("a poster for a bake sale", "user"), "aspect": ("9:16", "user"), "exact_words": (None, "missing")})
+        self.check(result, sheet, ["exact_words"], {"aspect": "9:16"})
+
+    # The host numbers the lines or changes the quotes; the user's words are the same.
+    async def test_words_match_the_users_without_case_quotes_or_list_numbers(self):
+        brief = "A vertical poster with three tips: 'Clear your desk', 'Silence notifications', 'Pick one task'. Number them 1 to 3."
+        for sent in [["1 Clear your desk", "2 Silence notifications", "3 Pick one task"],
+                     "1. Clear your desk\n2. Silence notifications\n3. Pick one task", ["CLEAR YOUR DESK", "“Silence notifications”"]]:
+            with self.subTest(sent=sent):
+                result, sheet = await self.plan([brief], "generate_image", {
+                    "subject": ("a poster with three tips", "user"), "aspect": ("9:16", "user"), "exact_words": (sent, "user")})
+                self.assertEqual(result["questions"], [])
+                self.assertTrue(result["ready"])
+
+    async def test_words_the_user_did_not_say_are_still_asked_even_when_close_to_theirs(self):
+        brief = "Make a matching vertical poster for Rooftop Jazz. Put these details on it: 17 October 2027 / 7 PM / Atlas Roof / Free entry."
+        result, sheet = await self.plan([brief], "generate_image", {
+            "subject": ("a poster for Rooftop Jazz", "user"), "aspect": ("9:16", "user"),
+            "exact_words": (["Rooftop Jazz / 24 October 2027 / 7 PM / Atlas Roof / Free entry"], "user")})   # the host moved the date
+        self.check(result, sheet, ["exact_words"], {"aspect": "9:16"})
+
+    # "You pick the words" in the brief lets the host write them. Before, only "you write them" in the newest message did.
+    async def test_you_pick_the_words_in_the_brief_lets_the_host_write_them(self):
+        briefs = ["Make a square social graphic for a local beach clean-up, with a short catchy headline — you pick the words. No dates or signup details.",
+                  "Make a vertical thumbnail for my video about sleeping better. Choose a punchy three-word headline yourself.",
+                  "A square café post for this latte. The exact words are your call, short and warm."]
+        for brief in briefs:
+            for source in ["default", "derived", "user"]:
+                with self.subTest(brief=brief[:40], source=source):
+                    result, sheet = await self.plan([brief], "generate_image", {
+                        "subject": ("a graphic", "user"), "aspect": ("1:1" if "square" in brief else "9:16", "user"),
+                        "exact_words": (["Love Your Beach. Lend a Hand."], source)})
+                    self.assertEqual(result["questions"], [])
+                    self.assertEqual(sheet["exact_words"]["value"], ["Love Your Beach. Lend a Hand."])
+
+    async def test_use_that_approves_the_words_the_assistant_proposed_but_a_bare_yes_does_not(self):
+        messages = ["Add something catchy to this latte pic for a square café post, short and warm.",
+                    assistant("I suggest “A little cup of calm”. " + QUESTIONS["exact_words"])]
+        sheet_for = {"edit": ("add a catchy line to the latte picture", "user"), "exact_words": (["A little cup of calm"], "user")}
+        result, sheet = await self.plan(messages + ["Yes, use that."], "edit_image", sheet_for, ["woman"])
+        self.assertEqual(result["questions"], [])
+        self.assertEqual(sheet["exact_words"]["value"], ["A little cup of calm"])
+        result, sheet = await self.plan(messages + ["Yes."], "edit_image", sheet_for, ["woman"])
+        self.check(result, sheet, ["exact_words"], {})
+
+    # The host rarely repeats the question word for word. "Your call" answers the question that was asked, in whatever words.
+    async def test_your_call_answers_a_reworded_question(self):
+        # (what the brief already says, the reworded question, the answer, the parameter that was open, what "your call" gives)
+        cases = [("make a silent widescreen video about a kind gesture at a park bench", "How long do you want it, in seconds?", "up to you", "seconds", 10),
+                 ("make a 6 second silent video about a kind gesture at a park bench", "Do you want it vertical or wide?", "you pick", "aspect", "16:9"),
+                 ("make a 6 second widescreen video about a kind gesture at a park bench", "Any sound? Music, a voice, or silence?", "whatever", "sound", "none")]
+        for brief, question, answer, parameter, expected in cases:
+            with self.subTest(parameter=parameter):
+                sheet_in = {"subject": ("a kind gesture at a park bench", "user"), "seconds": (6, "user"), "aspect": ("16:9", "user"), "sound": ("none", "user")}
+                sheet_in[parameter] = (None, "missing")
+                result, sheet = await self.plan([brief, assistant(question), answer], "create_video_from_text", sheet_in)
+                self.assertEqual((sheet[parameter]["value"], sheet[parameter]["source"]), (expected, "default"))
+                self.assertEqual(result["questions"], [])
+                self.assertTrue(result["ready"])
+
+    async def test_a_suggestion_that_mentions_a_shape_is_not_a_question_about_shape(self):
+        result, sheet = await self.plan(
+            ["make a 6 second silent video about a kind gesture at a park bench", assistant("I would make it vertical. Anything else you want to add?"), "your call"],
+            "create_video_from_text",
+            {"subject": ("a kind gesture at a park bench", "user"), "seconds": (6, "user"), "aspect": (None, "missing"), "sound": ("none", "user")})
+        self.check(result, sheet, ["aspect"], {})   # "your call" answered "anything else?", not the shape: the shape is still asked
+
+    async def test_the_tool_description_says_what_exact_words_is(self):
+        self.assertIn("exact_words is a list of strings", self.tools[TOOL].description)
+        self.assertIn("send [] when the user wants no text", self.tools[TOOL].description)
+
+    # --- a "your call" said to an earlier question still holds (dry sweep p2, 2026-11-10: the lost user was asked again
+    #     in 13 calls of 8 conversations, e.g. D20b: "you pick" to length and sound, then to the shape, then length and sound again) ---
+
+    async def test_your_call_said_to_an_earlier_question_still_holds_after_a_later_question(self):
+        history = ["make a video about a kind gesture at a park bench", assistant(QUESTIONS["seconds"] + " " + QUESTIONS["sound"]), "you pick",
+                   assistant(QUESTIONS["aspect"]), "you pick"]
+        for host_sheet in ({"seconds": (None, "missing"), "sound": (None, "missing"), "aspect": (None, "missing")},   # the host left them open
+                           {"seconds": (15, "default"), "sound": ("none", "default"), "aspect": ("16:9", "default")}):   # the host chose them
+            with self.subTest(host_sheet=host_sheet):
+                result, sheet = await self.plan(history, "create_video_from_text", {"subject": ("a kind gesture at a park bench", "user"), **host_sheet})
+                self.assertEqual(result["questions"], [])
+                self.assertTrue(result["ready"])
+                self.assertEqual({sheet[name]["source"] for name in ("seconds", "sound", "aspect")}, {"default"})
+
+    async def test_your_call_does_not_cover_a_question_asked_after_it(self):
+        result, sheet = await self.plan(
+            ["make a widescreen video about a kind gesture at a park bench", assistant(QUESTIONS["seconds"]), "you pick", assistant(QUESTIONS["sound"]), "hmm not sure"],
+            "create_video_from_text",
+            {"subject": ("a kind gesture at a park bench", "user"), "seconds": (None, "missing"), "sound": (None, "missing")})
+        self.check(result, sheet, ["sound"], {"seconds": YOUR_CALL_DEFAULTS["seconds"], "aspect": "16:9"})
+
+    async def test_a_value_the_user_gives_after_your_call_wins(self):
+        result, sheet = await self.plan(
+            ["make a 6 second silent video about a kind gesture at a park bench", assistant(QUESTIONS["aspect"]), "you pick",
+             assistant("I would make it widescreen. Anything else?"), "no wait, make it vertical for TikTok"],
+            "create_video_from_text",
+            {"subject": ("a kind gesture at a park bench", "user"), "seconds": (6, "user"), "sound": ("none", "user"), "aspect": ("16:9", "default")})
+        self.assertEqual((sheet["aspect"]["value"], sheet["aspect"]["source"]), ("9:16", "user"))
+        self.assertTrue(result["ready"])
+
+    async def test_your_call_after_no_question_hands_nothing_over(self):
+        # the host left its own questions out of the list: the tool cannot tell what "you pick" answers, so it asks (as the PRD says)
+        result, sheet = await self.plan(
+            ["make a video about a kind gesture at a park bench", "you pick"], "create_video_from_text",
+            {"subject": ("a kind gesture at a park bench", "user"), "seconds": (None, "missing"), "sound": (None, "missing"), "aspect": (None, "missing")})
+        self.check(result, sheet, ["seconds", "aspect", "sound"], {})
+
+    async def test_your_call_answers_a_reworded_question_about_movement(self):
+        result, sheet = await self.plan(
+            ["make a 6 second silent widescreen video from this pic", assistant("What kind of movement do you want in it?"), "you pick"],
+            "create_video_from_image",
+            {"motion": ("a slow push in", "default"), "seconds": (6, "user"), "sound": ("none", "user"), "aspect": ("16:9", "user")}, ["woman"])
+        self.assertEqual((sheet["motion"]["value"], sheet["motion"]["source"]), ("a slow push in", "default"))
+        self.assertTrue(result["ready"])
+
+    async def test_the_tool_description_asks_for_the_whole_conversation(self):
+        self.assertIn("each message you sent the user, your questions included", self.tools[TOOL].description)
+
+
 def _item_test(tool, brief, files, host_sheet, missing, values):
     async def test(self):
         await self.run_item(tool, brief, files, host_sheet, missing, values)
