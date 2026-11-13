@@ -1,8 +1,18 @@
-"""Build the tool-management failure list (markdown) from cases.json."""
+"""Build the tool-management failure list (markdown) from cases.json (made by audit_cases.py).
+
+Usage: python3 scripts/tool_failures.py cases.json rows.json > table.md
+"""
 import collections
 import json
 import re
 import sys
+import importlib.util
+from pathlib import Path
+
+_spec = importlib.util.spec_from_file_location("rt", Path(__file__).with_name("tool_right_tools.py"))
+_rt = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_rt)
+RIGHT = _rt.RIGHT
 
 cases = json.load(open(sys.argv[1]))
 VC = set("D18 D19 D20 D21 D22 D23 H40 H41 H42 H44 I45 I46 I47 I48 J55".split()) | {"H43a", "J51a", "J52a"}
@@ -97,6 +107,6 @@ for r in rows:
     to, tn = r["tools_old"], r["tools_new"]
     tools = f"`{to}`" if to == tn else f"`{to}` / `{tn}`"
     out.append(f"| {r['id']} | {r['title']} | {r['n_old']}/{r['n_new']} | {f(r['old'])} | {f(r['new'])} | {r['verdict']} | {tools} | "
-               f"{r['top'].replace('|', '/')} | {r['causes']} |  |  |")
+               f"{r['top'].replace('|', '/')} | {r['causes']} | {RIGHT.get(r['id'], '')} |  |")
 print("\n".join(out))
 json.dump(rows, open(sys.argv[2], "w"), indent=1)

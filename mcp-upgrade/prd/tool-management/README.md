@@ -40,7 +40,8 @@ Rule (user, 2026-11-13): tool management does not touch video composition.
 ## Open (decide with the user)
 
 - Name of the planner: `plan_tool_call` (proposed).
-- Jobs with no tool (MCP-17: music under the user's clip, watermark, stills to a video): build the missing tools here, or a separate track.
+- Jobs with no tool: build the missing tools here, or a separate track. Since cbbe722, `reframe_media`, `trim_media`, `add_words_to_media` and `mix_audio` exist (not benchmarked yet). Still no tool for: sound on a video, a picture on a video, a still as a clip, pictures side by side, translated subtitles, a frame at a chosen time, colour change by code, 4:5 in `reframe_media`. See the [failure list](failures.md).
+- `media_helpers_tool.py` holds those tools and is shared with video composition. New tools for tool management go in a new file, so the isolation rule holds.
 - The families: the list above is a proposal. Set after the failure list and the tool tests.
 
 ## Docs
