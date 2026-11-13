@@ -7,7 +7,7 @@
 
 ## To do
 
-- [ ] **MCP-11 · Voice-over by the voice cloner.** Open only for the production push. Upstream approved (2026-11-11: `test_release_gates.py` reports approved after upstream #184). Default `cloner` (user, 2026-11-11). [PRD](../prd/production.md).
+- [ ] **MCP-11 · Voice-over by the voice cloner.** Open only for the production push. Upstream approved (2026-11-11: `test_release_gates.py` reports approved after upstream #184). Default `cloner` (user, 2026-11-11). [PRD](../prd/video-composition/production.md).
   - Why: the video-model narration read A4's script 2 times in 8. The voice cloner read it exactly, for 17 credits (`Benchmark/voice.html`, 2026-11-08).
   - Block: upstream hides the voice tools on purpose. `openapi_policies.py` removes `/v1/ai-voice-cloner` always, and `/v1/ai-voice-generator` while `APPROVED_VOICE_NAMES` is empty (commit 2e6d659, #109). The user (2026-11-08): approval is pending on the other side.
   - Our branch may have the feature. Before a push or a PR, verify that upstream main allows it:
@@ -26,12 +26,12 @@
   - [x] Word check: the join transcribes the narration (Whisper, only when the server has `OPENAI_API_KEY`) and reports "no" under 80% of the script's words. Without the key: the speech check only, as before.
 - Facing-away speaker test (2026-11-08, 576 credits, `Benchmark/facing.html`): the line was said word for word 6 of 6 (back to the camera, profile, far away, two people where the one facing away speaks; ltx-2.5 and minimax-h3). The listener kept her mouth closed in all 3 two-person clips. ltx-2.5 put "back to the camera" as three-quarters away, side by side (S1).
 
-- [ ] **MCP-18 · Consider `plan_request` outside the video composition path.** User, 2026-11-12: ship video composition first; a single call stays as in the old MCP. [Scope](../prd/scope.md).
+- [ ] **MCP-18 · Consider `plan_request` outside the video composition path.** User, 2026-11-12: ship video composition first; a single call stays as in the old MCP. [Scope](../prd/ARCHITECTURE.md).
   - [x] 2026-11-12 · `plan_request` is called only before `plan_video_production` (description; tool name `plan_video_production` in the sheet). The `create_video_from_image` description is the old one again.
   - Why: persona bench, 16 single-call video items, old against new: avg score 3.38 → 3.19 (happy), 3.38 → 3.31 (stupid), 3.38 → 3.25 (dumper). The tool-calling items show no clear gain: 25 better / 13 worse (happy), 22 / 24 (stupid), 21 / 21 (dumper).
   - [ ] Later: measure `plan_request` on single calls and tool calling, each on its own, against the old MCP. Turn it on there only when it is better.
 
-- [ ] **MCP-01 · Conversation: derive the parameters, ask only for the rest.** [Ticket](MCP-01-conversation.md). [Spec](../prd/conversation.md).
+- [ ] **MCP-01 · Conversation: derive the parameters, ask only for the rest.** [Ticket](MCP-01-conversation.md). [Spec](../prd/shared/conversation.md).
   - [x] PRD, spec, 40 contract tests: `tests/test_plan_request.py`.
   - [x] Build `plan_request`: `mcp_magichour/plan_request.py`. All 40 pass.
   - [x] Harness for a local build: `run.mjs --local --mcp-url <address> [--hide a,b]` (agent repo).
@@ -43,7 +43,7 @@
   - [x] 2026-11-10 · Proposed · "Your call" now holds to the end of the chat (rule 6c). Motion added to rule 10b. The tool description now asks the host for the whole chat, its own questions included. Why: in sweep p2, 13 calls in 8 of 163 lost-user chats asked again what the user had handed over (D20b: "you pick" to length and sound, then to the shape, then length and sound again). 49 of 400 lost-user calls had no assistant message before a user message. 6 new tests (61 in the file; the whole suite has the same 3 failures). Replay of 994 recorded calls (831 from p2, 163 from the p3 re-run): no call asks more; 13 ask less (lost user 11, oversharing user 2); the lost user's p2 questions go 390 → 373. Measured on a host (2026-11-10, dry, 0 credits): OpenAI refused the key (401, 04:04), so the 72 chats ran with a Claude host (`claude-opus-5-5`) on both builds, before and after this change (p4c; not comparable with the GPT runs). Calls with a user message and no assistant message before it: 10 → 0 (5 → 0 with no assistant message at all). Questions asked to the user: 75 → 64. Tool questions: 113 → 99. Re-asks after a hand-over: 3 → 1 calls. Tool question put again: 27 → 20. Loops: 0 → 0. One chat newly stuck (H44b: after "just make it" the host still asks for on-screen words, as the rule says). A replay of every recorded call: the new code never asks more, and asks fewer in 3 calls, so most of the gain is the new description. One run for each build: the direction is the same everywhere, the size of the gain is within noise. Cost about $60. Not committed.
   - [ ] Proposed · The host sometimes flips a row from `default` to `derived` and drops assistant messages even so; the shape was then asked 4 times (A01a, oversharing user). The new description removed the dropped messages for a Claude host (p4c); the `default`/`derived` flip is not measured. Open.
   - [-] Proposed · Ask one question at a time (52 of 163 lost-user chats got 3 or more in one message). Closed: replaced by MCP-15 (user, 2026-11-11: batches).
-  - [x] 2026-11-11 · `get_last_frame` and the joins could not read an attached clip's `file_path` (G33b, E25b, E28a, E29b). User: option 1 with a clean fallback. `upload_media` + `kept_files.py`: the server keeps a copy of every file that passes through it; an unknown `file_path` fails before any API call. [PRD](../prd/production.md), Files and storage.
+  - [x] 2026-11-11 · `get_last_frame` and the joins could not read an attached clip's `file_path` (G33b, E25b, E28a, E29b). User: option 1 with a clean fallback. `upload_media` + `kept_files.py`: the server keeps a copy of every file that passes through it; an unknown `file_path` fails before any API call. [PRD](../prd/video-composition/production.md), Files and storage.
 - [x] **MCP-02 · Clip split: find the best rule.** Closed 2026-11-11 (user): the rule is chosen and tested in the A and B runs.
   - [x] Splitter with 5 rules (`one`, `time`, `idea`, `event`, `shot`): `mcp_magichour/video_production.py`.
   - [x] One reference for each clip: last frame / picture / own still / none.
@@ -64,7 +64,7 @@
   - [-] Ending line when the person faces away (C8). Dropped (user, 2026-11-11).
   - [-] Clips made at the same time. Dropped (user, 2026-11-11).
   - [-] Second run of each film. Dropped (user, 2026-11-11).
-- [ ] **MCP-03 · Video production tool in the MCP.** [PRD](../prd/production.md).
+- [ ] **MCP-03 · Video production tool in the MCP.** [PRD](../prd/video-composition/production.md).
   - [x] `plan_video_production`: story in, ordered calls out. `mcp_magichour/video_production_tool.py`. Tests: `tests/test_video_production_tool.py`.
   - [x] A host completes the plan (clips, sound, join): the 11-07 runs and the 2026-11-10/11 fleet runs.
   - [x] B1 and B2 through the GPT driver with the tool (2026-11-05, see Done).
@@ -121,7 +121,7 @@
   - The user asks to keep their file and change one part. No tool does the job by code, so the host sends the file through a model that redraws it, or makes nothing.
   - Jobs with no tool: mix music under the user's video (E27a/b/c), replace its soundtrack (E28b/c), put a logo or watermark on it (E29a/c), join the user's stills into a video (D20a/b), put photos side by side (G35a/b), change colour only (B07c, J49a), take a still frame from a video (G33b), edit one masked part (B07d).
   - `media_tools.add_sound` already mixes sound into a film. Only the production join uses it. No tool exposes it.
-- [ ] **MCP-12 · Trim.** Later (user, 2026-11-11). No trim tool exists. `plan_request` still plans `trim_video` and marks it ready, so the host calls a tool that is not there ("Unknown tool": E26a, E26b, 2026-11-11). Build it on the kept copy (ffmpeg, 0 credits), or make `plan_request` say there is no tool. PRD: [media files](../prd/media-files.md).
+- [ ] **MCP-12 · Trim.** Later (user, 2026-11-11). No trim tool exists. `plan_request` still plans `trim_video` and marks it ready, so the host calls a tool that is not there ("Unknown tool": E26a, E26b, 2026-11-11). Build it on the kept copy (ffmpeg, 0 credits), or make `plan_request` say there is no tool. PRD: [media files](../prd/shared/media-files.md).
 - [ ] **MCP-13 · Storage of kept files.** Later (user, 2026-11-11). Reminder: kept copies of users' files go to public Vercel Blob (`kept/`). Move to private storage. One module: `kept_files.py`.
 - [x] **MCP-14 · The user's own clip in a production.** Approved by the user 2026-11-11 (E28 films); checked again in the next benchmark. Beat fields `source` (the user's clip: file_path, URL or project id) and `source_sound`; the clip is a clip of its own, 0 credits; the join uses it as it is. Tests: `tests/test_video_production_tool.py` (3 new). Shown: fx4 (E28a/b/c × 3 users: 9 of 9 used `source`, 9 films with narration on the user's clip, 1,571 credits) and demo1 (A3: original 6 s unchanged + 6 s new from its last frame, 144 credits instead of 288). Check in the next run: [benchmark 02](../benchmark/02-next.md). A plan cannot take the user's clip as a piece, so a voice-over or music on the user's clip (E28a) and continuing a given clip (A3) have no path. The join can read the clip since 2026-11-11 (MCP-01 line, `kept_files.py`).
 

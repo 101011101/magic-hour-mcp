@@ -438,6 +438,9 @@ def compose_prompt(story: dict, clip: dict, reference: dict, ends_on: list[str] 
         lines.append("Each action happens once, in this order. No repeated shots, no other scenes.")
     else:
         lines.append("Each action happens once, in this order. No repeated shots, no title cards, no captions, no other scenes.")
+    if story.get("audio") or any(p.get("spoken") for p in clip["parts"]):
+        # user, 2026-11-13: a clip never makes music; music is one separate track for the whole film, added at the join
+        lines.append("Sound: only the voices and sounds of the scene itself. No music.")
     return " ".join(lines)
 
 

@@ -1,6 +1,6 @@
 # Conversation: `plan_request`
 
-Ticket: MCP-01. Overview: [ARCHITECTURE](ARCHITECTURE.md).
+Ticket: MCP-01. Overview: [ARCHITECTURE](../ARCHITECTURE.md).
 
 - Status: built (`mcp_magichour/plan_request.py`), rules updated 2026-11-10. Open questions below still need the user.
 - Ticket: `mcp-upgrade/tickets/MCP-01-conversation.md`.

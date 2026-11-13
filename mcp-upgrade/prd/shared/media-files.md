@@ -1,6 +1,6 @@
 # Media files: uploads, kept copies, join, last frame, film links
 
-Tickets: MCP-06, MCP-12, MCP-13; MCP-01 line of 2026-11-11. Overview: [ARCHITECTURE](ARCHITECTURE.md).
+Tickets: MCP-06, MCP-12, MCP-13; MCP-01 line of 2026-11-11. Overview: [ARCHITECTURE](../ARCHITECTURE.md).
 Code: `media_helpers_tool.py`, `kept_files.py`, `media_tools.py`, `video_production_tool.py` (`_upload`, `_finished_video`).
 
 ## Tools

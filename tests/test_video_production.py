@@ -141,6 +141,15 @@ class PersonFirstTests(unittest.TestCase):
         self.assertTrue(all(c["ends_on"] == [] for c in p["clips"]))
         self.assertTrue(all("End with everyone" not in c["steps"][-1]["prompt"] for c in p["clips"]))
 
+    def test_a_clip_with_sound_never_makes_its_own_music(self):
+        # user, 2026-11-13: music is one separate track, added at the join; a clip makes only the scene's own sound
+        s = story("c5")
+        silent = [c["steps"][-1]["prompt"] for c in plan(s, "person", 15)["clips"] if c["kind"] != "card"]
+        self.assertTrue(silent and all("No music." not in x for x in silent))
+        s["audio"] = True
+        loud = [c["steps"][-1]["prompt"] for c in plan(s, "person", 15)["clips"] if c["kind"] != "card"]
+        self.assertTrue(all(x.endswith("No music.") for x in loud))
+
     def test_the_other_rules_give_the_same_plans_as_before(self):
         for clip in plan(story("c4"), "idea", 15)["clips"]:
             self.assertNotIn("End with everyone", clip["steps"][-1]["prompt"])

@@ -1,12 +1,12 @@
 # Production: a multi-clip film from a story
 
-Tickets: MCP-02, MCP-03, MCP-10, MCP-14. Overview: [ARCHITECTURE](ARCHITECTURE.md).
+Tickets: MCP-02, MCP-03, MCP-10, MCP-14. Overview: [ARCHITECTURE](../ARCHITECTURE.md).
 Code: `video_production.py` (plan, split, questions, prompts), `video_production_tool.py` (tools, clip calls, join).
 
 ## Scope
 
 - In: plan a story, make its clips, join them into one film.
-- Out: when the host calls these tools (MCP-05, later). Reading what is in a clip (MCP-07, later). Sound: [sound](sound.md). Checks: [checks and gates](checks-and-gates.md). Files: [media files](media-files.md).
+- Out: when the host calls these tools (MCP-05, later). Reading what is in a clip (MCP-07, later). Sound: [sound](sound.md). Checks: [checks and gates](checks-and-gates.md). Files: [media files](../shared/media-files.md).
 
 ## Tools
 

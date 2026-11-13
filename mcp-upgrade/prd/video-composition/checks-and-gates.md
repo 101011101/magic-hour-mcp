@@ -1,6 +1,6 @@
 # Checks and gates
 
-Tickets: MCP-04, MCP-09, MCP-11. Overview: [ARCHITECTURE](ARCHITECTURE.md).
+Tickets: MCP-04, MCP-09, MCP-11. Overview: [ARCHITECTURE](../ARCHITECTURE.md).
 Code: `video_production.py` (`check_plan`, checklist), `video_production_tool.py` (join checks, word check), `gates.py`, `gates_docs.py`, `tests/test_release_gates.py`.
 
 ## Before payment (`plan_video_production`)

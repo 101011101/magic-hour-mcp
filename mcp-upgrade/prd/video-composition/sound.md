@@ -1,6 +1,6 @@
 # Sound: narration, music, captions on a film
 
-Tickets: MCP-08 (closed), MCP-11. Overview: [ARCHITECTURE](ARCHITECTURE.md).
+Tickets: MCP-08 (closed), MCP-11. Overview: [ARCHITECTURE](../ARCHITECTURE.md).
 Code: `video_production.py` (`plan_sound`), `video_production_tool.py` (`create_production_sound`, join), `media_tools.py` (mix, captions, speech).
 
 ## Design (option E, user, 2026-11-05)
@@ -28,6 +28,13 @@ Code: `video_production.py` (`plan_sound`), `video_production_tool.py` (`create_
 
 - `music` in the story: one instrumental track (`/v1/ai-music-generator`), as long as the film.
 - The cloner path keeps the music (bug fixed 2026-11-10).
+- A clip never makes music (user, 2026-11-13). Music is always one separate track, added at the join. A clip with sound gets "No music." in its prompt; a clip without sound is made silent at the join.
+
+## Voice-over and dialogue
+
+- Voice-over: a narrator off screen. Made by the voice cloner from the text alone, after the plan. It does not see the video. The join places each sentence on its beat.
+- Dialogue (`spoken`): a person on screen says the line. Made by the video model inside the clip, so it fits the clip and the lips.
+- A voice-over can be longer than its beat because the cloner reads at its own pace. The plan warns; the join fits it (below).
 
 ## Layers (user, 2026-11-12)
 
