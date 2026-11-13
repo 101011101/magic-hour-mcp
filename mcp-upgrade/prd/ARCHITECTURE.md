@@ -19,9 +19,10 @@ Tickets: [`../tickets/TICKETS.md`](../tickets/TICKETS.md).
 
 ## How they meet
 
-- `plan_request` reads the chat. It sends a multi-clip film to video composition, and one clip, one picture or one edit to tool management.
-- Video composition calls API tools to make its parts. Tool management owns those API tools.
-- Both read and keep files through the same code (`upload_media`, `kept_files.py`).
+- The host model reads the request and picks a side (user, 2026-11-13). A multi-clip film goes to `plan_request` → `plan_video_production`. An edit, or one make on existing media, goes to `plan_tool_call` (tool management, built behind a switch).
+- Two separate workflows. The two planners share no code. Tool management changes no video composition file (rule in [tool management](tool-management/README.md#isolation)).
+- Video composition calls API tools to make its parts. Tool management puts its tool knowledge in `plan_tool_call`'s output, not in the API tools' descriptions, so video composition never sees it.
+- Both read and keep files through the same code (`upload_media`, `kept_files.py`). Tool management reads it, does not change it.
 
 ## Benchmark items (persona bench, `V2/bench/v1/items`)
 
@@ -42,4 +43,4 @@ Tickets: [`../tickets/TICKETS.md`](../tickets/TICKETS.md).
 - MCP-13, later: private storage for kept copies.
 - MCP-05, later: when the host calls the production tools.
 - MCP-07, later: read what is in each clip.
-- MCP-18: `plan_request` outside the video composition path.
+- MCP-18: `plan_request` outside the video composition path. Replaced for tool management by `plan_tool_call` (MCP-19 to MCP-24).

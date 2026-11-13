@@ -3,9 +3,25 @@
 - One line for each ticket. Details are in the ticket file, if there is one.
 - "Proposed" = not from the user. Confirm or delete.
 - Nothing is committed. Nothing is deployed.
-- Updated: 2026-11-12.
+- Updated: 2026-11-13.
 
 ## To do
+
+### Tool management (user, 2026-11-13)
+
+A separate workflow. Changes no video composition file ([rule](../prd/tool-management/README.md#isolation)). In order:
+
+- [ ] **MCP-19 · Clean up the tool-management PRD.** [PRD](../prd/tool-management/README.md).
+  - [x] 2026-11-13 · Flow (predict the family, fill the sheet, ask what is open, return tool + notes), the two sheets, the isolation rule. "How they meet" in ARCHITECTURE corrected: `plan_request` no longer sends edits to tool management.
+  - [ ] Decide: the planner's name (`plan_tool_call` proposed); missing tools (MCP-17) here or a separate track.
+- [ ] **MCP-20 · Failure list.** Each tool-management item: old against new, better / same / worse, tool called against the right tool, the failure. From the existing runs (`Benchmark/audit`, `Benchmark/personas`, MCP-17's failure modes), 0 credits. Then the user's notes. [List](../prd/tool-management/failures.md).
+- [ ] **MCP-21 · Tool behaviour tests → tool notes.** Run each tool on the cases the failure list points to. Write the notes file: what each tool does well, how it fails, the deciding question. Costs credits: a budget for each family, agreed first.
+- [ ] **MCP-22 · Families and question sheets.** Group the tools. For each family, the deciding rows and the required rows, from the notes.
+- [ ] **MCP-23 · Build `plan_tool_call`.** `mcp_magichour/tool_plan.py`, behind `MAGIC_HOUR_TOOL_PLAN` (default `off`). Contract tests in `tests/test_tool_plan.py`. A test that the build changes no video composition file.
+- [ ] **MCP-24 · Benchmark the planner.** Family predicted right, tool picked right, item scores against the old MCP and against the switch off. Ship only if not worse on tool management, and video composition unchanged.
+- Folded in: MCP-17 (jobs with no tool) feeds MCP-20 and MCP-21. MCP-12 (trim) is tool management. MCP-16 (what may not be guessed) feeds the required rows.
+
+### Video composition and shared
 
 - [ ] **MCP-11 · Voice-over by the voice cloner.** Open only for the production push. Upstream approved (2026-11-11: `test_release_gates.py` reports approved after upstream #184). Default `cloner` (user, 2026-11-11). [PRD](../prd/video-composition/production.md).
   - Why: the video-model narration read A4's script 2 times in 8. The voice cloner read it exactly, for 17 credits (`Benchmark/voice.html`, 2026-11-08).

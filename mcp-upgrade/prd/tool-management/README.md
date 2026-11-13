@@ -1,6 +1,8 @@
 # Tool management
 
-The MCP edits media that already exists: one tool call on the user's clip, photo or audio. Overview: [ARCHITECTURE](../ARCHITECTURE.md). Comes after video composition.
+The MCP edits media that already exists: one tool call, or a few in order, on the user's clip, photo or audio. Overview: [ARCHITECTURE](../ARCHITECTURE.md). Comes after video composition.
+
+A separate workflow from video composition (user, 2026-11-13). Its own planner, notes, question sheets, tests and switch.
 
 ## The problem: an information gap
 
@@ -9,14 +11,43 @@ The MCP edits media that already exists: one tool call on the user's clip, photo
 
 ## The fix: two sheets (user, 2026-11-13)
 
-- Input side: a large question sheet. It lists what to ask the user before a tool is called.
-- Logic side: a large tip sheet of tool behaviour. It says how each tool works and which cases to watch for.
-- Neither sheet is written yet. Discuss the contents in chat first.
+- **Tool notes** (logic side). For each tool: what it does well, how it fails, which cases to watch for, and the deciding question that selects it. Built from the [failure list](failures.md) and the tool tests (MCP-21). A data file, not prose.
+- **Question sheets** (input side). One for each tool family. Made from the notes: no row without a note behind it.
+- Neither sheet is written yet.
+
+## How a request flows (`plan_tool_call`)
+
+1. **Predict the family.** The host names a tool family from the request (for example sound, edit and trim, face and character, image, subtitles and text). A family, not one tool, so a wrong guess stays close.
+2. **Fill the family's question sheet** from the user's words and files. Two kinds of rows:
+   - Deciding rows pick the tool inside the family. Example from video composition: a presenter on screen → lip sync; no presenter → voice cloner.
+   - Required rows must be right, or the result fails (aspect, which face, the time range).
+   - Every other parameter is loose: the server's default, never asked.
+3. **Ask what is left open.** Only deciding and required rows, in one batch, with a cap.
+4. **Return** the tool (or the tools in order), its parameters, and the notes on that tool's known faults. The host then calls the API tool directly.
+
+A few tools in order on existing media (trim, then subtitles) is tool management. A multi-clip film made from text and references is video composition.
+
+## Isolation
+
+Rule (user, 2026-11-13): tool management does not touch video composition.
+
+- New files only: `mcp_magichour/tool_plan.py`, the notes file, the question sheets, `tests/test_tool_plan.py`.
+- One registration line in `openapi_server.py`, behind `MAGIC_HOUR_TOOL_PLAN` (default `off`). Off: the server is as before.
+- No changes to: `plan_request.py`, `video_production.py`, `video_production_tool.py`, `gates.py`, `media_tools.py`, `openapi_policies.py`. No imports from the first four. A helper that is needed is copied, not shared.
+- Tool knowledge goes in `plan_tool_call`'s output, never in the API tools' descriptions (`openapi_policies.py`): the host reads those during video composition too.
+- Read only: `upload_media`, `kept_files.py`, the benchmark runs.
+
+## Open (decide with the user)
+
+- Name of the planner: `plan_tool_call` (proposed).
+- Jobs with no tool (MCP-17: music under the user's clip, watermark, stills to a video): build the missing tools here, or a separate track.
+- The families: the list above is a proposal. Set after the failure list and the tool tests.
 
 ## Docs
 
 | Doc | Covers | Code |
 |---|---|---|
+| [failures](failures.md) | each tool-management item, old MCP against new, what failed | — |
 | [api tools](api-tools.md) | one MCP tool per Magic Hour API operation (upstream base) | `openapi_*.py`, `workflow_guidance.py` |
 
-Shared with video composition: [conversation](../shared/conversation.md) (`plan_request`), [media files](../shared/media-files.md).
+Shared with video composition: [media files](../shared/media-files.md). [Conversation](../shared/conversation.md) (`plan_request`) is for video composition only.
