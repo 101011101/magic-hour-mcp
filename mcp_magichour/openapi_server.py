@@ -49,6 +49,7 @@ from .project_result_app import (
     read_mcp_app_html,
 )
 from .gates import MODE as GATES_MODE, register_gates
+from . import kept_files
 from .media_helpers_tool import register_media_helpers
 from .plan_request import register_plan_request
 from .tool_logging import ToolCallLoggingMiddleware
@@ -485,6 +486,7 @@ async def _upload_chatgpt_file(file: ChatGPTFile, media_type: ProjectType) -> di
             )
             uploaded = await files.put(item["upload_url"], content=bytes(media))
             uploaded.raise_for_status()
+            await asyncio.to_thread(kept_files.keep, item["file_path"], bytes(media))   # read again by join / last frame
             return {"file_path": item["file_path"]}
 
     try:
@@ -892,7 +894,8 @@ async def favicon(_: Request) -> FileResponse:
 async def film_download(request: Request) -> FileResponse | PlainTextResponse:
     """A film that join_production_clips made on this machine."""
     file = film_file(request.path_params["name"])
-    return FileResponse(file, media_type="video/mp4") if file else PlainTextResponse("Not found", status_code=404)
+    from .video_production_tool import FILM_TYPES
+    return FileResponse(file, media_type=FILM_TYPES.get(file.suffix, "video/mp4")) if file else PlainTextResponse("Not found", status_code=404)
 
 
 async def mcp_app_http_view(_: Request) -> HTMLResponse:

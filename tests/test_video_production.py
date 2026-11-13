@@ -1,7 +1,9 @@
 """The clip splitter: pure code, no network, no credits."""
 
 import json
+import os
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from mcp_magichour.video_production import (
@@ -213,6 +215,9 @@ class ChainTests(unittest.TestCase):
 
 class SoundPlanTests(unittest.TestCase):
     """A voice-over is one track for the whole film. The plan says what to make and where each part goes."""
+
+    def setUp(self):   # these tests cover the video-model narration; the cloner has its own tests
+        self.enterContext(patch.dict(os.environ, {"MAGIC_HOUR_VOICE_OVER": "video"}))
 
     def story_with_voice(self):
         s = story("c5")

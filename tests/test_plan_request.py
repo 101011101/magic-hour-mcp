@@ -131,11 +131,11 @@ ITEMS = [
       "keep": ("the car and everything else stay exactly as they are", "user")},
      [], {"aspect": "16:9"}),
 
-    # trim_video has no MCP tool. These two rows depend on an open question in the PRD.
-    ("S07", "vague", "trim_video", "cut this down", ["clip"],
+    # trim_media cuts by code. These two rows depend on an open question in the PRD.
+    ("S07", "vague", "trim_media", "cut this down", ["clip"],
      {"range": ("the first 5 seconds", GUESS)},
      ["range"], {}),
-    ("S07", "full", "trim_video", "Trim this clip to the first 6 seconds (0 to 6).", ["clip"],
+    ("S07", "full", "trim_media", "Trim this clip to the first 6 seconds (0 to 6).", ["clip"],
      {"range": ("0 to 6 seconds", "user")},
      [], {"range": "0 to 6 seconds"}),
 
@@ -656,3 +656,91 @@ for _item, _kind, *_rest in ITEMS:
 
 if __name__ == "__main__":
     unittest.main()
+
+
+from mcp_magichour.plan_request import plan_sheet  # noqa: E402
+
+
+class QuestionRoundsTrial(unittest.TestCase):
+    """MCP-15 (trial): one batch of every open question; MAGIC_HOUR_QUESTION_ROUNDS limits the batches."""
+
+    PARAMS = [{"name": "subject", "value": "a dog running on a beach", "source": "user"},
+              {"name": "seconds", "value": None, "source": "missing"}, {"name": "aspect", "value": None, "source": "missing"},
+              {"name": "sound", "value": None, "source": "missing"}, {"name": "exact_words", "value": None, "source": "missing"}]
+
+    def sheet(self, messages, rounds):
+        import os
+        from unittest.mock import patch
+        with patch.dict(os.environ, {"MAGIC_HOUR_QUESTION_ROUNDS": str(rounds)}):
+            return plan_sheet(messages, "create_video_from_text", self.PARAMS)
+
+    def batch_text(self, result):
+        return " ".join(f"{i}. {q['question']}" for i, q in enumerate(result["questions"], 1))
+
+    def test_the_first_batch_asks_every_open_question_with_its_default(self):
+        first = self.sheet([{"role": "user", "text": "make a video of a dog running on a beach"}], 1)
+        self.assertFalse(first["ready"])
+        self.assertGreaterEqual({q["param"] for q in first["questions"]}, {"seconds", "sound"})
+        self.assertTrue(all("if_skipped" in q for q in first["questions"]))
+        self.assertEqual(first["rounds"], {"used": 0, "limit": 1})
+
+    def test_one_round_then_the_rest_is_inferred(self):
+        first = self.sheet([{"role": "user", "text": "make a video of a dog running on a beach"}], 1)
+        chat = [{"role": "user", "text": "make a video of a dog running on a beach"}, {"role": "assistant", "text": self.batch_text(first)},
+                {"role": "user", "text": "make it 10 seconds"}]
+        second = self.sheet(chat, 1)
+        self.assertTrue(second["ready"])
+        rows = {r["name"]: r for r in second["params"]}
+        self.assertEqual(rows["seconds"]["value"], 10)
+        self.assertTrue(all(r["source"] != "missing" for r in second["params"] if r["name"] != "exact_words"))
+
+    def test_two_rounds_ask_again_for_what_is_still_open(self):
+        first = self.sheet([{"role": "user", "text": "make a video of a dog running on a beach"}], 2)
+        chat = [{"role": "user", "text": "make a video of a dog running on a beach"}, {"role": "assistant", "text": self.batch_text(first)},
+                {"role": "user", "text": "make it 10 seconds"}]
+        second = self.sheet(chat, 2)
+        if first["questions"] and len(first["questions"]) > 1:
+            self.assertFalse(second["ready"])
+            self.assertNotIn("seconds", [q["param"] for q in second["questions"]])
+            self.assertEqual(second["rounds"], {"used": 1, "limit": 2})
+
+    def test_your_call_after_a_batch_ends_the_questions(self):
+        first = self.sheet([{"role": "user", "text": "make a video of a dog running on a beach"}], 2)
+        chat = [{"role": "user", "text": "make a video of a dog running on a beach"}, {"role": "assistant", "text": self.batch_text(first)},
+                {"role": "user", "text": "10 seconds, your call on the rest"}]
+        self.assertTrue(self.sheet(chat, 2)["ready"])
+
+    def test_unset_keeps_the_old_behaviour(self):
+        import os
+        from unittest.mock import patch
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("MAGIC_HOUR_QUESTION_ROUNDS", None)
+            result = plan_sheet([{"role": "user", "text": "make a video of a dog"}], "create_video_from_text", self.PARAMS)
+        self.assertNotIn("rounds", result)
+        self.assertLessEqual(len(result["questions"]), 3)
+
+
+class CompositionPathOnlyTests(unittest.TestCase):
+    """2026-11-12 (user, MCP-18): plan_request is in the video composition path only; a single call is as before."""
+
+    def test_the_sheet_for_a_production_asks_like_a_text_to_video_sheet(self):
+        messages = [{"role": "user", "text": "Make a 30-second ad for my candle shop, three shots."}]
+        rows = [{"name": "subject", "value": "a candle shop ad", "source": "derived"}, {"name": "seconds", "value": 30, "source": "user"}]
+        made = plan_sheet(messages, "plan_video_production", rows)
+        plain = plan_sheet(messages, "create_video_from_text", rows)
+        self.assertEqual(made["ready"], plain["ready"])
+        self.assertEqual([q.get("param") or q for q in made.get("questions", [])], [q.get("param") or q for q in plain.get("questions", [])])
+
+    def test_the_description_keeps_single_calls_out(self):
+        from mcp_magichour.openapi_policies import API_TOOL_METADATA
+
+        async def tools():
+            async with Client(create_mcp()) as client:
+                return {t.name: t.description for t in await client.list_tools()}
+
+        import asyncio
+        described = asyncio.run(tools())
+        self.assertIn("Do not call it before a single create or edit call", described["plan_request"])
+        self.assertEqual(API_TOOL_METADATA[("POST", "/v1/image-to-video")][2],
+                         "Animates a supplied image into a video using motion instructions and available model "
+                         "options. Starts a background job that costs credits; returns a project id for wait_for_video_project.")

@@ -113,8 +113,11 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
         self.posts, self.uploads, self.joined = [], [], []
         self.video_status = "complete"
 
+        self.paths = []
+
         def upstream(request):
             path = request.url.path
+            self.paths.append(path)
             if request.url.host == "storage.example.test":
                 self.uploads.append(path)
                 return httpx.Response(200)
@@ -137,8 +140,12 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
 
         transport = httpx.MockTransport(upstream)
         self.films = Path(self.enterContext(__import__("tempfile").TemporaryDirectory()))
+        self.kept = Path(self.enterContext(__import__("tempfile").TemporaryDirectory()))
+        self.enterContext(patch.dict(os.environ, {"MAGIC_HOUR_KEPT_DIR": str(self.kept)}))
+        self.enterContext(patch.dict(os.environ, {"BLOB_READ_WRITE_TOKEN": ""}))
+        self.enterContext(patch.dict(os.environ, {"MAGIC_HOUR_VOICE_OVER": "video"}))   # these tests cover the video-model narration; the cloner test sets its own
 
-        def fake_join(files, out, audio=True):
+        def fake_join(files, out, audio=True, seconds=None, size=None):
             self.joined.append(([f.name for f in files], audio))
             out.write_bytes(b"film")
             return out
@@ -171,10 +178,11 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
     async def fake_transcribe(self, audio):
         return self.heard
 
-    def fake_add_sound(self, film, out, narration=None, parts=None, music=None):
-        self.sound = {"narration": narration.name if narration else None, "music": music.name if music else None, "parts": parts}
+    def fake_add_sound(self, film, out, narration=None, parts=None, music=None, spoken=None, music_first=False, layers=None, music_swell=False):
+        self.sound = {"narration": narration.name if narration else None, "music": music.name if music else None, "parts": parts,
+                      "spoken": spoken, "music_first": music_first}
         out.write_bytes(b"film with sound")
-        return out
+        return {"lufs_before": -30.0, "lufs": -16.0, "speech": [], "layers": ["speech", "effects"]}
 
     def fake_captions(self, film, timed, out):
         self.captions = timed
@@ -260,7 +268,7 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ToolError):   # the plan has sound: the join asks for it
             await self.call("join_production_clips", production=p["production"], made=made)
         film = await self.call("join_production_clips", production=p["production"], made=made, sound={"narration": "n", "music": "m"})
-        self.assertEqual(film["sound"], {"narration": True, "music": True, "captions": True, "speech_seconds": 8.8})
+        self.assertEqual(film["sound"], {"narration": True, "music": True, "captions": True, "loudness_lufs": -16.0, "speech_seconds": 8.8})
         self.assertEqual((self.sound["narration"], self.sound["music"]), ("narration.mp4", "music"))
         self.assertEqual(len(self.sound["parts"]), 4)
         starts = [part["at"] for part in self.sound["parts"]]
@@ -269,7 +277,7 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
         self.assertAlmostEqual(starts[2] - starts[1], 9, 5)    # the second beat of clip 2 starts 9 s into that clip
         self.assertEqual([c["text"] for c in self.captions], ["Some scents fade by noon.", "This one stays.", "It starts soft.", "One spray is enough.", "Mockup Fragrance."])
         self.assertTrue(all(a["end"] <= b["start"] + 1e-6 for a, b in zip(self.captions, self.captions[1:])))
-        self.assertEqual(self.joined[-1][1], False)            # the clips themselves are silent
+        self.assertFalse(any(self.joined[-1][1]))              # the clips themselves are silent
         self.assertEqual([c["result"] for c in film["checked"]], ["yes"] * len(film["checked"]))
         self.assertEqual(film["not_met"], [])
         self.assertTrue(any("looks the same" in line for line in film["unchecked"]))
@@ -347,13 +355,166 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
         p = await self.planned("c4")
         made = {"1": "a", "2": "b", "3": "c", "4": "d"}
         film = await self.call("join_production_clips", production=p["production"], made=made)
-        self.assertEqual(self.joined, [(["clip-1.mp4", "clip-2.mp4", "clip-3.mp4", "clip-4.mp4"], True)])
+        self.assertEqual(self.joined, [(["clip-1.mp4", "clip-2.mp4", "clip-3.mp4", "clip-4.mp4"], [True] * 4)])
         self.assertRegex(film["download_url"], r"/films/[0-9a-f]{32}\.mp4$")
         self.assertTrue((self.films / film["download_url"].rsplit("/", 1)[1]).exists())
         self.assertEqual(film["clips"], 4)
         self.assertEqual(self.posts, [])
         with self.assertRaises(ToolError):
             await self.call("join_production_clips", production=p["production"], made={"1": "a", "2": "b"})
+
+    async def test_an_upload_through_the_server_can_be_joined_and_framed(self):
+        import base64
+        up = await self.call("upload_media", file_name="clip.mp4", data_base64=base64.b64encode(b"user-clip").decode())
+        self.assertEqual((up["file_path"], up["kind"], up["bytes"]), ("api-assets/test/frame.jpg", "video", 9))
+        self.assertEqual(self.uploads, ["/frame.jpg"])
+        self.paths.clear()
+        film = await self.call("join_videos", videos=[up["file_path"], "proj-1"])
+        self.assertEqual(self.joined, [(["source.jpg", "source.mp4"], True)])   # each file in its own folder, named by its type
+        self.assertNotIn("/v1/video-projects/api-assets/test/frame.jpg", self.paths)
+        self.assertRegex(film["download_url"], r"/films/[0-9a-f]{32}\.mp4$")
+        frame = await self.call("get_last_frame", video=up["file_path"])
+        self.assertEqual(frame["file_path"], "api-assets/test/frame.jpg")
+
+    async def test_an_upload_by_url_is_downloaded_then_kept(self):
+        up = await self.call("upload_media", file_name="jet.mp4", url="https://videos.magichour.ai/u/jet.mp4")
+        self.assertEqual(up["kind"], "video")
+        self.assertEqual(list(self.kept.iterdir())[0].read_bytes(), b"video-bytes")
+
+    async def test_a_file_uploaded_around_the_server_fails_clearly_and_spends_nothing(self):
+        for name, arguments in [("join_videos", {"videos": ["api-assets/acct/never-seen.mp4"]}),
+                                ("get_last_frame", {"video": "api-assets/acct/never-seen.mp4"})]:
+            with self.subTest(tool=name), self.assertRaisesRegex(ToolError, "upload_media"):
+                await self.call(name, **arguments)
+        self.assertFalse([p for p in self.paths if "never-seen" in p])
+        self.assertEqual(self.posts, [])
+
+    async def test_the_production_join_takes_the_users_own_clip_by_file_path(self):
+        import base64
+        p = await self.planned("c4")
+        up = await self.call("upload_media", file_name="mine.mov", data_base64=base64.b64encode(b"mine").decode())
+        await self.call("join_production_clips", production=p["production"], made={"1": up["file_path"], "2": "b", "3": "c", "4": "d"})
+        self.assertEqual(self.joined[0][0], ["clip-1.mp4", "clip-2.mp4", "clip-3.mp4", "clip-4.mp4"])
+        self.assertNotIn("/v1/video-projects/api-assets/test/frame.jpg", self.paths)
+
+    def users_clip_story(self, file_path, **extra):
+        return {"title": "My clip", "aspect": "16:9", "setting": "A sunny kitchen, soft daylight.", "captions": True,
+                "beats": [{"seconds": 7, "text": "The user's own clip.", "source": file_path, "clip": 1,
+                           "says": ["Make mornings easier.", "Prepare the night before."]}], **extra}
+
+    async def test_a_voice_over_goes_on_the_users_own_clip(self):
+        # MCP-14: the user's clip is a beat of its own (`source`); nothing is generated for it.
+        import base64
+        up = await self.call("upload_media", file_name="mine.mp4", data_base64=base64.b64encode(b"user-clip").decode())
+        p = await self.call("plan_video_production", story=self.users_clip_story(up["file_path"]))
+        clip = p["clips"][0]
+        self.assertEqual((clip["made_by"], clip["kind"], clip["steps"][0]["credits"]), ("user", "source", 0))
+        self.assertIn("source-1", [line["id"] for line in p["checklist"]])
+        made = await self.call("create_production_clip", production=p["production"], clip=1)
+        self.assertEqual((made["made_by"], made["credits_charged"]), ("user", 0))
+        sound = await self.call("create_production_sound", production=p["production"])
+        self.assertEqual([path for path, _ in self.posts], ["/v1/text-to-video"])   # the narration only, no clip
+        self.paths.clear()
+        film = await self.call("join_production_clips", production=p["production"], made={}, sound={"narration": sound["narration"]})
+        self.assertEqual(self.joined[-1], (["clip-1.mp4"], [True]))   # the user's clip keeps its own sound
+        self.assertFalse([path for path in self.paths if "api-assets" in path])   # read from the kept copy
+        self.assertTrue(film["sound"]["narration"])
+
+    async def test_speech_in_the_users_clip_is_never_lowered_unless_the_host_says_it_is_background(self):
+        # 2026-11-13: the user's clip's own sound was lowered 10 dB as "effects", even when someone speaks in it.
+        import base64
+        up = await self.call("upload_media", file_name="mine.mp4", data_base64=base64.b64encode(b"user-clip").decode())
+        for speech, kept in [(None, [(0.0, 8.4)]), (True, [(0.0, 8.4)]), (False, [])]:
+            story = self.users_clip_story(up["file_path"], music="Soft piano.")
+            story["beats"][0].pop("says")
+            if speech is not None:
+                story["beats"][0]["source_speech"] = speech
+            p = await self.call("plan_video_production", story=story)
+            sound = await self.call("create_production_sound", production=p["production"])
+            film = await self.call("join_production_clips", production=p["production"], made={}, sound={"music": sound["music"]})
+            self.assertEqual(self.sound["spoken"], kept, speech)
+            self.assertEqual(film["sound"].get("user_clip_as_speech"), [1] if kept else None)
+
+    async def test_a_voice_over_on_the_users_clip_warns_when_the_clip_may_have_speech(self):
+        import base64
+        up = await self.call("upload_media", file_name="mine.mp4", data_base64=base64.b64encode(b"user-clip").decode())
+        p = await self.call("plan_video_production", story=self.users_clip_story(up["file_path"]))
+        self.assertIn("voice-over-on-speech", [a["note"] for a in p["advice"]])
+        story = self.users_clip_story(up["file_path"])
+        story["beats"][0]["source_speech"] = False
+        p = await self.call("plan_video_production", story=story)
+        self.assertNotIn("voice-over-on-speech", [a["note"] for a in p["advice"]])
+
+    async def test_a_voice_over_with_too_many_words_for_its_beat_is_warned_at_the_plan(self):
+        # I46a, 2026-11-13: 12 words in a 4 s beat; the last words ran past the end of the film.
+        story = {"title": "Jet", "aspect": "16:9", "setting": "An airfield at dawn.", "beats": [
+            {"seconds": 4, "text": "A jet on the runway.", "clip": 1, "says": ["The F-35A Lightning II is powered by a single engine."]},
+            {"seconds": 4, "text": "The jet takes off.", "clip": 1,
+             "says": ["It is the conventional takeoff and landing version, built for normal runways."]}]}
+        p = await self.call("plan_video_production", story=story)
+        paced = [a["warning"] for a in p["advice"] if a["note"] == "voice-over-pace"]
+        self.assertEqual(len(paced), 1)
+        self.assertIn("Beat 2: the voice-over has 12 words for 4 s", paced[0])
+
+    async def test_a_new_clip_continues_from_the_users_clip(self):
+        # A3: the next clip starts from the last frame of the user's clip.
+        import base64
+        up = await self.call("upload_media", file_name="mine.mp4", data_base64=base64.b64encode(b"user-clip").decode())
+        story = self.users_clip_story(up["file_path"])
+        story["beats"][0].pop("says")
+        story["beats"].append({"seconds": 5, "text": "She turns and walks out of frame.", "clip": 2, "link": "continues"})
+        p = await self.call("plan_video_production", story=story)
+        self.assertEqual(p["clips"][1]["reference"]["kind"], "last_frame")
+        self.assertEqual(p["clips"][1]["depends_on"], [1])
+        await self.call("create_production_clip", production=p["production"], clip=2, made={})
+        (path, body), = self.posts
+        self.assertEqual(path, "/v1/image-to-video")
+        await self.call("join_production_clips", production=p["production"], made={"2": "job-1"})
+        self.assertEqual(self.joined[-1], (["clip-1.mp4", "clip-2.mp4"], [True, False]))   # the new clip is silent
+
+    async def test_the_users_clip_is_cut_to_source_start_and_end(self):
+        # J50b: keep the first 5 s of the user's 8 s clip and make a new ending from the frame at 5 s.
+        import base64
+        cuts = []
+
+        def fake_trim(source, out, start=0.0, end=None):
+            cuts.append((source.name, start, end))
+            out.write_bytes(b"part")
+            return out
+
+        up = await self.call("upload_media", file_name="mine.mp4", data_base64=base64.b64encode(b"user-clip").decode())
+        story = self.users_clip_story(up["file_path"])
+        story["beats"][0].pop("says")
+        story["beats"][0].update(seconds=5, source_end=5)
+        story["beats"].append({"seconds": 3, "text": "The plane lands on the desk.", "clip": 2, "link": "continues"})
+        p = await self.call("plan_video_production", story=story)
+        self.assertEqual(p["clips"][0]["steps"][0]["end"], 5)
+        with patch("mcp_magichour.media_tools.trim", side_effect=fake_trim):
+            await self.call("create_production_clip", production=p["production"], clip=2, made={})
+            await self.call("join_production_clips", production=p["production"], made={"2": "job-1"})
+        self.assertEqual(cuts, [("clip-1.mp4", 0.0, 5), ("clip-1.mp4", 0.0, 5)])   # the last frame and the join both use the cut
+        self.assertEqual(self.joined[-1][0], ["clip-1-part.mp4", "clip-2.mp4"])
+        bad = self.users_clip_story(up["file_path"])
+        bad["beats"][0].update(source_start=4, source_end=2)
+        self.assertFalse((await self.call("plan_video_production", story=bad))["ok"])
+
+    async def test_a_source_beat_must_stand_alone_and_be_used_as_it_is(self):
+        bad = self.users_clip_story("api-assets/x/mine.mp4")
+        bad["beats"][0]["reference"] = {"kind": "none"}
+        p = await self.call("plan_video_production", story=bad)
+        self.assertFalse(p["ok"])
+        two = self.users_clip_story("api-assets/x/mine.mp4")
+        two["beats"].append({"seconds": 3, "text": "A second beat.", "clip": 1})
+        p = await self.call("plan_video_production", story=two)
+        self.assertFalse(p["ok"])
+        self.assertEqual(self.posts, [])
+
+    async def test_upload_needs_one_source_and_a_known_type(self):
+        for arguments in [{"file_name": "a.mp4"}, {"file_name": "a.mp4", "url": "https://x.test/a.mp4", "data_base64": "eA=="},
+                          {"file_name": "a.exe", "data_base64": "eA=="}, {"file_name": "a.mp4", "data_base64": "not base64!"}]:
+            with self.subTest(arguments=arguments), self.assertRaises(ToolError):
+                await self.call("upload_media", **arguments)
+        self.assertEqual(self.uploads, [])
 
     async def test_without_ffmpeg_the_file_steps_say_so_and_spend_nothing(self):
         p = await self.planned("c4")

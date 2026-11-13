@@ -26,13 +26,22 @@ Questions (user, 2026-11-07: the model decides; the MCP asks at the known risks,
                     the checklist says the letters may change.
     background      on a card: its colour as a code (#3B1F6B). The card is then drawn by code, colour and words exact,
                     and needs no generation call.
-    picture         on a card: a picture to hold unchanged for the card's seconds (a logo), fitted onto `background`.
+    picture         on a card: a picture to hold unchanged for the card's seconds (a logo, a screenshot), with its
+                    exact_words drawn over it by code. With `background`: 80% of the frame on that colour; without it:
+                    as large as fits, over a blurred copy of itself (2026-11-12, D20b: a white default looked like paper).
+    source          the user's own clip, used as it is (MCP-14): its file_path from upload_media, a URL, or a finished
+                    project id. The beat is a clip of its own; nothing is generated for it (0 credits). `says`, `music`
+                    and captions go on it like on any clip; a later clip can start from its last frame (continue a clip).
+    source_sound    keep the user's clip's own sound (default true); false makes that clip silent before the sound is added.
+    source_start, source_end  use only that part of the user's clip, cut by code (2026-11-12, J50b: "keep the first 5 s
+                    and change the rest" had no way to shorten the user's clip).
 
 A voice-over is one track for the whole film, not a sound inside each clip: `says` holds the narrator's lines
 for a beat. One call reads all the lines in one voice; the join puts each beat's lines on that beat.
     voice_sample  a URL of a short recording of a voice the user owns or has rights to. With the voice-over switch on
-                  (MAGIC_HOUR_VOICE_OVER=cloner), the voice cloner reads the script in that voice. Else a video model
-                  reads it over a black screen (2 right in 8, 2026-11-08).
+                  (MAGIC_HOUR_VOICE_OVER=cloner, the default), the voice cloner reads the script in that voice; without a
+                  recording, in a default preset voice (Ashley, or Daniel when the narrator is a man). With the switch
+                  set to video, a video model reads it over a black screen (2 right in 8, 2026-11-08).
     The switch is off in what we ship until upstream approves the voice cloner (MCP-11; tests/test_release_gates.py).
 
 A beat is the smallest unit: one action. `link` says how a beat relates to the beat before it:
@@ -50,7 +59,7 @@ from copy import deepcopy
 from typing import Any
 
 LINKS = ("continues", "event", "moves", "new")
-WORD_ROUTES = ("card", "model", "still", "accept")
+WORD_ROUTES = ("overlay", "card", "model", "still", "accept")
 STRATEGIES = ("one", "time", "idea", "event", "shot", "person", "manual")
 ASPECTS = ("16:9", "9:16", "1:1")
 ROLE_PRIORITY = ("person", "copy", "product", "place")
@@ -63,7 +72,7 @@ CREDITS_PER_SECOND = 24
 STILL_CREDITS = 10
 PROMPT_LIMIT = 2000
 TRIGGER_SECONDS = 15
-VOICE_OVER_DEFAULT = "video"   # what we ship. "cloner" only after upstream approves the voice cloner (MCP-11)
+VOICE_OVER_DEFAULT = "cloner"   # user, 2026-11-11: on by default; ships to production once upstream approves (MCP-11)
 VOICE_OVER_MODES = ("video", "cloner")
 CLONER_CREDITS_PER_10_LETTERS = 1   # 0.1 credits a character, rounded up
 
@@ -78,6 +87,20 @@ def word_match(heard: str, script: str) -> float:
         for j, y in enumerate(b, 1):
             prev, row[j] = row[j], (prev + 1 if x == y else max(row[j], row[j - 1]))
     return round(row[-1] / (len(a) or 1), 2)
+
+
+# User, 2026-11-11 (proof of concept): with the cloner on and no recording from the user, the cloner reads the script in
+# a default preset voice (Magic Hour's own voice previews), so a voice-over needs no question. A user's own recording wins.
+DEFAULT_VOICES = {
+    "female": ("Ashley", "https://videos.magichour.ai/presets/voices/v2/cv-0001-ashley.mp3"),
+    "male": ("Daniel", "https://videos.magichour.ai/presets/voices/v2/cv-0008-daniel.mp3"),
+}
+MALE_WORDS = re.compile(r"\b(man|man's|male|men|he|his|him|guy|boy|gentleman|father|dad|deep)\b", re.I)
+
+
+def default_voice(narrator: str | None) -> tuple[str, str]:
+    """The preset voice for a narrator description: a man's voice if the words say so, else a woman's."""
+    return DEFAULT_VOICES["male" if MALE_WORDS.search(narrator or "") else "female"]
 
 
 def voice_over_mode() -> str:
@@ -136,9 +159,8 @@ def validate_story(story: dict) -> list[str]:
             problems.append(f"beat {i}: kind must be scene or card")
         if beat.get("kind") == "card" and not beat.get("exact_words") and not beat.get("picture"):
             problems.append(f"beat {i}: a card needs exact_words, or `picture` (a picture to hold unchanged, such as a logo)")
-        if beat.get("picture") and not str(beat["picture"]).startswith(("http://", "https://")):
-            problems.append(f"beat {i}: `picture` must be the picture's URL (the server downloads it to hold it unchanged); "
-                            "a Magic Hour file_path cannot be downloaded")
+        if beat.get("picture") and not str(beat["picture"]).startswith(("http://", "https://", "api-assets/")):
+            problems.append(f"beat {i}: `picture` must be the picture's URL or its file_path from upload_media")
         if beat.get("words_route") == "still" and beat.get("reference"):
             problems.append(f"beat {i}: the words answer 'still' makes this clip's start picture; drop `reference`, or answer 'card' or 'model'")
         if "link" in beat and beat["link"] not in LINKS:
@@ -151,6 +173,14 @@ def validate_story(story: dict) -> list[str]:
             problems.append(f"beat {i}: words_route must be one of {', '.join(WORD_ROUTES)}")
         if beat.get("model") not in (None, *MODEL_MAX_SECONDS):
             problems.append(f"beat {i}: model must be one of {', '.join(MODEL_MAX_SECONDS)}")
+        if beat.get("source"):
+            clash = [f for f in ("reference", "spoken", "in_scene_words", "exact_words", "words_route", "model", "picture", "background") if beat.get(f)]
+            if beat.get("kind", "scene") != "scene" or clash:
+                problems.append(f"beat {i}: a `source` beat is the user's own clip, used as it is; drop {', '.join(clash) or 'kind card'}")
+        if (beat.get("source_start") is not None or beat.get("source_end") is not None) and not beat.get("source"):
+            problems.append(f"beat {i}: source_start and source_end go only on a `source` beat")
+        if beat.get("source_end") is not None and beat["source_end"] <= (beat.get("source_start") or 0):
+            problems.append(f"beat {i}: source_end must be after source_start")
         if beat.get("background") and not re.fullmatch(r"#[0-9A-Fa-f]{6}", beat["background"]):
             problems.append(f"beat {i}: background must be a colour code like #3B1F6B")
     problems += _clip_problems(beats)
@@ -190,6 +220,8 @@ def _clip_problems(beats: list[dict]) -> list[str]:
     for i, beat in enumerate(beats):
         if beat.get("kind") == "card" and sum(1 for b in beats if b.get("clip") == beat.get("clip")) > 1:
             problems.append(f"beat {i + 1}: a card is a clip of its own; give it its own clip number")
+        if beat.get("source") and sum(1 for b in beats if b.get("clip") == beat.get("clip")) > 1:
+            problems.append(f"beat {i + 1}: the user's clip (`source`) is a clip of its own; give it its own clip number")
     return problems
 
 
@@ -225,6 +257,9 @@ def _beats_that_fit(story: dict, max_seconds: int, person_seconds: int | None = 
         link = beat_link(beat, previous)
         previous = beat
         limit = person_seconds if person_seconds and pictured_people(story, [beat]) else max_seconds
+        if beat.get("source"):   # the user's clip is used whole, however long
+            out.append({**deepcopy(beat), "n": n, "kind": "source", "link": link})
+            continue
         parts = -(-beat["seconds"] // limit)
         base, extra = divmod(beat["seconds"], parts)
         for p in range(parts):
@@ -268,7 +303,7 @@ def split(story: dict, strategy: str = "idea", max_seconds: int = TRIGGER_SECOND
     person_seconds = MODEL_MAX_SECONDS[REFERENCE_MODEL] if strategy == "person" else None
     manual = strategy == "manual"
     for beat in _beats_that_fit(story, 10**6 if manual else max_seconds, person_seconds):
-        is_card = beat["kind"] == "card"
+        is_card = beat["kind"] in ("card", "source")   # each is a clip of its own
         in_scene = current is not None and not is_card and current["kind"] == "scene"
         same_person = strategy == "person" and in_scene and beat["link"] != "new" and bool(people(story, current["parts"]) & people(story, [beat]))
         from_picture = same_person and bool(pictured_people(story, current["parts"]) & pictured_people(story, [beat]))
@@ -313,6 +348,8 @@ def choose_reference(story: dict, clip: dict, previous: dict | None, moves: str 
     """
     if clip["kind"] == "card":
         return {"kind": "still", "exact_words": [w for part in clip["parts"] for w in part.get("exact_words", [])]}
+    if clip["kind"] == "source":
+        return {"kind": "source", "file": clip["parts"][0]["source"]}
     routed = [w for part in clip["parts"] if part.get("words_route") == "still" for w in part.get("exact_words", [])]
     if routed:   # the host chose: a picture of the scene with the words, and the clip starts from it
         return {"kind": "scene_still", "exact_words": routed}
@@ -382,6 +419,9 @@ def compose_prompt(story: dict, clip: dict, reference: dict, ends_on: list[str] 
             lines.append(f'Said out loud on screen, once, word for word: "{said.strip()}"')
         for words in part.get("in_scene_words") or []:
             lines.append(f'The words "{words.strip()}" are part of the picture, spelled exactly.')
+        if part.get("exact_words") and part.get("kind", "scene") == "scene":
+            # I47c: a label named a stage (Evaporation) and the model drew it faintly or late
+            lines.append(f"The action of {at}-{end} s is large and plain to see from {at} s, not faint or late.")
         if part.get("words_route") == "model":
             for words in part.get("exact_words") or []:
                 lines.append(f'Show the words "{words.strip()}" on screen in large clean letters, spelled exactly.')
@@ -394,7 +434,10 @@ def compose_prompt(story: dict, clip: dict, reference: dict, ends_on: list[str] 
                          "held still for the last second.")
         else:
             lines.append("End with everyone from the last action still in frame, held still for the last second.")
-    lines.append("Each action happens once, in this order. No repeated shots, no title cards, no captions, no other scenes.")
+    if any(p.get("words_route") == "model" and p.get("exact_words") for p in clip["parts"]):
+        lines.append("Each action happens once, in this order. No repeated shots, no other scenes.")
+    else:
+        lines.append("Each action happens once, in this order. No repeated shots, no title cards, no captions, no other scenes.")
     return " ".join(lines)
 
 
@@ -421,12 +464,22 @@ def plan(story: dict, strategy: str = "idea", max_seconds: int = TRIGGER_SECONDS
         steps: list[dict] = []
         background = next((p.get("background") for p in clip["parts"] if p.get("background")), None)
         held = next((p.get("picture") for p in clip["parts"] if p.get("picture")), None)
+        if clip["kind"] == "source":   # the user's own clip, used as it is: nothing to make (MCP-14)
+            part = clip["parts"][0]
+            out.append({
+                "n": clip["n"], "kind": "source", "beats": clip["beats"], "seconds": clip["seconds"], "link": clip["link"],
+                "reference": reference, "ends_on": [], "depends_on": [], "made_by": "user",
+                "steps": [{"tool": "use_source", "model": "user", "credits": 0, "seconds": clip["seconds"], "source": part["source"],
+                           "sound": part.get("source_sound", True) is not False, "speech": part.get("source_speech"),
+                           "start": part.get("source_start"), "end": part.get("source_end")}],
+            })
+            continue
         if clip["kind"] == "card" and held:   # the user's picture held unchanged (a logo): code, no generation call
             out.append({
                 "n": clip["n"], "kind": "card", "beats": clip["beats"], "seconds": clip["seconds"], "link": clip["link"],
                 "reference": {"kind": "held", "file": held}, "ends_on": [], "depends_on": [], "made_by": "code",
                 "steps": [{"tool": "hold_picture", "model": "code", "credits": 0, "seconds": clip["seconds"], "picture": held,
-                           "background": background or "#FFFFFF"}],
+                           "background": background, "words": [w for p in clip["parts"] for w in p.get("exact_words", [])]}],
             })
             continue
         if clip["kind"] == "card" and background:   # drawn by code: exact colour and words, no generation call
@@ -466,6 +519,12 @@ def plan(story: dict, strategy: str = "idea", max_seconds: int = TRIGGER_SECONDS
                 late_problems.append(f"clip {clip['n']}: {asked} cannot take a picture reference; use {REFERENCE_MODEL}, or drop the reference")
             else:
                 model = asked
+        overlay, inside = [], 0
+        for part in clip["parts"]:
+            if part.get("words_route") == "overlay" and part.get("exact_words"):
+                overlay.append({"text": "\n".join(part["exact_words"]), "start": inside, "end": inside + part["seconds"]})
+            inside += part["seconds"]
+        out_overlay = {"overlay": overlay} if overlay else {}
         steps.append({
             "tool": tool, "model": model, "resolution": RESOLUTION, "seconds": clip["seconds"],
             "audio": (bool(story.get("audio")) or any(p.get("spoken") for p in clip["parts"])) and clip["kind"] != "card",
@@ -476,7 +535,7 @@ def plan(story: dict, strategy: str = "idea", max_seconds: int = TRIGGER_SECONDS
             "n": clip["n"], "kind": clip["kind"], "beats": clip["beats"], "seconds": clip["seconds"],
             "link": clip["link"], "reference": reference, "ends_on": ends_on,
             "depends_on": [reference["of_clip"]] if reference["kind"] == "last_frame" else [],
-            "steps": steps,
+            "steps": steps, **out_overlay,
         })
     for c in out:
         c.setdefault("made_by", "api")
@@ -498,6 +557,7 @@ def plan(story: dict, strategy: str = "idea", max_seconds: int = TRIGGER_SECONDS
 
 
 NARRATION_WORDS_PER_SECOND = 2.5
+VOICE_WORDS_PER_SECOND = 2.7   # the cloner's pace, measured: I46a 22 words in 7.3 s, E28c 16 in 6.2 s
 MUSIC_MIN_SECONDS, MUSIC_CREDITS_PER_SECOND = 15, 1
 
 
@@ -518,9 +578,12 @@ def plan_sound(story: dict, clips: list[dict]) -> dict | None:
     if parts:
         script = " ".join(line for part in parts for line in part["lines"])
         seconds = min(MODEL_MAX_SECONDS[TEXT_MODEL], max(5, -(-len(script.split()) // NARRATION_WORDS_PER_SECOND) + 3))
-        if voice_over_mode() == "cloner" and story.get("voice_sample"):
+        if voice_over_mode() == "cloner" and story.get("voice_route") != "video":
+            name, preset = default_voice(story.get("narrator"))
+            sample = story.get("voice_sample") or preset
             sound["narration"] = {
-                "parts": parts, "tool": "voice_cloner", "sample": story["voice_sample"], "script": script,
+                "parts": parts, "tool": "voice_cloner", "sample": sample, "script": script,
+                "voice": "the user's recording" if story.get("voice_sample") else f"default preset voice {name}",
                 "credits": -(-len(script) // 10) * CLONER_CREDITS_PER_10_LETTERS,
             }
         else:
@@ -546,6 +609,8 @@ def checklist(story: dict, clips: list[dict], sound: dict | None) -> list[dict]:
     lines = [{"id": "file", "want": f"One file, {seconds} s, {story['aspect']}", "how": "measured"},
              {"id": "order", "want": f"{len(story['beats'])} beats in story order, each once, no repeats", "how": "by eye"}]
     for clip in clips:
+        if clip["kind"] == "source":
+            lines.append({"id": f"source-{clip['n']}", "want": f"The user's clip used as it is, about {clip['seconds']} s", "how": "measured length"})
         if clip["kind"] == "card":
             words = ", ".join(f'"{w}"' for part in clip["parts"] for w in part.get("exact_words", []))
             lines.append({"id": f"card-{clip['n']}", "want": f"Card held {clip['seconds']} s with exactly {words}", "how": "measured length, words by eye"})
@@ -554,7 +619,8 @@ def checklist(story: dict, clips: list[dict], sound: dict | None) -> list[dict]:
     for n, beat in enumerate(story["beats"], start=1):
         if beat.get("kind", "scene") == "scene" and beat.get("exact_words"):
             route = beat.get("words_route") or "not chosen"
-            how = {"model": "by eye: drawn by the video model, may be misspelled", "still": "by eye: from the picture made with them",
+            how = {"overlay": "exact: drawn by code over the scene", "model": "by eye: drawn by the video model, may be misspelled",
+                   "still": "by eye: drawn by the picture model, may be misspelled",
                    "accept": "by eye: accepted as a risk, tell the user"}.get(route, "by eye")
             lines.append({"id": f"words-{n}", "want": f"On screen, spelled exactly: {', '.join(chr(34) + w + chr(34) for w in beat['exact_words'])}", "how": how})
         for words in beat.get("in_scene_words") or []:
@@ -571,7 +637,7 @@ def checklist(story: dict, clips: list[dict], sound: dict | None) -> list[dict]:
         lines.append({"id": "captions", "want": "The voice-over's sentences drawn on the picture when they are said", "how": "measured"})
     if story.get("audio"):
         lines.append({"id": "scene-sound", "want": "The scenes have their own sound (as the beats describe)", "how": "measured: a sound track that is not silent"})
-    elif not sound:
+    elif not sound and not any(c["kind"] == "source" and c["parts"][0].get("source_sound", True) is not False for c in clips):
         lines.append({"id": "silent", "want": "No sound", "how": "measured"})
     return lines
 
@@ -610,7 +676,7 @@ def check_plan(story: dict, planned: dict) -> list[str]:
     made: set[int] = set()
     for clip in planned["clips"]:
         video = clip["steps"][-1]
-        if clip.get("made_by") == "code":   # a drawn card: no model, no prompt
+        if clip.get("made_by") in ("code", "user"):   # a drawn card or the user's clip: no model, no prompt
             made.add(clip["n"])
             continue
         if clip["seconds"] > MODEL_MAX_SECONDS[video["model"]]:
@@ -626,6 +692,10 @@ def check_plan(story: dict, planned: dict) -> list[str]:
 
 HEX = re.compile(r"#[0-9A-Fa-f]{6}\b")
 NAMED_HEX = re.compile(r"(\b[A-Za-z]+ )?(#[0-9A-Fa-f]{6})\b")   # "teal #0E7C86": the word before a code, if any
+
+
+SOCIAL = re.compile(r"\b(reels?|ads?|advert\w*|promo\w*|commercial|tiktok|instagram|insta|social|shorts|story post)\b", re.I)
+SILENT = re.compile(r"\b(silent|no (music|sound|audio)|without (music|sound|audio)|mute[d]?)\b", re.I)
 
 
 def advise(story: dict, planned: dict, request: str | None = None) -> list[dict]:
@@ -663,6 +733,39 @@ def advise(story: dict, planned: dict, request: str | None = None) -> list[dict]
                 if old and places and old not in places:
                     warn("last-frame-keeps-place", clip["n"], f"Clip {clip['n']} starts from clip {before['n']}'s last frame "
                                                               f"({old}) but takes place in {', '.join(sorted(places))}.")
+    subjects = {s["id"]: s for s in story.get("subjects", [])}
+    for sid, subject in subjects.items():
+        if subject["role"] != "product":
+            continue
+        shown = [c for c in planned["clips"] if c["kind"] != "card" and any(sid in beats[n - 1].get("subjects", []) for n in c["beats"])]
+        if subject.get("picture"):
+            used = [c["n"] for c in shown if c["reference"]["kind"] == "picture" and c["reference"].get("subject") == sid]
+            if used:
+                out.append({"clip": used[0], "note": "product-photo-scene", "evidence": "2026-11-12, H40a: the kitchen behind the user's bottle stayed in a studio shot.",
+                            "warning": f"Clip(s) {', '.join(map(str, used))} start from the user's photo of {sid}; the model keeps the photo's "
+                                       "background. If the scene is somewhere else, first make a still of the product in that scene "
+                                       "(edit_image with the photo, or remove_image_background) and give it as `reference.file`."})
+        elif len(shown) >= 2 and any(c["reference"]["kind"] not in ("last_frame", "file") for c in shown[1:]):
+            out.append({"clip": shown[1]["n"], "note": "product-no-picture", "evidence": "2026-11-12, H40c: the product looked different in each clip.",
+                        "warning": f"{sid} is a product in {len(shown)} clips with no picture. Each clip draws it anew, so it changes. "
+                                   "Make one still of it first (generate_image) and give it as `reference.file` in each clip that shows it."})
+    if request and not story.get("music") and SOCIAL.search(request) and not SILENT.search(request):
+        out.append({"clip": None, "note": "music-default", "evidence": "2026-11-12, D20c: a reel was made silent; the user expected sound.",
+                    "warning": "This is a reel, an ad or a social post, and the story has no `music`. Such videos get music unless the "
+                               "user asks for silence: set `music` (a mood and instruments), or tell the user it is silent."})
+    for n, beat in enumerate(beats, start=1):
+        words = len(" ".join(beat.get("says") or []).split())
+        need = round(words / VOICE_WORDS_PER_SECOND + 0.1, 1)   # the join can start the words 0.1 s into the beat
+        if words and need > beat["seconds"]:
+            out.append({"clip": None, "note": "voice-over-pace", "evidence": "2026-11-13, I46a: 12 words in a 4 s beat; the last words ran past the film's end.",
+                        "warning": f"Beat {n}: the voice-over has {words} words for {beat['seconds']} s. The voice reads about "
+                                   f"{VOICE_WORDS_PER_SECOND} words a second, so it needs about {need} s. Cut words or make the beat longer. "
+                                   "If not, the join moves the words earlier, reads them up to 15% faster, and holds the last frame."})
+        if beat.get("source") and beat.get("says") and beat.get("source_sound", True) is not False and beat.get("source_speech") is not False:
+            out.append({"clip": None, "note": "voice-over-on-speech", "evidence": "",
+                        "warning": f"Beat {n}: a voice-over on the user's clip, and the clip keeps its own sound. If someone speaks in "
+                                   "the clip, both voices play at once. Set `source_speech` false if its sound is only background, "
+                                   "or `source_sound` false to drop it."})
     if request:
         from .gates import brief_items
 
@@ -711,12 +814,13 @@ def questions(story: dict, planned: dict) -> list[dict]:
                         "ltx-2.5 got them wrong 0 of 4 times; minimax-h3 right 2 of 2. How should they be made? (Words that are "
                         "part of the picture, such as a label or a sign, go in `in_scene_words` instead: no question, best effort.)"),
                 "options": {
+                    "overlay": "The scene is made without words, and the join draws the words over it by code for the beat's seconds. Always exact; plain white letters on a dark band.",
                     "card": "A card of its own right after this beat, 2 s taken from the beat. Always exact. The words are not over the scene.",
                     "model": "minimax-h3 makes this beat's clip and draws the words in the scene. Looks best; 2 of 2 so far; check the frame after.",
-                    "still": "A picture of the scene with the words is made first and the clip starts from it. Exact; the words stay on screen for the whole clip.",
+                    "still": "A picture of the scene with the words is made first and the clip starts from it. The picture model may misspell them; the words stay on screen for the whole clip.",
                     "accept": "Keep it as planned. Tell the user the words may be misspelled.",
                 },
-                "recommend": "card",
+                "recommend": "overlay",
             })
     for clip in planned.get("clips", []):
         if clip["kind"] == "card" or len(clip["beats"]) < 2:
@@ -730,8 +834,7 @@ def questions(story: dict, planned: dict) -> list[dict]:
                     "options": {"split": "Give beat {0} a clip of its own.".format(n), "keep": "Keep the clip. The line may not be said."},
                     "recommend": "split",
                 })
-    if (voice_over_mode() == "cloner" and any(b.get("says") for b in beats) and not story.get("voice_sample")
-            and story.get("voice_route") != "video"):
+    if False:   # 2026-11-11: no question; without a recording the cloner uses a default preset voice (default_voice)
         out.append({
             "id": "voice", "beat": None,
             "ask": ("The film has a voice-over. A video model reading it over a black screen said the script right 2 times in 8 "
@@ -775,8 +878,7 @@ def apply_answers(story: dict, answers: dict[str, str]) -> tuple[dict, list[str]
             if choice == "video":
                 story["voice_route"] = "video"
             elif choice == "sample":
-                if not story.get("voice_sample"):
-                    problems.append("voice: put the recording's URL in the story's `voice_sample`")
+                pass   # with no recording, the default preset voice reads it
             else:
                 problems.append("voice: choose sample or video")
             continue

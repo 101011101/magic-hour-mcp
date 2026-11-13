@@ -10,6 +10,7 @@ Spec: mcp-upgrade/prd/MCP-01-conversation.md.
 
 from __future__ import annotations
 
+import os
 import re
 from typing import Any, Literal
 
@@ -50,24 +51,38 @@ TOOLS: dict[str, tuple[list[str], list[str]]] = {
     "swap_face_in_photo": (["which_face"], []),
     "swap_head_in_photo": (["which_face"], []),
     "create_talking_photo": (["script", "language"], ["script"]),
-    "trim_video": (["range"], ["range"]),  # no MCP tool yet; kept so a trim request still gets its question
+    # 2026-11-12 (user): plan_request is in the video composition path only (MCP-18)
+    "plan_video_production": (["subject", "seconds", "aspect", "sound", "exact_words", "look"], ["subject", "seconds", "aspect", "sound"]),
+    "trim_media": (["range"], ["range"]),  # cut by code (2026-11-12, E26b, J49c: the tool was missing)
 }
 ToolName = Literal[
     "generate_image", "edit_image", "create_video_from_text", "create_video_from_image", "generate_music",
     "add_subtitles_to_video", "upscale_image", "remove_image_background", "swap_face_in_photo",
-    "swap_head_in_photo", "create_talking_photo", "trim_video",
+    "swap_head_in_photo", "create_talking_photo", "trim_media", "plan_video_production",
 ]
 
 # A host often sends the create tool's own argument names. Each maps to the sheet's name.
 ALIASES = {"end_seconds": "seconds", "duration": "seconds", "length": "seconds", "aspect_ratio": "aspect",
            "orientation": "aspect", "shape": "aspect", "audio": "sound", "words": "exact_words", "text": "exact_words"}
 PROMPT_NAMES = {"prompt", "style.prompt", "description"}
-PROMPT_PARAM = {"generate_image": "subject", "create_video_from_text": "subject", "edit_image": "edit",
+PROMPT_PARAM = {"generate_image": "subject", "create_video_from_text": "subject", "plan_video_production": "subject", "edit_image": "edit",
                 "create_video_from_image": "motion", "generate_music": "mood"}
 DEFAULT_ALLOWED = {"look", "position", "transition", "voice", "language", "keep"}
 VIDEO_FROM_PICTURE = {"create_video_from_image", "create_talking_photo"}
 YOUR_CALL_VALUES = {"aspect": "16:9", "seconds": 10, "sound": "none"}
 MAX_QUESTIONS = 3
+
+
+def question_rounds() -> int | None:
+    """MCP-15 (trial, 2026-11-11): MAGIC_HOUR_QUESTION_ROUNDS = how many batches of questions the user is asked at most.
+    Unset: the old behaviour (three questions a call, no limit on rounds)."""
+    raw = os.getenv("MAGIC_HOUR_QUESTION_ROUNDS", "").strip()
+    return int(raw) if raw.isdigit() and int(raw) >= 1 else None
+
+
+def question_rounds_used(asked: list[str]) -> int:
+    """The batches already put to the user: the assistant messages that asked any of the set's questions."""
+    return sum(1 for text in asked if any(asked_about(name, text) for name in QUESTIONS))
 
 _I = re.ASCII | re.IGNORECASE
 # The plain ways a person hands the choice over. The dry persona sweep of 2026-11-09 found "you pick", "wherever you pick"
@@ -344,8 +359,30 @@ def plan_sheet(messages: list[dict], tool: str, params: list[dict], attachments:
     to_ask = [name for name in open_rows if name in required or name in must_ask
               or name not in OPTIONAL_QUIET | {"aspect"}]
     to_ask.sort(key=lambda name: name not in required)
-    questions = [{"param": name, "question": QUESTIONS[name]} for name in to_ask][:MAX_QUESTIONS]
-    return {"tool": tool, "ready": not questions, "params": [sheet[name] for name in uses if name in sheet], "questions": questions}
+    rounds = question_rounds()
+    if rounds is None:
+        questions = [{"param": name, "question": QUESTIONS[name]} for name in to_ask][:MAX_QUESTIONS]
+        return {"tool": tool, "ready": not questions, "params": [sheet[name] for name in uses if name in sheet], "questions": questions}
+
+    # 9. MCP-15 (trial): one batch with every open question, each with what happens if the user skips it. The batch covers
+    #    every gap, so "your call" after a batch hands over all that is still open. When the rounds are used up, nothing
+    #    more is asked: the open rows are left to the host to infer.
+    used = question_rounds_used(asked)
+    after_batch = used > 0 and bool(last_asked) and any(asked_about(name, last_asked) for name in QUESTIONS)
+    if to_ask and (used >= rounds or (after_batch and your_call) or gave_up):
+        why = ("the user said it is our call" if after_batch and your_call else "the user said to just make it" if gave_up
+               else f"{used} round(s) of questions asked, the limit is {rounds}: infer it")
+        for name in to_ask:
+            if name in YOUR_CALL_VALUES:
+                fill(name, picture_shape if name == "aspect" and picture_shape else YOUR_CALL_VALUES[name], "default", why)
+            else:
+                fill(name, None, "default", why + "; choose a value that fits the request and tell the user what you chose")
+        to_ask = []
+    skip = {name: f"if you skip it: {YOUR_CALL_VALUES[name]}" for name in YOUR_CALL_VALUES}
+    questions = [{"param": name, "question": QUESTIONS[name], "if_skipped": skip.get(name, "if you skip it: the assistant chooses")}
+                 for name in to_ask]
+    return {"tool": tool, "ready": not questions, "params": [sheet[name] for name in uses if name in sheet], "questions": questions,
+            "rounds": {"used": used, "limit": rounds}}
 
 
 class Message(BaseModel):
@@ -374,13 +411,19 @@ def register_plan_request(mcp: FastMCP) -> None:
         name="plan_request",
         title="Check the request before creating",
         description=(
-            "Call this before a create or edit tool. Pass the whole conversation so far, in order: each user message "
+            "Call this before plan_video_production, for a video made of several clips (longer than 15 seconds, 3 or "
+            "more separate ideas, or a card or exact words with a scene), with tool plan_video_production. Do not call it "
+            "before a single create or edit call. Pass the whole conversation so far, in order: each user message "
             "word for word and each message you sent the user, your questions included. Pass the tool you plan to "
             "call, and one row for each parameter you know: value and source (user = the user said it, derived = it "
             "follows from the user's words, default = your choice, missing = unknown). Row names: subject, edit, keep, "
             "motion, seconds, aspect, sound, exact_words, look, mood, script, language, which_face, range. Returns the "
             "checked sheet and "
-            "up to 3 questions. If ready is false, ask the user the returned questions word for word and call again "
+            + ("every open question at once. If ready is false, ask the user all the returned questions in ONE message, "
+               "numbered, each with its `if_skipped` default, and say they can answer only some or say 'your call' for the "
+               "rest. Rows that come back as default with no value are yours to choose: pick what fits and tell the user. "
+               if question_rounds() else "up to 3 questions. ")
+            + "If ready is false, ask the user the returned questions word for word and call again "
             "with your question and the user's answer added to messages. If ready is true, create with the returned values. A value the user "
             "did not give comes back missing: do not guess shape, length, sound or on-screen words. exact_words is a "
             "list of strings, one for each line of text to show, exactly as the user wrote it; send [] when the user "

@@ -1,7 +1,7 @@
 # MCP-01 · Conversation: derive the parameters, ask only for the rest
 
 - Status: built, 2026-11-05. Not deployed. Not committed.
-- Code: `mcp_magichour/plan_request.py`. Spec: `mcp-upgrade/prd/MCP-01-conversation.md`. Tests: `tests/test_plan_request.py`, `tests/test_video_production_tool.py`.
+- Code: `mcp_magichour/plan_request.py`. Spec: `mcp-upgrade/prd/conversation.md`. Tests: `tests/test_plan_request.py`, `tests/test_video_production_tool.py`.
 - Source: the user, 2026-11-05.
 - Port from (agent repo): `V4/agent/intent.js`, `V4/agent/questions.js`, `V4/prd/PRD.md`.
 
@@ -87,7 +87,7 @@
 ## Open
 
 - Who derives: built as option A (the host model fills the sheet, server code checks it). Not confirmed by the user.
-- The spec lists 28 open questions. See `mcp-upgrade/prd/MCP-01-conversation.md`.
+- The spec lists 28 open questions. See `mcp-upgrade/prd/conversation.md`.
 - The server instructions do not name `plan_request`. The host finds it from the tool description only.
 - Attachments: V4 reads each attached picture with a vision model (role, shape). The MCP server does not see the pictures before upload.
 - Harness: done. `run.mjs --local --mcp-url <address>` gives a local build to the driver as function tools. `--hide a,b` removes tools (the "before" side).

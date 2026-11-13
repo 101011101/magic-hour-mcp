@@ -133,15 +133,26 @@ API_TOOL_METADATA = {
         "replace_character_in_video",
         "Replace character in video",
         "Replaces a subject in a video with a character from a reference image, or transfers the "
-        "video's motion onto that character. Starts a background job that costs credits; returns a "
-        "project id for wait_for_video_project.",
+        "video's motion onto that character. Use it, not swap_face_in_video, to put a person from a "
+        "photo into a video when their hair, skin or build differ a lot from the person in the video: "
+        "a face swap keeps the video person's hair and skin. The whole person is replaced, so the "
+        "clothes may change to the photo's; tell the user. For one of several people, use point "
+        "selection (selection_mode points) at that person's position in the first frame, not auto: "
+        "with auto the model chooses the person (benchmark C15c). One person per call: run it again on "
+        "the result for a second person, with that person's points. Starts a background job that costs credits (about 48 per second at 480p); "
+        "returns a project id for wait_for_video_project.",
     ),
     ("POST", "/v1/face-swap"): (
         "swap_face_in_video",
         "Swap face in video",
         "Swaps faces in an existing video: all faces with a reference image, or selected faces "
-        "using detect_faces results. Starts a background job that costs credits; returns a project "
-        "id for wait_for_video_project.",
+        "using detect_faces results. It changes the face only: hair, skin tone and build stay those "
+        "of the person in the video. Before you use it, look at the photo and a frame of the video. "
+        "If the hair (colour, length, curl) or skin tone differ, the result does not look like the "
+        "photo's person (benchmark C15a: dark curly hair onto a blonde woman was not recognisable): "
+        "use replace_character_in_video instead, even when the user says 'face', and tell the user the "
+        "hair and clothes come from the photo. Starts a background job that costs credits; returns a "
+        "project id for wait_for_video_project.",
     ),
     ("POST", "/v1/image-to-video"): (
         "create_video_from_image",
@@ -211,7 +222,11 @@ API_TOOL_METADATA = {
         "API default is eligible. For a Free account with no requested model, "
         "flux-2-klein at 640px with image_count=1 is an available option when it supports the "
         "supplied inputs and requested edit. Check the current model's input limits; never drop "
-        "references or change an explicit model, resolution or count to fit this option.",
+        "references or change an explicit model, resolution or count to fit this option. "
+        "flux-2-klein keeps the input image's shape and ignores aspect_ratio; to change the shape, "
+        "use qwen-edit (it follows aspect_ratio), or reframe_media on the result. Words a model "
+        "draws are often misspelled: for exact words, edit without them and add them with "
+        "add_words_to_media.",
     ),
     ("POST", "/v1/ai-headshot-generator"): (
         "generate_headshot",
@@ -224,7 +239,9 @@ API_TOOL_METADATA = {
         "generate_image",
         "Generate image",
         "Generates one or more images from a text prompt, with model, output size and image count "
-        "options. Costs credits; returns a project id for wait_for_image_project.",
+        "options. Words a model draws are often misspelled: for exact words on a flat surface (a "
+        "poster, a label), make the picture without them and add them with add_words_to_media. "
+        "Costs credits; returns a project id for wait_for_image_project.",
     ),
     ("POST", "/v1/ai-image-upscaler"): (
         "upscale_image",
@@ -255,6 +272,7 @@ API_TOOL_METADATA = {
         "swap_face_in_photo",
         "Swap face in photo",
         "Swaps faces in a supplied photo using a source face image or selected face mappings. "
+        "It changes the face only; to carry the hair and head shape too, use swap_head_in_photo. "
         "Costs 10 credits; output size depends on subscription. Returns a project id for "
         "wait_for_image_project.",
     ),

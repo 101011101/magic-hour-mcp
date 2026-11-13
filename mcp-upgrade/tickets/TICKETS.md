@@ -3,19 +3,20 @@
 - One line for each ticket. Details are in the ticket file, if there is one.
 - "Proposed" = not from the user. Confirm or delete.
 - Nothing is committed. Nothing is deployed.
-- Updated: 2026-11-05.
+- Updated: 2026-11-12.
 
 ## To do
 
-- [ ] **MCP-11 · Voice-over by the voice cloner. BLOCKED AT PUSH: needs upstream approval.**
+- [ ] **MCP-11 · Voice-over by the voice cloner.** Open only for the production push. Upstream approved (2026-11-11: `test_release_gates.py` reports approved after upstream #184). Default `cloner` (user, 2026-11-11). [PRD](../prd/production.md).
   - Why: the video-model narration read A4's script 2 times in 8. The voice cloner read it exactly, for 17 credits (`Benchmark/voice.html`, 2026-11-08).
   - Block: upstream hides the voice tools on purpose. `openapi_policies.py` removes `/v1/ai-voice-cloner` always, and `/v1/ai-voice-generator` while `APPROVED_VOICE_NAMES` is empty (commit 2e6d659, #109). The user (2026-11-08): approval is pending on the other side.
   - Our branch may have the feature. Before a push or a PR, verify that upstream main allows it:
     - `git fetch upstream && git rebase upstream/main`.
     - Check that `apply_magic_hour_policies` keeps `/v1/ai-voice-cloner` (or `APPROVED_VOICE_NAMES` is not empty).
     - Not allowed: do not push the feature on. Push it off, or hold the push.
-  - [x] Switch: `MAGIC_HOUR_VOICE_OVER=cloner`; shipped default `VOICE_OVER_DEFAULT = "video"` (`video_production.py`).
+  - [x] Switch: `MAGIC_HOUR_VOICE_OVER=video|cloner`; default `VOICE_OVER_DEFAULT = "cloner"` (user, 2026-11-11: our version ships to production once upstream approves; until then we work as if approved).
   - [x] Switch on, no `voice_sample`: the plan asks question `voice` (sample / video), recommends sample.
+  - [x] 2026-11-11 · Replaced (user, proof of concept): no question; without a recording the cloner reads in a default preset voice (Ashley, or Daniel when `narrator` names a man; `DEFAULT_VOICES` in `video_production.py`).
   - [x] Switch on, with `voice_sample`: `create_production_sound` calls `/v1/ai-voice-cloner`; the join fetches an audio project.
   - [x] Gate: `tests/test_release_gates.py` fails while the shipped default or a shipped config turns the cloner on and upstream still hides it.
   - [x] Hook file: `scripts/pre-push`. Not installed (the user installs it): `ln -sf ../../scripts/pre-push .git/hooks/pre-push`.
@@ -25,7 +26,12 @@
   - [x] Word check: the join transcribes the narration (Whisper, only when the server has `OPENAI_API_KEY`) and reports "no" under 80% of the script's words. Without the key: the speech check only, as before.
 - Facing-away speaker test (2026-11-08, 576 credits, `Benchmark/facing.html`): the line was said word for word 6 of 6 (back to the camera, profile, far away, two people where the one facing away speaks; ltx-2.5 and minimax-h3). The listener kept her mouth closed in all 3 two-person clips. ltx-2.5 put "back to the camera" as three-quarters away, side by side (S1).
 
-- [ ] **MCP-01 · Conversation: derive the parameters, ask only for the rest.** [Ticket](MCP-01-conversation.md). [Spec](../prd/MCP-01-conversation.md).
+- [ ] **MCP-18 · Consider `plan_request` outside the video composition path.** User, 2026-11-12: ship video composition first; a single call stays as in the old MCP. [Scope](../prd/scope.md).
+  - [x] 2026-11-12 · `plan_request` is called only before `plan_video_production` (description; tool name `plan_video_production` in the sheet). The `create_video_from_image` description is the old one again.
+  - Why: persona bench, 16 single-call video items, old against new: avg score 3.38 → 3.19 (happy), 3.38 → 3.31 (stupid), 3.38 → 3.25 (dumper). The tool-calling items show no clear gain: 25 better / 13 worse (happy), 22 / 24 (stupid), 21 / 21 (dumper).
+  - [ ] Later: measure `plan_request` on single calls and tool calling, each on its own, against the old MCP. Turn it on there only when it is better.
+
+- [ ] **MCP-01 · Conversation: derive the parameters, ask only for the rest.** [Ticket](MCP-01-conversation.md). [Spec](../prd/conversation.md).
   - [x] PRD, spec, 40 contract tests: `tests/test_plan_request.py`.
   - [x] Build `plan_request`: `mcp_magichour/plan_request.py`. All 40 pass.
   - [x] Harness for a local build: `run.mjs --local --mcp-url <address> [--hide a,b]` (agent repo).
@@ -36,16 +42,16 @@
   - [x] 2026-11-10 · Persona dry sweep p2 (3 users × 163 cases, old and new, 0 credits) found: "No text" sent as a string was read letter by letter and asked about words; "your call" counted only when the question came back word for word; words with list numbers or a changed quote were asked again. Fix in `plan_request.py` (rules 7 to 10b in the spec), 12 new tests (`tests/test_plan_request.py`, 55 pass; the whole suite has the same 3 failures as before, no web build). Replay of 673 recorded calls: 0 questions added except G37b, where the host moved "17 October" to "24 October" and the old code let it pass. Dry re-run of 94 conversations on the fixed build: word questions 47 → 6 on the cases the replay changed. Not committed.
   - [x] 2026-11-10 · Proposed · "Your call" now holds to the end of the chat (rule 6c). Motion added to rule 10b. The tool description now asks the host for the whole chat, its own questions included. Why: in sweep p2, 13 calls in 8 of 163 lost-user chats asked again what the user had handed over (D20b: "you pick" to length and sound, then to the shape, then length and sound again). 49 of 400 lost-user calls had no assistant message before a user message. 6 new tests (61 in the file; the whole suite has the same 3 failures). Replay of 994 recorded calls (831 from p2, 163 from the p3 re-run): no call asks more; 13 ask less (lost user 11, oversharing user 2); the lost user's p2 questions go 390 → 373. Measured on a host (2026-11-10, dry, 0 credits): OpenAI refused the key (401, 04:04), so the 72 chats ran with a Claude host (`claude-opus-5-5`) on both builds, before and after this change (p4c; not comparable with the GPT runs). Calls with a user message and no assistant message before it: 10 → 0 (5 → 0 with no assistant message at all). Questions asked to the user: 75 → 64. Tool questions: 113 → 99. Re-asks after a hand-over: 3 → 1 calls. Tool question put again: 27 → 20. Loops: 0 → 0. One chat newly stuck (H44b: after "just make it" the host still asks for on-screen words, as the rule says). A replay of every recorded call: the new code never asks more, and asks fewer in 3 calls, so most of the gain is the new description. One run for each build: the direction is the same everywhere, the size of the gain is within noise. Cost about $60. Not committed.
   - [ ] Proposed · The host sometimes flips a row from `default` to `derived` and drops assistant messages even so; the shape was then asked 4 times (A01a, oversharing user). The new description removed the dropped messages for a Claude host (p4c); the `default`/`derived` flip is not measured. Open.
-  - [ ] Proposed · A lost user got 3 or more questions in one message in 52 of 163 conversations (new build). Ask one in plain words, then the next.
-  - [ ] Proposed · `get_last_frame` takes a project id or a URL, not the `file_path` of an attached clip (G33b). Decide whether the server can read an uploaded file back.
-- [ ] **MCP-02 · Clip split: find the best rule.**
+  - [-] Proposed · Ask one question at a time (52 of 163 lost-user chats got 3 or more in one message). Closed: replaced by MCP-15 (user, 2026-11-11: batches).
+  - [x] 2026-11-11 · `get_last_frame` and the joins could not read an attached clip's `file_path` (G33b, E25b, E28a, E29b). User: option 1 with a clean fallback. `upload_media` + `kept_files.py`: the server keeps a copy of every file that passes through it; an unknown `file_path` fails before any API call. [PRD](../prd/production.md), Files and storage.
+- [x] **MCP-02 · Clip split: find the best rule.** Closed 2026-11-11 (user): the rule is chosen and tested in the A and B runs.
   - [x] Splitter with 5 rules (`one`, `time`, `idea`, `event`, `shot`): `mcp_magichour/video_production.py`.
   - [x] One reference for each clip: last frame / picture / own still / none.
   - [x] 5 test stories: `tests/fixtures/stories/`. Unit tests: `tests/test_video_production.py`.
   - [x] Bench runner: `scripts/split_bench.py`.
   - [x] Paid run 1: C4 (B2) and C5 (B1). 5 films, 3,092 credits. Films and checklists: `Benchmark/split/`.
   - [x] Rule chosen from run 1: cut at a new idea, and at 15 s.
-  - [ ] Paid run 2: C1, C2, C3 (about 2,832 credits). Waits for the user's OK.
+  - [-] Paid run 2: C1, C2, C3. Dropped (user, 2026-11-11).
   - [x] Split rule (user, 2026-11-05). Strategy `person`, the tool's rule.
     - Ideas come first. The same person is an idea: their beats stay in one clip, also when the place changes, while the clip fits.
     - Limit: 15 s. For a person with a picture: 30 s (`minimax-h3`).
@@ -53,19 +59,20 @@
     - A person who comes back after other clips starts from the last clip that showed them.
     - If the place is new: the clip ends close on the person, and the next clip pulls back to show the new place.
     - A new idea with no person from before: new clip, no reference (or its picture).
-  - [ ] References for people (pictures). Later (user, 2026-11-05). For now: people in words only, the measure is that they stay the same between clips.
-  - [ ] New place, same person: give the last frame as a named reference (`minimax-h3`), not as the start frame. Proposed. Test on C7: about 240 credits.
-  - [ ] Change the ending line: no "face visible" when the person faces away. Proposed. Test on C8: about 288 credits.
-  - [ ] Clips that do not depend on each other can be made at the same time. The bench makes them one after the other. Proposed.
-  - [ ] Second run of each film. One run for each is not enough to be sure.
-- [ ] **MCP-03 · Video production tool in the MCP.**
+  - [ ] References for people (pictures). Later (user, 2026-11-05).
+  - [-] New place, same person, last frame as a named reference (C7). Dropped (user, 2026-11-11).
+  - [-] Ending line when the person faces away (C8). Dropped (user, 2026-11-11).
+  - [-] Clips made at the same time. Dropped (user, 2026-11-11).
+  - [-] Second run of each film. Dropped (user, 2026-11-11).
+- [ ] **MCP-03 · Video production tool in the MCP.** [PRD](../prd/production.md).
   - [x] `plan_video_production`: story in, ordered calls out. `mcp_magichour/video_production_tool.py`. Tests: `tests/test_video_production_tool.py`.
-  - [ ] A host cannot complete the plan yet: see MCP-06.
-  - [ ] Run B1 and B2 through the GPT driver with the tool.
+  - [x] A host completes the plan (clips, sound, join): the 11-07 runs and the 2026-11-10/11 fleet runs.
+  - [x] B1 and B2 through the GPT driver with the tool (2026-11-05, see Done).
   - [x] Before payment: story adds up, each clip fits the model, prompt is 2,000 characters or less, order of calls.
   - [x] After generation: clip length, clip size.
   - [x] Join: the film is silent when the story has no sound (`minimax-h3` adds music with audio off).
-  - [ ] After generation: shots in order, no shot repeats, same people in all clips. Scored by eye at this time.
+  - [ ] After generation: shots in order, no shot repeats, same people in all clips. Scored by eye until MCP-07.
+  - [ ] The join trims each clip to its planned length (minimax-h3 clips run ~0.3 s long; B2 31.8 s, 2026-11-07). Fleet 2026-11-12: 78 of 88 films within 0.5 s; the five-photo reels D20a/b/c ran 1.7–2.3 s long (1–2 s clips come back about 1.6 s or longer). `media_tools.join` puts each whole clip in; `check_outputs` allows ±1 s for each clip.
 - [ ] **MCP-05 · When to call the video production tool.** Instructions to the host agent, or code that reads the request and decides. Later (user, 2026-11-05).
 - [ ] **MCP-06 · Last frame, join and storage on the deployed server.**
   - [x] 2026-11-06 · ffmpeg: the server uses the ffmpeg on its PATH, else the one the `imageio-ffmpeg` package ships; ffprobe is no longer needed (`media_tools.probe` reads ffmpeg's own report). Install: `pip install -e ".[production]"`.
@@ -74,8 +81,7 @@
 - [ ] **MCP-04 · Gates and checks.**
   - [x] 2026-11-06 · Checklist: `plan_video_production` returns `checklist` (what the story promises). `join_production_clips` returns `checked` (length, shape, card lengths, narration placed, music, captions, sound present or silent, measured on the file), `unchecked` (lines for the host to confirm by eye) and `not_met`. The host is told to report unmet lines, not to present them as done.
 - [ ] **MCP-07 · State manager.** Read what is in each clip. Later (user, 2026-11-05). Until then: assume each clip shows what its story text says.
-- [ ] **MCP-08 · Voice-over, captions, music on a multi-clip film.** Proposed. B1 needs them. Not in MCP-02.
-  - A1 on v1 was silent for this reason. `generate_music` is on the server; `join_production_clips` cannot take its track.
+- [x] **MCP-08 · Voice-over, captions, music on a multi-clip film.** Closed: option E (user, 2026-11-05), `create_production_sound` and the join; see Done.
 - [ ] **MCP-09 · Todo list from the request, checked at the end.** User, 2026-11-05: break the prompt into a todo list, then check that each line is done, at least the easy checks.
   - [x] 2026-11-06 · From the story: see MCP-04. Covers only what the host put in the story.
   - [ ] From the brief: a line for each thing the request asks for, made at `plan_request` time, so a line the host left out of the story (A2's end words, A1's music) still shows as not met.
@@ -96,12 +102,28 @@
 - [x] 2026-11-07 · Agent groups, MCP asks (user's design). Beat fields `clip`, `spoken`, `reference`, `in_scene_words`, `background`, `picture`, `model`; `questions` + `answers` (words over a scene: card / model / still / accept; a spoken line with another beat: split / keep; colour codes: words / keep), plan held until answered; `advice` for the rest; `request` tracked; drawn and held cards made by code at the join; narration speech measured. 218 tests. Paid run of A2, B2, B1, A4: 2,677 credits.
   - Same four on v1 (7 Nov): 22 yes · 3 partly · 2 no. New: 21 · 4 · 2. Fixed: B2 line said (own clip), B1 9 yes, cards and logo exact. New faults: ltx-2.5 narration spoke nonsense (A4); minimax-h3 clips run ~0.3 s long each (B2 31.8 s); minimax-h3 put A2's words at the start.
   - Next: voice-over from Magic Hour's voice generator, not a video model; the join trims each clip to its planned length; the "model" words option warns that the moment is not controlled.
-- [ ] **MCP-10 · A1 to A4 again on the current build.** The v1 runs on the page are from 2026-11-05 04:45 to 04:56, before the sound tools, the checklist and the ending-line fixes. One run each, after the fixes below.
-  - [ ] A2 · words over the last shot: `exact_words` on a scene beat are drawn by code in the join (as captions are), not asked of the model (old MCP "walk anway", v1 none; ltx-2.5 cannot spell).
-  - [ ] A3 · continue a given clip: a plan whose first piece is the user's file, one clip from its last frame, silent join. The host had no such tool and regenerated all 12 s with minimax-h3 (music came back with audio off; she slides out of frame facing the camera, no turn). 144 credits, not 288.
-  - [ ] A4, S3 · too eager a split: a single continuous scene of 15 s or less stays one call; an end card is appended, not a reason to split the rest. Count ideas by place and people, not by beats.
-  - [ ] B1 · the label: the letters are lost in the host's edited reference (640 px, bottle about 60 px wide) and 480p cannot hold them in the hand shots. Options: a tighter crop of the bottle as a second named reference on `minimax-h3`, or 720p for shots where the bottle is small.
-  - [ ] B2 · the spoken line: "You came back." was in the prompt as prose; ltx-2.5 did not speak it (the old MCP's one call spoke it 10 times; Replicate's ltx-2.5-fast once). Put it in `says` on the beat so `compose_prompt` writes it as a dialogue line, and add a "line spoken once" check (speech spans).
+- [ ] **MCP-10 · A1 to A4 again on the current build.** Mostly closed by the 2026-11-07 and 11-08 runs (A2, B2, B1, A4). The v1 runs on the page are from 2026-11-05 04:45 to 04:56, before the sound tools, the checklist and the ending-line fixes. One run each, after the fixes below.
+  - [-] Superseded by the user's pick (2026-11-07): a card after the scene, or minimax-h3 over the scene; not drawn by code (W4). A2 · words over the last shot: `exact_words` on a scene beat are drawn by code in the join (as captions are), not asked of the model (old MCP "walk anway", v1 none; ltx-2.5 cannot spell).
+  - [ ] A3 · see MCP-14. Continue a given clip: a plan whose first piece is the user's file, one clip from its last frame, silent join. The host had no such tool and regenerated all 12 s with minimax-h3 (music came back with audio off; she slides out of frame facing the camera, no turn). 144 credits, not 288.
+  - [x] 2026-11-07 · Fixed by agent-grouped clips (the host sets `clip` on each beat). A4, S3 · too eager a split: a single continuous scene of 15 s or less stays one call; an end card is appended, not a reason to split the rest. Count ideas by place and people, not by beats.
+  - [ ] Partly: 11-07 run 9 lines yes; the label stays best effort (`in_scene_words`). B1 · the label: the letters are lost in the host's edited reference (640 px, bottle about 60 px wide) and 480p cannot hold them in the hand shots. Options: a tighter crop of the bottle as a second named reference on `minimax-h3`, or 720p for shots where the bottle is small.
+  - [x] 2026-11-07 · Fixed: `spoken` on the beat and the `line` question; the line is said in its own clip. B2 · the spoken line: "You came back." was in the prompt as prose; ltx-2.5 did not speak it (the old MCP's one call spoke it 10 times; Replicate's ltx-2.5-fast once). Put it in `says` on the beat so `compose_prompt` writes it as a dialogue line, and add a "line spoken once" check (speech spans).
+  - [ ] A1 and A3: not rerun on the current build.
+- [ ] **MCP-15 · Ask in batches, with a limit on rounds.** User, 2026-11-11. Trial; the PRD is updated only after the user approves the results.
+  - Rule: one batch with every open question (numbered sub-questions), each with what happens if the user skips it. The batch covers every gap, so "your call" after a batch hands over everything still open.
+  - `MAGIC_HOUR_QUESTION_ROUNDS`: the most batches the user is asked. Answers that leave gaps, with no "your call": another batch while rounds remain; else the agent infers the rest and says what it chose. Unset: the old behaviour (3 questions a call, no limit).
+  - [x] Code: `plan_request.py` (rule 9, `question_rounds`), 5 tests in `tests/test_plan_request.py`.
+  - [x] 2026-11-11 · Dry runs (tags qr0 today, qr1 one round, qr2 two rounds; 25 cases with the most questions last run × happy and lost user; 150 chats, 0 credits). Question rounds before the first make call, lost user: today 4/13/8 chats with 0/1/2 rounds (avg 1.16); one round 4/20/1 (avg 0.88); two rounds 2/17/6 (avg 1.16). Happy user: 2 chats asked today, 4 with either trial. With one round, the agent told the user what it chose for the gaps (D23c, H40a). Exceptions: F31b asked a second time for the script (a gap that cannot be guessed, MCP-16); G36a lost Bash permission (test fault).
+  - [ ] User's approval; then the PRD (conversation rule 6c, question 17) and the default number of rounds.
+  - Replaces the proposed line under MCP-01 "ask one in plain words, then the next" (closed).
+- [ ] **MCP-16 · What the agent may not guess.** Deferred (user, 2026-11-11). Under MCP-15, when the rounds run out: (a) a gap that cannot be guessed (an edit with no stated change, no picture for a picture edit); (b) exact words on a poster or ad, which an agent can write but the user may not want. Decide later.
+- [ ] **MCP-17 · The user's media is redrawn.** For the user to address (user, 2026-11-12). Fleet root-cause run: 38 failures, 98 chats, average score 2.1/5, 9 usable as is. Page: `Benchmark/audit/failure-modes/index.html`, group "user media redrawn".
+  - The user asks to keep their file and change one part. No tool does the job by code, so the host sends the file through a model that redraws it, or makes nothing.
+  - Jobs with no tool: mix music under the user's video (E27a/b/c), replace its soundtrack (E28b/c), put a logo or watermark on it (E29a/c), join the user's stills into a video (D20a/b), put photos side by side (G35a/b), change colour only (B07c, J49a), take a still frame from a video (G33b), edit one masked part (B07d).
+  - `media_tools.add_sound` already mixes sound into a film. Only the production join uses it. No tool exposes it.
+- [ ] **MCP-12 · Trim.** Later (user, 2026-11-11). No trim tool exists. `plan_request` still plans `trim_video` and marks it ready, so the host calls a tool that is not there ("Unknown tool": E26a, E26b, 2026-11-11). Build it on the kept copy (ffmpeg, 0 credits), or make `plan_request` say there is no tool. PRD: [media files](../prd/media-files.md).
+- [ ] **MCP-13 · Storage of kept files.** Later (user, 2026-11-11). Reminder: kept copies of users' files go to public Vercel Blob (`kept/`). Move to private storage. One module: `kept_files.py`.
+- [x] **MCP-14 · The user's own clip in a production.** Approved by the user 2026-11-11 (E28 films); checked again in the next benchmark. Beat fields `source` (the user's clip: file_path, URL or project id) and `source_sound`; the clip is a clip of its own, 0 credits; the join uses it as it is. Tests: `tests/test_video_production_tool.py` (3 new). Shown: fx4 (E28a/b/c × 3 users: 9 of 9 used `source`, 9 films with narration on the user's clip, 1,571 credits) and demo1 (A3: original 6 s unchanged + 6 s new from its last frame, 144 credits instead of 288). Check in the next run: [benchmark 02](../benchmark/02-next.md). A plan cannot take the user's clip as a piece, so a voice-over or music on the user's clip (E28a) and continuing a given clip (A3) have no path. The join can read the clip since 2026-11-11 (MCP-01 line, `kept_files.py`).
 
 ## Done
 

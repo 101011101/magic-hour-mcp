@@ -4,7 +4,7 @@
 - Sides: **old** (the MCP at `https://mcp.magichour.ai/`), **v1** (the modified MCP, a local build), **Replicate** (its plugin).
 - Nothing is committed. Nothing is deployed. V1 code is in the working tree of the two repos.
 - Repos: MCP `/Users/ray/Coding/magic-hour-mcp`. Agent and harness `/Users/ray/Coding/magic-agent-video-generator`.
-- More detail: `tickets/TICKETS.md` (done / to do), `prd/MCP-01-conversation.md`, `/Users/ray/Coding/magic-hour-mcp/Benchmark/upgrade.html` (results page).
+- More detail: `tickets/TICKETS.md` (done / to do), `prd/conversation.md`, `/Users/ray/Coding/magic-hour-mcp/Benchmark/upgrade.html` (results page).
 
 ## What v1 is
 

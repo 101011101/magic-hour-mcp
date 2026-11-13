@@ -102,11 +102,21 @@ class QuestionTests(unittest.TestCase):
         story["beats"][4]["exact_words"] = ["walk anyway"]      # over the walk away, as in A2
         return story
 
-    def test_words_over_a_scene_are_a_question_with_four_options(self):
+    def test_words_over_a_scene_are_a_question_with_five_options(self):
         story = self.words_story()
         q = next(q for q in vp.questions(story, plan_story(story)) if q["id"] == "words-5")
-        self.assertEqual(set(q["options"]), {"card", "model", "still", "accept"})
-        self.assertEqual(q["recommend"], "card")
+        self.assertEqual(set(q["options"]), {"overlay", "card", "model", "still", "accept"})
+        self.assertEqual(q["recommend"], "overlay")
+
+    def test_overlay_keeps_the_words_out_of_the_prompt_and_times_them_in_the_clip(self):
+        answered, _ = vp.apply_answers(self.words_story(), {"words-5": "overlay"})
+        planned = plan_story(answered)
+        self.assertTrue(planned["ok"], planned["problems"])
+        clip = next(c for c in planned["clips"] if 5 in c["beats"])
+        self.assertNotIn("walk anyway", clip["steps"][-1]["prompt"])
+        start = sum(answered["beats"][n - 1]["seconds"] for n in clip["beats"] if n < 5)
+        self.assertEqual(clip["overlay"], [{"text": "walk anyway", "start": start, "end": start + answered["beats"][4]["seconds"]}])
+        self.assertIn("exact: drawn by code", next(l["how"] for l in planned["checklist"] if l["id"] == "words-5"))
 
     def test_card_puts_the_words_on_a_drawn_card_after_the_beat(self):
         answered, _ = vp.apply_answers(self.words_story(), {"words-5": "card"})
@@ -263,7 +273,44 @@ class FixesFromTheDryRunTests(unittest.TestCase):
 
 
 class HeldPictureUrlTests(unittest.TestCase):
-    def test_a_held_picture_needs_a_url(self):
+    def test_a_held_picture_takes_a_url_or_a_file_path(self):
         story = grouped(walk_anyway(), [1, 2, 2, 3, 4, 5])
         story["beats"][5] = {"seconds": 2, "kind": "card", "clip": 5, "text": "The logo.", "picture": "api-assets/x/logo.png"}
-        self.assertTrue(any("must be the picture's URL" in p for p in vp.validate_story(story)))
+        self.assertFalse(any("picture" in p for p in vp.validate_story(story)))
+        story["beats"][5]["picture"] = "logo.png"
+        self.assertTrue(any("must be the picture's URL or its file_path" in p for p in vp.validate_story(story)))
+
+    def test_a_held_photo_has_no_white_default_and_keeps_its_words(self):
+        story = grouped(walk_anyway(), [1, 2, 2, 3, 4, 5])
+        story["beats"][5] = {"seconds": 2, "kind": "card", "clip": 5, "text": "A photo.", "picture": "https://x.test/p.jpg",
+                             "exact_words": ["Come on in"]}
+        step = plan_story(story)["clips"][-1]["steps"][0]
+        self.assertEqual((step["tool"], step["background"], step["words"]), ("hold_picture", None, ["Come on in"]))
+
+
+class ProductAndLabelTests(unittest.TestCase):
+    """2026-11-12 happy r1: H40a (the photo's kitchen stayed), H40c (a product with no picture changed), I47c (a stage
+    named by a label was drawn faintly)."""
+
+    def ad(self, picture=None):
+        return {"title": "Ad", "aspect": "9:16", "setting": "A clean white studio, soft light.",
+                "subjects": [{"id": "bottle", "words": "A green glass bottle with a cork.", "role": "product", **({"picture": picture} if picture else {})}],
+                "beats": [{"seconds": 5, "text": "The bottle turns on a plinth.", "subjects": ["bottle"], "clip": 1},
+                          {"seconds": 5, "text": "A close view of the bottle's label.", "subjects": ["bottle"], "clip": 2, "link": "new"}]}
+
+    def test_a_product_with_no_picture_in_two_clips_gets_a_still_first(self):
+        story = self.ad()
+        self.assertIn("product-no-picture", [a["note"] for a in vp.advise(story, plan_story(story))])
+
+    def test_the_users_product_photo_as_reference_warns_about_its_background(self):
+        story = self.ad("api-assets/x/bottle.jpg")
+        story["beats"][0]["reference"] = {"kind": "picture", "subject": "bottle"}
+        planned = plan_story(story)
+        self.assertTrue(planned["ok"], planned["problems"])
+        self.assertIn("product-photo-scene", [a["note"] for a in vp.advise(story, planned)])
+
+    def test_a_beat_with_a_label_asks_for_a_plain_action_from_its_start(self):
+        story = {"title": "Water", "aspect": "16:9", "setting": "A lake under a hot sun.",
+                 "beats": [{"seconds": 5, "text": "Thick white steam rises off the lake.", "exact_words": ["Evaporation"], "words_route": "overlay", "clip": 1}]}
+        planned = plan_story(story)
+        self.assertIn("plain to see from 0 s", planned["clips"][0]["steps"][-1]["prompt"])

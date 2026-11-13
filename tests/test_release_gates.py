@@ -60,24 +60,30 @@ class VoiceOverSwitch(unittest.TestCase):
         planned = vp.plan(story, strategy="manual", cuts=[1])
         return planned, vp.questions(story, planned)
 
-    def test_off_by_default_uses_the_video_model_and_asks_nothing(self):
+    def test_the_cloner_is_on_by_default_and_the_video_model_stays_available(self):
+        # User, 2026-11-11: the cloner is on by default; production waits for upstream approval (MCP-11).
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("MAGIC_HOUR_VOICE_OVER", None)
+            self.assertEqual(vp.voice_over_mode(), "cloner")
+            planned, asked = self.plan(STORY)
+        self.assertEqual(planned["sound"]["narration"]["tool"], "voice_cloner")
+        self.assertNotIn("voice", [q["id"] for q in asked])
+        with patch.dict(os.environ, {"MAGIC_HOUR_VOICE_OVER": "video"}):
             planned, asked = self.plan(STORY)
         self.assertEqual(planned["sound"]["narration"]["tool"], "video")
-        self.assertNotIn("voice", [q["id"] for q in asked])
 
-    def test_on_without_a_sample_asks_for_one(self):
+    def test_without_a_sample_the_cloner_reads_in_a_default_voice(self):
+        # User, 2026-11-11 (proof of concept): no question; a preset voice, a man's when the narrator is one.
         with patch.dict(os.environ, {"MAGIC_HOUR_VOICE_OVER": "cloner"}):
             planned, asked = self.plan(STORY)
-            question = next(q for q in asked if q["id"] == "voice")
-            self.assertEqual(question["recommend"], "sample")
-            story, problems = vp.apply_answers(STORY, {"voice": "sample"})
-            self.assertTrue(problems)   # no URL yet
+            self.assertNotIn("voice", [q["id"] for q in asked])
+            narration = planned["sound"]["narration"]
+            self.assertEqual((narration["tool"], narration["sample"]), ("voice_cloner", vp.DEFAULT_VOICES["female"][1]))
+            planned, _ = self.plan({**STORY, "narrator": "a deep, calm man's voice"})
+            self.assertEqual(planned["sound"]["narration"]["sample"], vp.DEFAULT_VOICES["male"][1])
             story, problems = vp.apply_answers(STORY, {"voice": "video"})
             self.assertFalse(problems)
-            planned, asked = self.plan(story)
-        self.assertNotIn("voice", [q["id"] for q in asked])
+            planned, _ = self.plan(story)
         self.assertEqual(planned["sound"]["narration"]["tool"], "video")
 
     def test_on_with_a_sample_uses_the_cloner(self):

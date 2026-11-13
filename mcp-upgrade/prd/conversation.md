@@ -1,8 +1,10 @@
-# MCP-01 · Conversation: PRD and spec
+# Conversation: `plan_request`
 
-- Status: draft, 2026-11-05. Not confirmed by the user.
+Ticket: MCP-01. Overview: [ARCHITECTURE](ARCHITECTURE.md).
+
+- Status: built (`mcp_magichour/plan_request.py`), rules updated 2026-11-10. Open questions below still need the user.
 - Ticket: `mcp-upgrade/tickets/MCP-01-conversation.md`.
-- Contract tests: `tests/test_plan_request.py` (40 tests; all fail until the tool is built).
+- Contract tests: `tests/test_plan_request.py` (61 tests, all pass).
 - **Assumption, not confirmed (ticket, Open, option A):** the host model fills the parameter sheet and sends it as tool arguments. Server code checks the sheet. The server calls no model.
 - "V4" = `magic-agent-video-generator/V4`. Line numbers are those of the V4 files on 2026-11-05.
 
@@ -259,7 +261,7 @@ Decisions that change the tests
 1. Who derives. This PRD uses option A of the ticket. Confirm.
 2. Question text for `aspect` and `look`. The ticket table has short texts. `questions.js` adds examples. The tests use `questions.js`. Which text?
 3. `which_one` and `reference_role` are in the ticket table. No tool in `catalogue.js` uses them. Keep or remove?
-4. `trim_video` has no MCP tool. The tests make `plan_request` plan it (item S07). What does the host do with a `ready` sheet for it? Or: remove S07 from this ticket?
+4. `trim_video` has no MCP tool. The tests make `plan_request` plan it (item S07). What does the host do with a `ready` sheet for it? Or: remove S07 from this ticket? (2026-11-11: hosts called the missing tool in E26a, E26b. Ticket MCP-12, later.)
 5. 18 MCP creation tools have no sheet in V4. Which parameters and questions do they get?
 6. `create_talking_photo`: V4 asks for a script; the MCP tool takes an audio file. `add_subtitles_to_video`: V4 has `language`; the MCP tool has no language argument. Change the sheets?
 7. `create_video_from_image` has no shape argument. Rule 17 asks for the shape. V4 fits the start frame to the shape first (spec 5.3; not in the MCP). Ask for the shape before that tool is there?
