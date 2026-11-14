@@ -23,4 +23,4 @@ Each of these makes a result look worse than it is, or stops a run.
 ## 3. Dry runs refuse `plan_tool_call`
 
 - In a dry run `chat.mjs` refuses every tool not in `FREE_TOOLS`. `plan_tool_call` is read-only and spends nothing, but without the change a dry run with the planner on refuses the planner itself.
-- The one-line change is committed in the runner repo on branch `william/plan-tool-call-free` (commit 92dd2bef), on a local copy (`~/mh-bench`). Not pushed yet.
+- The one-line change is kept on the `william` branch of this repo as a patch: [`mcp-upgrade/runner-patches/fleet-plan-tool-call-free.patch`](../../runner-patches/fleet-plan-tool-call-free.patch). Nothing is pushed to the runner repo (user, 2026-11-13: all work on the `william` branch). To use it on a local copy of the runner: `git -C <runner copy> apply <path to the patch>`.

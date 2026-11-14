@@ -1,0 +1,32 @@
+From 92dd2bef5c637ed9483db72c22e0b2a42a1b809d Mon Sep 17 00:00:00 2001
+From: William
+ <william@eduroam-campus-10-36-143-78.campus-dynamic.uwaterloo.ca>
+Date: Fri, 13 Nov 2026 23:37:38 -0500
+Subject: [PATCH] fleet: plan_tool_call is free (read-only), so dry runs can
+ test the tool-management planner
+
+In a dry run chat.mjs refuses every tool outside FREE_TOOLS. plan_tool_call
+(magic-hour-mcp, branch william, behind MAGIC_HOUR_TOOL_PLAN) is read-only and
+spends no credits; without this a dry run refuses the planner itself.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ V2/bench/mcp/fleet/chat.mjs | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/V2/bench/mcp/fleet/chat.mjs b/V2/bench/mcp/fleet/chat.mjs
+index 4f721a34..d9f74bda 100644
+--- a/V2/bench/mcp/fleet/chat.mjs
++++ b/V2/bench/mcp/fleet/chat.mjs
+@@ -69,7 +69,7 @@ Write the user's next message.` }).reply;
+ const FREE_STILL = Object.entries(STILLS).filter(([, m]) => m.plan === "free").map(([k]) => k), FREE_VIDEO = ["ltx-2.5", "minimax-h3"];
+ const IMAGE_TOOLS = new Set(["generate_image", "edit_image"]), VIDEO_MODEL_TOOLS = new Set(["create_video_from_text", "create_video_from_image", "edit_video", "replace_character_in_video", "create_spoken_ad_video"]);
+ const READ_ONLY = ["get_workflow_guide", "ping", "wait_for_video_project", "wait_for_image_project", "wait_for_audio_project", "fetch_image_download", "fetch_audio_download", "fetch_video_download", "get_account_info", "list_saved_items", "get_upload_urls", "get_face_detection_results", "get_video_project", "get_image_project", "get_audio_project", "join_production_clips", "join_videos", "get_last_frame", "voices_list"];
+-const FREE_TOOLS = new Set([...READ_ONLY, "plan_request", "plan_video_production", "detect_faces", "get_face_detection_results", "upload_chatgpt_image", "upload_chatgpt_media"]);
++const FREE_TOOLS = new Set([...READ_ONLY, "plan_tool_call", "plan_request", "plan_video_production", "detect_faces", "get_face_detection_results", "upload_chatgpt_image", "upload_chatgpt_media"]);
+ const FIXED = { swap_face_in_photo: 10, swap_head_in_photo: 10, remove_image_background: 5, colorize_photo: 10, create_meme: 10, create_qr_code: 0, generate_headshot: 50, create_gif_or_short_video: 50, edit_face_in_photo: 1, detect_faces: 0 };
+ const toolDefs = readJson(join(FLEET, `tools-${chat.side}.json`), { tools: [] }).tools || [];
+ const RO = new Set([...READ_ONLY, ...toolDefs.filter((t) => t.annotations?.readOnlyHint).map((t) => t.name)]);
+-- 
+2.39.5 (Apple Git-154)
+
