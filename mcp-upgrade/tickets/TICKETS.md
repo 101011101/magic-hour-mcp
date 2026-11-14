@@ -41,7 +41,8 @@ Order (user, 2026-11-13): first make the existing tools very good (MCP-21 to MCP
   - [x] 2026-11-13 · Dry run found 3 faults (exact words as a value, consent 'none', side by side not a gap); fixed in b28d821.
 - [ ] **MCP-24 · Benchmark the planner.** Family predicted right, tool picked right, item scores against the old MCP and against the switch off. Ship only if not worse on tool management, and video composition unchanged.
   - [x] 2026-11-13 · Targeted run (user: only relevant cases): 13 cases + 2 refusals, planner on vs off vs old MCP, 991 credits. Average 2.7 (old) → 3.0 (off) → 3.3 (on). Gains on the vague user (A01a 2 → 4), 'the best part' (E26a), upscale (B13b); a child's face now declined. One loss (B13a, the 'preserve' setting), fixed. [Results](../prd/tool-management/tool-tests.md).
-  - [ ] More runs per case (one run moves a score by 1 to 2); then the switch default.
+  - [x] 2026-11-13 · 3 runs per case (rounds r2, r3; 2,098 credits): old 2.69, off 2.85, on 3.28. Holds in every run: A01a (vague user) +2, B13b +1.3; J50a +1. No case worse in every run. The host calls the planner in only 1 of 3 J54b runs, so refusal rules there are mostly not applied.
+  - [ ] Decide the switch default (user). Before turning it on: a check with ChatGPT as host (all runs used Claude).
 - Folded in: MCP-17 (jobs with no tool) feeds MCP-20 and MCP-29 to MCP-35. MCP-12 (trim) is tool management; `trim_media` exists since cbbe722. MCP-16 (what may not be guessed) feeds the required rows.
 
 #### 2. Tool composition (combining existing tools)
