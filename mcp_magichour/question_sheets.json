@@ -8,7 +8,8 @@
     "Free-tier models only (tool_notes.json, free_models). Never name a paid model.",
     "Keep the user's media unless the user asked for it to be redrawn or re-made.",
     "When no tool does the job (a GAP row), say so plainly and offer the nearest real option. Do not send the user's media through a tool that redraws it instead.",
-    "A request for a film of several shots or scenes goes to video composition (plan_request), not to these sheets."
+    "A request for a film of several shots or scenes goes to video composition (plan_request), not to these sheets.",
+    "Passing a result to the next tool: Magic Hour's own tools (generate_image, edit_image, create_video_from_image, swap_*, add_subtitles_to_video and the other API tools) take a file_path or a download URL, not a project id; pass the finished project's download URL or the file_path a code tool returned. The code tools (reframe_media, trim_media, add_words_to_media, mix_audio, join_videos, get_last_frame, add_sound_to_video, adjust_colours, put_pictures_side_by_side, put_picture_on_video, make_card_clip) also take a finished project id."
   ],
   "families": {
     "new_picture": {

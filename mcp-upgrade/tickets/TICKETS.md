@@ -63,6 +63,7 @@ Chains of tools that exist today. Each chain goes in the tool notes and in `plan
 - [ ] **MCP-27 · Cut and rebuild the user's video.** `trim_media`, `get_last_frame`, `create_video_from_image`, `reframe_media`, `join_videos` in order. Cases: E25b (trim per speaker, reframe each, join), E25c (reframe, then subtitles), E26a/b (best part, cut the boring parts), J49c (keep the first 5 s), J50b (keep the start, new ending from the last frame), C15a (trim, then face swap), G33b (a frame at a chosen time: trim to it, then last frame).
   - [ ] Blocked (user, 2026-11-14: wait for Ray's fix): `join_videos` fails without a system ffmpeg (`media_tools.join` calls `ffmpeg` by name; notes-for-ray.md).
 - [ ] **MCP-28 · Build sound from parts.** Voice lines and music made one at a time, then `join_videos` (sound files) or `mix_audio`. Cases: F31b (two voices), F32a (voice over music), F32b (podcast of two hosts). Music under 15 s: `generate_music` makes 15 s at least (API minimum), then `trim_media` (F30a, E27a, E27c). Needs the voice generator (hidden upstream, MCP-11).
+  - [x] 2026-11-14 · Run wcomp with MCP-25 and MCP-26 (13 cases, 663 credits): every chain made the right final file (checked by hand: grades 3.23 vs old 2.77, held down by the grader judging earlier files and missing the audio). Real fault: G37a passed an image project id to edit_image (refused); rule added to the sheets. Open: G36a's sizes differ in design when generated separately.
 
 #### 3. New tools (no tool does the job today)
 

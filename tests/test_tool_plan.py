@@ -210,6 +210,13 @@ class CompositionTests(unittest.TestCase):
         self.assertIn("several_sizes decides", d["shape"])
 
 
+class HandoffRuleTests(unittest.TestCase):
+    def test_the_rules_say_api_tools_need_a_file_path_or_url(self):
+        """Run wcomp G37a: an image project id passed to edit_image and create_video_from_image was refused."""
+        rules = " ".join(tool_plan.sheets()["rules"])
+        self.assertIn("not a project id", rules)
+
+
 class SwitchTests(unittest.TestCase):
     def test_off_by_default(self):
         env = {k: v for k, v in os.environ.items() if k != "MAGIC_HOUR_TOOL_PLAN"}

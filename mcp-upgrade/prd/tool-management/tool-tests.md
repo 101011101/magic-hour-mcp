@@ -118,6 +118,26 @@ User: call the planner only when the answer would materially change the result. 
 | E29b end card after the clip | 2 | 2, then **4** | First: `make_card_clip` → `join_videos` failed (`media_tools.join` calls ffmpeg by name). Fix: `make_card_clip` attach=after, one call, 0 credits (run wnew-e29b) |
 | **Average** | **2.0** | **4.2** | |
 
+## Tool composition, run wcomp (2026-11-14)
+
+- 13 cases: words on a made picture (MCP-25), make then reshape (MCP-26), audio from parts (MCP-28). Video chains (MCP-27) wait for Ray's `join` fix. Happy user, one run each, planner and new tools on. Dry run first (wcomp-dry): found two conflicting sheet instructions for several sizes, fixed (86ef3be). Live: 663 credits.
+- Grades: average 3.23 (old MCP 2.77). Several low grades are the grader judging the wrong file; the files were checked:
+
+| Case | Old MCP | Grade | The files |
+|---|---|---|---|
+| A02b, A03a, A06a, J49b (words on a picture) | 1–5 | 4, 4, 4, 4 | Picture, then `add_words_to_media`; J49b 1 → 4 |
+| B12b (story frame) | 1 | 4 | `reframe_media` fill |
+| G34a (3 carousel slides) | 4 | 3 | All 3 slides have their words; the grader judged slide 3 before the words |
+| G36a (one ad, 3 sizes) | 4 | 2 | All 3 sizes have the words; the grader missed the wide one. Real point: separate generations differ in design |
+| J51b (resize to vertical, navy bars) | 1 | 1 | The final file is 480x854, 8 s: right; the grader judged the earlier 854x480 files |
+| G37a (poster, story, reel) | 4 | 4 | Real fault: an image project id passed to `edit_image` and `create_video_from_image` was refused; the agent recovered. Rule added: API tools take a file_path or URL |
+| F31b (two voices, ~8 s) | 2 | 3 | One 7.8 s file (4 lines joined, mixed) |
+| F32a (20 s intro, voice over music) | 2 | 2 | One 20.0 s file |
+| F32b (90 s podcast, two hosts) | 2 | 3 | One 84 s file |
+| F30a (10 s music) | 3 | 4 | 15 s generated, cut to 10 s |
+
+- The audio grades are low because `voices_list` saved about 100 preview clips first and the grader read only the first files; the final audio was not judged.
+
 ## Setup faults found (tell Ray)
 
 - The runner uploads attachments straight to Magic Hour (`get_upload_urls`). Our code tools can only read files that went through `upload_media` (a kept copy), so every reframe, trim or words case fails for that reason alone. For this run the attachments were uploaded through `upload_media` and the chats pointed at them.
@@ -125,4 +145,5 @@ User: call the planner only when the answer would materially change the result. 
 - `upload_media` with `data_base64` broke the connection on a 4 MB video (the description says up to 100 MB). Uploading by `url` worked.
 - The grader needs `ffprobe` on the PATH.
 - The grader judges the frames of an earlier file when a chat saves several (E24d: the final file is right, the grade is 2).
+- The grader reads only the first files a chat saved: after `voices_list` (about 100 preview clips) it never sees the final audio (run wcomp F31b, F32a, F32b).
 - In a dry run the runner refuses every tool not in its own free list, `plan_tool_call` included; added locally for these runs (not committed).
