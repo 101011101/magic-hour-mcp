@@ -58,7 +58,7 @@ Rule (user, 2026-11-13): tool management does not touch video composition.
 | [tool notes](../../../mcp_magichour/tool_notes.json) | each tool: family, type (use it for), antitype (do not, use instead), limits, deciding question (24 tools) | `tool_notes.json` |
 | [question sheets](../../../mcp_magichour/question_sheets.json) | 7 request families, each with deciding and required rows, read-from cues, defaults and evidence | `question_sheets.json` |
 | [notes for Ray](notes-for-ray.md) | runner faults, the flux-2-klein line in `edit_image`, the dry-run free list | — |
-| new tools | `add_sound_to_video` (MCP-29) | `tool_media.py`, `tests/test_tool_media.py` |
+| new tools | `add_sound_to_video` (MCP-29), `put_pictures_side_by_side` (MCP-30), `put_picture_on_video` (MCP-31), `make_card_clip` (MCP-32), `adjust_colours` (MCP-35) | `tool_media.py`, `tests/test_tool_media.py` |
 | [tool tests](tool-tests.md) | targeted runs that confirm the notes (wlive1: 14 cases) | — |
 | [failures](failures.md) | each tool-management item, old MCP against new, what failed | — |
 | [api tools](api-tools.md) | one MCP tool per Magic Hour API operation (upstream base) | `openapi_*.py`, `workflow_guidance.py` |

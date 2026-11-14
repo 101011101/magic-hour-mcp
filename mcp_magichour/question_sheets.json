@@ -131,7 +131,9 @@
         "add_words_to_media",
         "edit_image",
         "upscale_image",
-        "remove_image_background"
+        "remove_image_background",
+        "adjust_colours",
+        "put_pictures_side_by_side"
       ],
       "settings": {
         "edit_image": {
@@ -244,33 +246,40 @@
         },
         {
           "id": "colour_only",
-          "kind": "deciding",
+          "kind": "required",
           "applies": "a colour change of the whole picture",
-          "ask": "I can't change only the colours by code yet. I can redraw the picture with warmer colours, but small details may change. Go ahead?",
+          "ask": "Which colour change: warmer, cooler, black and white, brighter, or more contrast? And how strong: a little or a lot?",
           "read_from": [
-            "'Warmer', 'cooler', 'black and white', 'just the colours'."
+            "'Warmer', 'cosier', 'golden' → warmer.",
+            "'Cooler', 'colder', 'blue tint' → cooler.",
+            "'Black and white', 'grayscale', 'remove the colour' → black and white.",
+            "'Brighter', 'lighter' → brighter; 'punchier', 'more contrast' → contrast."
           ],
           "answers": {
-            "yes": "edit_image (qwen-image-2.1) with 'change only the colours, keep everything else'.",
-            "no": "Stop."
+            "warmer": "adjust_colours warmth 0.3 (a lot: 0.6).",
+            "cooler": "adjust_colours warmth -0.3 (a lot: -0.6).",
+            "black and white": "adjust_colours saturation 0.",
+            "brighter": "adjust_colours brightness 0.1 (a lot: 0.2).",
+            "more contrast": "adjust_colours contrast 1.2 (a lot: 1.4)."
           },
-          "default": "Yes for black and white (B10c 4.7); ask for other colour changes.",
-          "why": "GAP MCP-35; edit_image antitype colour only (B07c, J49a)."
+          "default": "A little (warmth 0.3).",
+          "why": "MCP-35, adjust_colours (2026-11-14): changes only the colours, nothing redrawn. Before: edit_image redrew the picture (B07c, J49a). Not benchmarked yet."
         },
         {
           "id": "several_in_one",
           "kind": "deciding",
           "applies": "two or more pictures in one (side by side, before and after, a collage)",
-          "ask": "I can't put photos side by side by code yet. I can redraw them into one picture (the photos will change), or send them separately with the words on each. Which?",
+          "ask": "Keep each photo exactly as it is, side by side (or in a grid), or redraw them into one new picture?",
           "read_from": [
-            "'Side by side', 'before and after', 'in one image', 'collage', two pictures attached and one result asked."
+            "'Side by side', 'before and after', 'keep both photos as they are' → side by side.",
+            "'Show how it could look', 'make a combined picture' → redraw."
           ],
           "answers": {
-            "redraw": "edit_image (qwen-image-2.1) with both pictures; tell the user the photos will be redrawn.",
-            "separately": "add_words_to_media on each picture."
+            "side by side": "put_pictures_side_by_side with layout, aspect and labels (e.g. ['Before', 'After']); the photos are kept whole.",
+            "redraw": "edit_image (qwen-image-2.1) with both pictures; tell the user the photos will be redrawn."
           },
-          "default": "Ask; do not guess.",
-          "why": "GAP MCP-30: edit_image redraws and crops both photos (G35a 2.0, G35b 1.7)."
+          "default": "Side by side.",
+          "why": "MCP-30, put_pictures_side_by_side (2026-11-14). Before: edit_image redrew and cropped both photos (G35a 2.0, G35b 1.7). Not benchmarked yet."
         }
       ]
     },
@@ -378,7 +387,9 @@
         "get_last_frame",
         "create_video_from_image",
         "edit_video",
-        "add_sound_to_video"
+        "add_sound_to_video",
+        "put_picture_on_video",
+        "make_card_clip"
       ],
       "settings": {
         "create_video_from_image": {
@@ -516,17 +527,19 @@
         {
           "id": "logo_or_card",
           "kind": "deciding",
-          "applies": "a logo picture on the video, or an end card",
-          "ask": "I can't put a picture on a video or add a still card yet. I can add your words as text instead. OK?",
+          "applies": "a logo or picture on the video, or a card before or after it",
+          "ask": "Where should the logo go (which corner), how big, and for the whole clip? (For a card: what words, what colour, how long, before or after the clip?)",
           "read_from": [
-            "'Put this logo in the corner', 'add an end card'."
+            "'In the top-right corner', 'small', 'throughout' → place, size, whole clip.",
+            "'End card', '2-second black card with white text' → card: words, colour, seconds, after."
           ],
           "answers": {
-            "yes": "add_words_to_media with the words.",
-            "no": "Stop."
+            "logo": "remove_image_background first if the logo has a background, then put_picture_on_video (place, size 0.15, opacity).",
+            "card": "make_card_clip with the words, background, seconds and like_video = the user's clip, then join_videos in order (clip then card for an end card).",
+            "words only": "add_words_to_media."
           },
-          "default": "Offer the words.",
-          "why": "GAP MCP-31 (E29a 1.3), MCP-32 (E29b 2.0)."
+          "default": "Logo: top_right, size 0.15, the whole clip. Card: 2 s, black, white words, after the clip.",
+          "why": "MCP-31 put_picture_on_video, MCP-32 make_card_clip (2026-11-14). Before: no tool (E29a 1.3, E29b 2.0). Not benchmarked yet."
         }
       ]
     },

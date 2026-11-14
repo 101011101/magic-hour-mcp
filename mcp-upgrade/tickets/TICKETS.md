@@ -70,11 +70,16 @@ Later, after composition. Each new tool goes in a new file of tool management, n
   - [x] 2026-11-13 · Built `add_sound_to_video` (`mcp_magichour/tool_media.py`, same switch as the planner): music and/or a voice-over on the user's video by code, 0 credits; the video's own sound kept clear (keep), lowered (under) or removed (replace); a long voice read a little faster, then the last frame held; loudness set. On the shared `media_tools.add_sound`, unchanged. 6 tests on generated clips (`tests/test_tool_media.py`). Sheets: `sound_on_video` now points to it (was a GAP). Found: `media_tools.join` calls `ffmpeg` by name (notes for Ray).
   - [ ] Test on E27a-c, E28a-c (live run).
 - [ ] **MCP-30 · Pictures side by side.** Two or more pictures in one frame by code, no redraw. Cases: G35a (2.0), G35b (1.7).
+  - [x] 2026-11-14 · Built `put_pictures_side_by_side` (`tool_media.py`, the planner's switch, 0 credits): 2 to 4 pictures in a row, column or 2x2 grid, each whole (never cropped, stretched or redrawn), optional exact labels. Tests on generated media (`tests/test_tool_media.py`). The sheets now point to it (was a GAP). Not benchmarked yet.
 - [ ] **MCP-31 · A picture on a video.** A logo in a corner for the whole clip. Case: E29a (1.3).
+  - [x] 2026-11-14 · Built `put_picture_on_video` (`tool_media.py`, the planner's switch, 0 credits): a logo or picture on a video or picture, corner or centre, sized, see-through, for all or part of a clip; transparency kept. Tests on generated media (`tests/test_tool_media.py`). The sheets now point to it (was a GAP). Not benchmarked yet.
 - [ ] **MCP-32 · A still as a video clip.** A card of N seconds, to join to a clip. Case: E29b (2.0, old only).
+  - [x] 2026-11-14 · Built `make_card_clip` (`tool_media.py`, the planner's switch, 0 credits): a still card (exact words on a colour, or a picture) as a clip with a silent sound track, the size of a given clip, for join_videos. Tests on generated media (`tests/test_tool_media.py`). The sheets now point to it (was a GAP). Not benchmarked yet.
 - [ ] **MCP-33 · Translated subtitles.** Subtitles in another language, the voice kept. `add_subtitles_to_video` writes the spoken language. First check: what `translate_video` does (never called in the bench). Case: E24b (2.0).
+  - [x] 2026-11-14 · Checked: `translate_video` dubs the speech into another language (the voice changes; 1 to 30 s clips). It does not make subtitles, so it does not fit E24b (Spanish subtitles, English voice kept). Open: how to get a transcript with times.
 - [ ] **MCP-34 · 4:5 shape.** `reframe_media` has 16:9, 9:16 and 1:1. Ask Ray first: it is his file. Case: B12c (1.0); also asked in A03, G34b, J50a.
 - [ ] **MCP-35 · Colour change by code.** Warmer, cooler, black and white, without a redraw. Cases: B07c (3.7), J49a (3.3), B10c (4.7: `edit_image` already does it well; lowest priority).
+  - [x] 2026-11-14 · Built `adjust_colours` (`tool_media.py`, the planner's switch, 0 credits): warmth, saturation (0 = black and white), brightness, contrast, on a picture or a video; nothing redrawn. Tests on generated media (`tests/test_tool_media.py`). The sheets now point to it (was a GAP). Not benchmarked yet.
 
 ### Video composition and shared
 

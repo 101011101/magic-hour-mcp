@@ -35,12 +35,12 @@
         },
         {
           "job": "Pictures side by side",
-          "use": "none yet (MCP-30)",
+          "use": "put_pictures_side_by_side (MCP-30)",
           "why": "Both pictures are redrawn and cropped (G35a/b: 1.7 to 2.0)."
         },
         {
           "job": "Colour only, nothing else changed",
-          "use": "none yet (MCP-35)",
+          "use": "adjust_colours (MCP-35)",
           "why": "Small details change too (B07c, J49a). Close enough for black and white (B10c 4.7)."
         }
       ],
@@ -238,7 +238,7 @@
         },
         {
           "job": "A logo on a video",
-          "use": "none yet (MCP-31)",
+          "use": "remove_image_background, then put_picture_on_video (MCP-31)",
           "why": "It only makes the PNG; nothing puts it on the video (E29a: 1.3)."
         }
       ],
@@ -484,7 +484,7 @@
       "antitype": [
         {
           "job": "A still end card",
-          "use": "none yet (MCP-32)",
+          "use": "make_card_clip, then join_videos (MCP-32)",
           "why": "It adds motion and the card came out 2 s instead of 9 (E29b)."
         }
       ],
@@ -641,6 +641,89 @@
         "original=keep keeps everything heard in the clip clear, not only speech (it finds sound by loudness)."
       ],
       "deciding_question": "Keep the video's own sound clear, lower it, or replace it?",
+      "bench": "0 runs."
+    },
+    "adjust_colours": {
+      "family": "image by code",
+      "does": "Changes only the colours of a picture or video by code: warmth, saturation (0 = black and white), brightness, contrast. Nothing redrawn, 0 credits. Built for tool management (MCP-35).",
+      "type": [
+        "Warmer or cooler (B07c, J49a).",
+        "Black and white (B10c).",
+        "Brighter or more contrast."
+      ],
+      "antitype": [
+        {
+          "job": "Change the colour of one object (the car navy)",
+          "use": "edit_image",
+          "why": "It changes the whole picture's colours, not one object."
+        }
+      ],
+      "limits": [
+        "Not benchmarked yet; tested on generated pictures and clips.",
+        "Warmth 0.3 is a clear but gentle change; 0.6 is strong."
+      ],
+      "deciding_question": "Which colour change, and how strong?",
+      "bench": "0 runs."
+    },
+    "put_pictures_side_by_side": {
+      "family": "image by code",
+      "does": "Puts 2 to 4 pictures into one (row, column, 2x2 grid), each whole: scaled to fit, never cropped, stretched or redrawn; optional exact labels. 0 credits. MCP-30.",
+      "type": [
+        "Before and after (G35a).",
+        "A comparison or a collage of the user's photos."
+      ],
+      "antitype": [
+        {
+          "job": "A made-up after picture",
+          "use": "edit_image first for the new picture, then this tool with the original and the new one (G35b)",
+          "why": "This tool only arranges pictures that exist."
+        }
+      ],
+      "limits": [
+        "Not benchmarked yet.",
+        "Pictures of different shapes leave padding (background colour) around them."
+      ],
+      "deciding_question": "Which pictures, in what order, what layout and shape, labels?",
+      "bench": "0 runs."
+    },
+    "put_picture_on_video": {
+      "family": "video by code",
+      "does": "Puts a picture (a logo; transparent PNG kept) on a video or picture, in a corner or the centre, sized, see-through, for all or part of a clip. Video kept exactly, 0 credits. MCP-31.",
+      "type": [
+        "A logo on the user's video for the whole clip (E29a)."
+      ],
+      "antitype": [
+        {
+          "job": "Text or a handle as a watermark",
+          "use": "add_words_to_media",
+          "why": "Words are drawn exactly by add_words_to_media (E29c)."
+        }
+      ],
+      "limits": [
+        "Not benchmarked yet.",
+        "A logo with a white background shows the white box: remove_image_background first."
+      ],
+      "deciding_question": "Where, how big, for how long?",
+      "bench": "0 runs."
+    },
+    "make_card_clip": {
+      "family": "video by code",
+      "does": "Makes a still card as a clip (exact words on a flat colour, or a picture whole on that colour), with a silent sound track and the size of a given clip, so join_videos can add it. 0 credits. MCP-32.",
+      "type": [
+        "An end card or title card for the user's clip (E29b), then join_videos."
+      ],
+      "antitype": [
+        {
+          "job": "A moving title or animation",
+          "use": "create_video_from_image or create_video_from_text",
+          "why": "The card is still."
+        }
+      ],
+      "limits": [
+        "Not benchmarked yet.",
+        "Words: one line each, the first larger; no font choice."
+      ],
+      "deciding_question": "Which words, which colour, how long, before or after?",
       "bench": "0 runs."
     }
   },

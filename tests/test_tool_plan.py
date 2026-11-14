@@ -101,10 +101,10 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(length["value"], "15 s.")
 
     def test_a_gap_is_reported(self):
-        out = tool_plan.plan("change_video", "put my logo on this clip", {
+        out = tool_plan.plan("change_video", "Spanish subtitles on my English clip", {
             "keep_or_remake": "keep", "shape_how": "n/a", "range": "n/a", "new_ending": "n/a", "words": "n/a",
-            "subtitle_language": "n/a", "has_speech": "n/a", "sound_on_video": "n/a", "logo_or_card": "yes"})
-        self.assertIn("logo_or_card", out["gaps"])
+            "subtitle_language": "translated", "has_speech": "n/a", "sound_on_video": "n/a", "logo_or_card": "n/a"})
+        self.assertIn("subtitle_language", out["gaps"])
 
     def test_music_on_the_users_video_plans_add_sound_to_video(self):
         """MCP-29: no longer a gap."""
@@ -139,12 +139,11 @@ class DryRunFixTests(unittest.TestCase):
                              "which_part": "n/a", "headshot_look": "n/a"})
         self.assertTrue(out["ready"])
 
-    def test_side_by_side_is_a_gap(self):
-        answers = {r["id"]: "n/a" for r in tool_plan.sheets()["families"]["change_picture"]["rows"] if "applies" in r}
-        answers.update({"keep_or_redraw": "keep", "several_in_one": "separately"})
-        out = tool_plan.plan("change_picture", "before and after side by side", answers)
-        self.assertIn("several_in_one", out["gaps"])
-
+    def test_side_by_side_plans_the_new_tool(self):
+        """MCP-30: side by side is no longer a gap."""
+        out = tool_plan.plan("change_picture", "before and after side by side", {"keep_or_redraw": "keep", "several_in_one": "side by side"})
+        self.assertNotIn("several_in_one", out["gaps"])
+        self.assertIn("put_pictures_side_by_side", out["tools"])
 
 class OnlyWhenNeededTests(unittest.TestCase):
     """User, 2026-11-13: the planner only when the answer would materially change the result."""
