@@ -156,6 +156,20 @@ User: call the planner only when the answer would materially change the result. 
 
 - Weak spots of generation first: keeping a set consistent (separate generations) and exact follow-up edits. The checklist grader is near its ceiling on clear requests; quality shows in its notes, not its score.
 
+## Matching sets and exact edits, run wset (2026-11-14)
+
+- Rules (76f5f61): a set (sizes, slides, poster with story and reel) is made from one master with edit_image, and a video in the set is animated from the master; an exact follow-up edit is edit_image, then compare, then a deterministic fallback (remove the words, add_words_to_media). Dry run clean; live 350 credits; checklist grader, shared checklists.
+
+| Case | Before (run wgen) | Now | How |
+|---|---|---|---|
+| G34a carousel | 7/8 ('look like a set' not done) | **8/8** | master slide, then 2 slides from it |
+| G37a poster, story, reel | 13/14 ('matching pack' not done) | **14/14** | master poster, story from it, reel animated from it |
+| G36a one ad in 3 sizes | earlier run: 'same design' not done | **11/11** | master square, vertical and wide from it |
+| J49b text 1.5x bigger, same font and centre | 8/11 | 9/11 | the host marked it exact but did not compare or fall back: 1.78x, the cup redrawn |
+
+- Checked by eye: each set reads as one design.
+- Open: the exact-edit fallback depends on the host comparing the result, and it did not.
+
 ## Setup faults found (tell Ray)
 
 - The runner uploads attachments straight to Magic Hour (`get_upload_urls`). Our code tools can only read files that went through `upload_media` (a kept copy), so every reframe, trim or words case fails for that reason alone. For this run the attachments were uploaded through `upload_media` and the chats pointed at them.
