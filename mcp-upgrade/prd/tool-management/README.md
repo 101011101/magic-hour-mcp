@@ -46,13 +46,14 @@ Rule (user, 2026-11-13): tool management does not touch video composition.
 - Name of the planner: `plan_tool_call` (proposed).
 - Decided (user, 2026-11-13): order of work is the existing tools first, then tool composition (chains of existing tools), then new tools. New tools are tool-management tickets MCP-29 to MCP-35; composition is MCP-25 to MCP-28. See [tickets](../../tickets/TICKETS.md).
 - `media_helpers_tool.py` holds those tools and is shared with video composition. New tools for tool management go in a new file, so the isolation rule holds.
-- The families: the list above is a proposal. Set after the failure list and the tool tests.
+- Families (2026-11-13, proposed): the sheets use 7 request families (new picture, change picture, faces, change video, new video, talking, sound). The notes keep tool families (how a tool works); a sheet points to the tools behind it.
 
 ## Docs
 
 | Doc | Covers | Code |
 |---|---|---|
 | [tool notes](../../../mcp_magichour/tool_notes.json) | each tool: family, type (use it for), antitype (do not, use instead), limits, deciding question (24 tools) | `tool_notes.json` |
+| [question sheets](../../../mcp_magichour/question_sheets.json) | 7 request families, each with deciding and required rows, read-from cues, defaults and evidence | `question_sheets.json` |
 | [tool tests](tool-tests.md) | targeted runs that confirm the notes (wlive1: 14 cases) | — |
 | [failures](failures.md) | each tool-management item, old MCP against new, what failed | — |
 | [api tools](api-tools.md) | one MCP tool per Magic Hour API operation (upstream base) | `openapi_*.py`, `workflow_guidance.py` |
