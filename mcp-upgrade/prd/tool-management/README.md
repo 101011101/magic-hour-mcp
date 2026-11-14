@@ -31,7 +31,7 @@ A few tools in order on existing media (trim, then subtitles) is tool management
 
 ## Tier
 
-- Free-tier models only (user, 2026-11-13). The planner never names a paid model. Free models per tool: `free_models` in [tool notes](../../../mcp_magichour/tool_notes.json).
+- Free-tier models first, because they cost less (user, 2026-11-13). A paid model only when it clearly improves the result (or the user asks), the user's plan allows it, and the user is told the extra cost first. The sheets' settings name free models; free models per tool: `free_models` in [tool notes](../../../mcp_magichour/tool_notes.json). The tests so far ran on the free plan only, so nothing is measured yet about when a paid model is worth it.
 
 ## Isolation
 

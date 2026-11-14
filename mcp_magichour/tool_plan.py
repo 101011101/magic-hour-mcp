@@ -4,7 +4,7 @@ Tool management is separate from video composition (mcp-upgrade/prd/tool-managem
 module imports nothing from plan_request, video_production, video_production_tool or gates.
 
 The host model fills a question sheet (question_sheets.json) from the user's words; this code checks it and returns
-either the questions still open (at most 3) or the plan: what each answer means, the family's free-tier settings, and
+either the questions still open (at most 3) or the plan: what each answer means, the family's settings (free-tier models first), and
 the notes (tool_notes.json) for every tool the plan names. The server calls no model and spends no credits.
 Switch: MAGIC_HOUR_TOOL_PLAN=on registers the tool; anything else (the default) leaves the server as before.
 """
@@ -153,7 +153,8 @@ def plan(family: str, request: str, answers: dict[str, str] | None) -> dict:
     return {"ready": True, "stage": "plan", "family": family, "request": request, "decisions": decisions,
             "settings": settings, "free_models": notes().get("free_models", {}), "tools": tool_notes,
             "gaps": gaps, "rules": sheets()["rules"],
-            "next": ("Call the tools in the order the decisions give, with `settings` (free-tier models only) and the "
+            "next": ("Call the tools in the order the decisions give, with `settings` (free-tier models first; a paid model only "
+                     "when it clearly helps, the user's plan allows it and the user is told the cost) and the "
                      "user's details word for word. Check each tool's `antitype` and `limits` before calling it. "
                      + ("For each row in `gaps`, tell the user plainly what cannot be done and offer the nearest option. "
                         if gaps else "")
@@ -192,7 +193,7 @@ def register_tool_plan(mcp: FastMCP) -> None:
             "Answer a row with an option, the user's own words, 'your_call' or 'n/a'; mark 'ask' ONLY for a row "
             "whose answer would change the result and that the user's words and files do not answer. Rows you leave "
             "out take their default and you tell the user. Returns at most 3 questions, or the plan: which tools in "
-            "order, free-tier settings, each tool's known faults, and gaps (what no tool can do). Call with the "
+            "order, settings (free-tier models first, as they cost less), each tool's known faults, and gaps (what no tool can do). Call with the "
             "family only to see the full sheet. Read-only; spends no credits and creates nothing."
         ),
         annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False),

@@ -36,7 +36,8 @@ class DataTests(unittest.TestCase):
                 self.assertIn(row["kind"], ("deciding", "required"), row["id"])
                 self.assertTrue(row["answers"] and row["default"] and row["why"], f"{family}.{row['id']}")
 
-    def test_settings_name_free_models_only(self):
+    def test_default_settings_use_free_models(self):
+        """Free models first (user, 2026-11-13: they cost less); paid only when it clearly helps."""
         free = {m.split(" ")[0] for ms in tool_plan.notes()["free_models"].values() if isinstance(ms, list) for m in ms}
         for family, sheet in tool_plan.sheets()["families"].items():
             for tool, s in sheet.get("settings", {}).items():
@@ -158,6 +159,14 @@ class OnlyWhenNeededTests(unittest.TestCase):
         idx = tool_plan.sheet_index()
         self.assertIn("change_picture: keep_or_redraw(keep|redraw)", idx)
         self.assertLess(len(idx), 1500)
+
+
+class TierTests(unittest.TestCase):
+    def test_the_rules_prefer_free_and_allow_paid_with_the_cost(self):
+        rule = next(r for r in tool_plan.sheets()["rules"] if "free-tier" in r)
+        self.assertIn("Prefer free-tier", rule)
+        self.assertIn("paid model only when", rule)
+        self.assertNotIn("Never name a paid model", " ".join(tool_plan.sheets()["rules"]))
 
 
 class LookRowTests(unittest.TestCase):
