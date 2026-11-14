@@ -87,7 +87,8 @@
         "Part of a clip. Asked for the first 5 s, it delivered all 10 s (C15a)."
       ],
       "use_instead": {
-        "part of a clip": "trim_media first, then this tool (MCP-27)"
+        "part of a clip": "trim_media first, then this tool (MCP-27)",
+        "the hair and head too": "none: head swap is photo only"
       },
       "bench": "Right tool: 10 runs, average 1.8.",
       "deciding_question": "Which person, and which part of the clip? Warn the user that the face may only look similar."
@@ -107,6 +108,38 @@
       },
       "bench": "Right tool: 9 runs, average 1.6 (most of it E29a, a job no tool finishes).",
       "deciding_question": "Is there text in the picture? Where will the cut-out be used?"
+    },
+    "swap_head_in_photo": {
+      "does": "Puts the whole head from one picture (face, hair, head shape) onto the body in another picture. Photo only. 10 credits.",
+      "preferred": "User, 2026-11-13: use head swap for swapping faces in photos.",
+      "good_for": [
+        "Putting the user's face on someone in a photo, keeping their hair and head shape, so they are recognisable. Face swap changes the face only, and graders did not recognise the person when the hair stayed (C15a, the video case)."
+      ],
+      "fails_on": [
+        "Not benchmarked: never called in the persona bench.",
+        "Choosing one person: its settings are only `body_file_path` and `head_file_path`, with no face choice. A photo with several people (C14b) is not tested."
+      ],
+      "use_instead": {
+        "a video": "none: no head swap for video; swap_face_in_video",
+        "one person among several, if head swap picks the wrong one": "swap_face_in_photo, individual-faces mode, after detect_faces"
+      },
+      "bench": "0 runs. Test it on C14a and C14b (MCP-21).",
+      "deciding_question": "Which photo gives the head, and which photo (and which person) receives it?"
+    },
+    "swap_face_in_photo": {
+      "does": "Puts a face from one picture onto faces in another picture. Changes the face only, not hair or head shape.",
+      "preferred": "Second choice (user, 2026-11-13): swap_head_in_photo first.",
+      "good_for": [
+        "Choosing which face in a group photo gets which new face (individual-faces mode, after detect_faces)."
+      ],
+      "fails_on": [
+        "Recognisability: only the face changes; hair and head shape stay (C14b 2.3)."
+      ],
+      "use_instead": {
+        "a face swap on one person": "swap_head_in_photo"
+      },
+      "bench": "12 runs, average 3.1 (C14a 3.7 to 4.0, C14b 2.0 to 2.3).",
+      "deciding_question": "One person, or several people each with their own new face?"
     }
   }
 }

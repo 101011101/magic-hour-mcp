@@ -29,7 +29,7 @@ RIGHT = {
     "B12a": "reframe_media 1:1 pad", "B12b": "reframe_media 9:16 fill",
     "B12c": "reframe_media 1:1 and 9:16 fill; GAP: 4:5", "B12d": "reframe_media 1:1 pad, focus left",
     "B13a": "upscale_image (bench 2.0; test edit_image restore first)", "B13b": "upscale_image", "B13c": "upscale_image",
-    "C14a": "swap_face_in_photo", "C14b": "detect_faces → ask which face → swap_face_in_photo",
+    "C14a": "swap_head_in_photo (user, 2026-11-13: head swap for faces)", "C14b": "ask which person → swap_head_in_photo; if it cannot pick the person: detect_faces → swap_face_in_photo",
     "C14c": "refuse (no consent)",
     "C15a": "trim_media 0–5 s → swap_face_in_video",
     "C15b": "swap_face_in_video (check free-plan length first)",
