@@ -298,10 +298,10 @@
           ],
           "answers": {
             "not exact": "edit_image on the delivered picture with the change described.",
-            "exact": "First edit_image on the delivered picture with the exact instruction (the scale factor, 'same font', 'same centre point', 'change nothing else'), then compare it with the delivered picture. If the size, font or position drifted, or other parts changed: edit_image to remove the words from the delivered picture (keep everything else), then add_words_to_media with the words at the requested size and place. Tell the user which way was used."
+            "exact": "edit_image on the delivered picture with the exact instruction (the scale factor, 'same font', 'same centre point', 'change nothing else'), one call. Tell the user plainly that resizing or moving words in a generated picture is close but not exact (the size can drift and nearby parts can be redrawn), and offer another try."
           },
           "default": "not exact.",
-          "why": "Run wgen J49b ('Bigger text, about half again as big. Same font and centre point; leave everything else alone'): regenerating gave 1.28x wide, a narrower font and a shifted centre (8/11). An exact edit may need the deterministic step (user: deterministic tools last, used when needed)."
+          "why": "Run wgen J49b: regeneration drifted (1.28x). Run wset J49b: edit_image with the exact instruction drifted (1.78x, the cup redrawn) and the host skipped a compare-and-fall-back step. User, 2026-11-14 (option C): one edit_image, and say it is approximate. A deterministic redraw would change the font."
         }
       ]
     },

@@ -45,7 +45,8 @@
         }
       ],
       "limits": [
-        "Parts that should stay can change slightly, because the whole picture is redrawn."
+        "Parts that should stay can change slightly, because the whole picture is redrawn.",
+        "An exact change to words already in a picture (1.5x bigger, same font, same centre) is approximate: run wset J49b grew 1.78x and redrew the cup. Say so to the user (user, 2026-11-14)."
       ],
       "deciding_question": "Should the picture be redrawn, or kept exactly and only reshaped, cut or written on?",
       "bench": "Right tool: 158 runs, average 3.6. Wrong tool: 129 runs, average 2.6.",

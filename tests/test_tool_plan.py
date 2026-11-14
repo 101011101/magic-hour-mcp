@@ -235,14 +235,15 @@ class SetAndExactEditTests(unittest.TestCase):
         self.assertIn("FROM the master with edit_image", d["set"])
         self.assertIn("create_video_from_image", d["set"])
 
-    def test_an_exact_follow_up_edit_has_a_deterministic_fallback(self):
-        """Run wgen J49b: 'about half again as big, same font and centre point' drifted when regenerated."""
+    def test_an_exact_follow_up_edit_is_one_edit_and_the_user_is_told(self):
+        """Runs wgen, wset J49b: exact text resizing drifts; user chose one edit_image and saying it is approximate."""
         answers = {r["id"]: "n/a" for r in tool_plan.sheets()["families"]["change_picture"]["rows"] if "applies" in r}
         answers.update({"keep_or_redraw": "redraw", "exact_change": "exact"})
         out = tool_plan.plan("change_picture", "bigger text, same font and centre", answers)
         d = {x["id"]: x["instruction"] for x in out["decisions"]}
-        self.assertIn("add_words_to_media", d["exact_change"])
-        self.assertIn("compare", d["exact_change"])
+        self.assertIn("edit_image", d["exact_change"])
+        self.assertIn("not exact", d["exact_change"])
+        self.assertNotIn("add_words_to_media", d["exact_change"])
 
 
 class SwitchTests(unittest.TestCase):
