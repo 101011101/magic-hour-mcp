@@ -7,7 +7,10 @@
     "video by code": "The user's video is kept exactly; code cuts, reshapes, writes on or joins it.",
     "faces": "A face or head from one picture onto a person in a photo or video.",
     "sound": "Music or voice, made as a sound file.",
-    "subtitles": "Spoken words written on the video."
+    "subtitles": "Spoken words written on the video.",
+    "image make": "A new picture from text, made by a model.",
+    "video make": "A new video from text or from a picture, made by a model.",
+    "talking video": "A person in a picture or video speaks given words."
   },
   "tools": {
     "edit_image": {
@@ -20,10 +23,26 @@
         "The same character or product in new scenes (C16a/b: 4.0)."
       ],
       "antitype": [
-        {"job": "A new shape (square, vertical)", "use": "reframe_media", "why": "It keeps the input's shape: a wide photo asked to be square came back 640x384 (B12a-d: 1.0 to 1.3)."},
-        {"job": "Exact words, a caption, a meme", "use": "add_words_to_media", "why": "Letters are misspelt or moved (B11a 2.3, J49b 2.3)."},
-        {"job": "Pictures side by side", "use": "none yet (MCP-30)", "why": "Both pictures are redrawn and cropped (G35a/b: 1.7 to 2.0)."},
-        {"job": "Colour only, nothing else changed", "use": "none yet (MCP-35)", "why": "Small details change too (B07c, J49a). Close enough for black and white (B10c 4.7)."}
+        {
+          "job": "A new shape (square, vertical)",
+          "use": "reframe_media",
+          "why": "It keeps the input's shape: a wide photo asked to be square came back 640x384 (B12a-d: 1.0 to 1.3)."
+        },
+        {
+          "job": "Exact words, a caption, a meme",
+          "use": "add_words_to_media",
+          "why": "Letters are misspelt or moved (B11a 2.3, J49b 2.3)."
+        },
+        {
+          "job": "Pictures side by side",
+          "use": "none yet (MCP-30)",
+          "why": "Both pictures are redrawn and cropped (G35a/b: 1.7 to 2.0)."
+        },
+        {
+          "job": "Colour only, nothing else changed",
+          "use": "none yet (MCP-35)",
+          "why": "Small details change too (B07c, J49a). Close enough for black and white (B10c 4.7)."
+        }
       ],
       "limits": [
         "Parts that should stay can change slightly, because the whole picture is redrawn."
@@ -38,9 +57,21 @@
         "Change how the whole video looks, when the user accepts that it is re-made. Not shown in the bench: it was never the right tool in 36 runs."
       ],
       "antitype": [
-        {"job": "A new shape (vertical, square)", "use": "reframe_media", "why": "Output is about 832x448 or 832x512 whatever was asked (E25a/b: 1.0)."},
-        {"job": "A shorter clip, the best part, cut the boring parts", "use": "trim_media", "why": "It re-renders the footage instead of cutting it (E26a/b: 2.0)."},
-        {"job": "Words or a watermark", "use": "add_words_to_media", "why": "The mark was missing (E29c: 1.0)."}
+        {
+          "job": "A new shape (vertical, square)",
+          "use": "reframe_media",
+          "why": "Output is about 832x448 or 832x512 whatever was asked (E25a/b: 1.0)."
+        },
+        {
+          "job": "A shorter clip, the best part, cut the boring parts",
+          "use": "trim_media",
+          "why": "It re-renders the footage instead of cutting it (E26a/b: 2.0)."
+        },
+        {
+          "job": "Words or a watermark",
+          "use": "add_words_to_media",
+          "why": "The mark was missing (E29c: 1.0)."
+        }
       ],
       "limits": [
         "Output shape is its own (about 832x512), not the input's (J49c)."
@@ -55,8 +86,16 @@
         "A music bed of 15 s or more (F30b/c: 4.0)."
       ],
       "antitype": [
-        {"job": "Music shorter than 15 s", "use": "generate_music with duration 15, then trim_media (MCP-28)", "why": "The API's minimum duration is 15 s: a 10 s request came back 15 s (F30a 2.3; E27a, E27c)."},
-        {"job": "Music on the user's video", "use": "none yet (MCP-29)", "why": "It makes a separate file; nothing puts it on the video (E27a-c: 2.0)."}
+        {
+          "job": "Music shorter than 15 s",
+          "use": "generate_music with duration 15, then trim_media (MCP-28)",
+          "why": "The API's minimum duration is 15 s: a 10 s request came back 15 s (F30a 2.3; E27a, E27c)."
+        },
+        {
+          "job": "Music on the user's video",
+          "use": "none yet (MCP-29)",
+          "why": "It makes a separate file; nothing puts it on the video (E27a-c: 2.0)."
+        }
       ],
       "limits": [],
       "deciding_question": "How long, and on its own or under the user's video?",
@@ -69,9 +108,21 @@
         "Subtitles in the language that is spoken (E24a: 3.0)."
       ],
       "antitype": [
-        {"job": "Subtitles in another language", "use": "none yet (MCP-33); check translate_video first", "why": "It writes the spoken language: Spanish asked, English delivered (E24b: 2.0)."},
-        {"job": "Subtitles and a new shape", "use": "reframe_media first, then this tool (MCP-27)", "why": "It has no shape setting (E24d, E25c)."},
-        {"job": "A clip with no speech", "use": "no call: tell the user there is no speech", "why": "The job fails instead of saying so (E24c)."}
+        {
+          "job": "Subtitles in another language",
+          "use": "none yet (MCP-33); check translate_video first",
+          "why": "It writes the spoken language: Spanish asked, English delivered (E24b: 2.0)."
+        },
+        {
+          "job": "Subtitles and a new shape",
+          "use": "reframe_media first, then this tool (MCP-27)",
+          "why": "It has no shape setting (E24d, E25c)."
+        },
+        {
+          "job": "A clip with no speech",
+          "use": "no call: tell the user there is no speech",
+          "why": "The job fails instead of saying so (E24c)."
+        }
       ],
       "limits": [
         "The first line is sometimes missing (E24a)."
@@ -87,8 +138,16 @@
         "Put the user's face on someone in a photo, keeping their hair and head shape so they are recognisable (C14a)."
       ],
       "antitype": [
-        {"job": "A face swap in a video", "use": "swap_face_in_video", "why": "Head swap is photo only."},
-        {"job": "One chosen person in a group photo, if head swap picks the wrong one", "use": "detect_faces, then swap_face_in_photo (individual-faces)", "why": "Its only settings are body_file_path and head_file_path: no face choice (C14b, not tested)."}
+        {
+          "job": "A face swap in a video",
+          "use": "swap_face_in_video",
+          "why": "Head swap is photo only."
+        },
+        {
+          "job": "One chosen person in a group photo, if head swap picks the wrong one",
+          "use": "detect_faces, then swap_face_in_photo (individual-faces)",
+          "why": "Its only settings are body_file_path and head_file_path: no face choice (C14b, not tested)."
+        }
       ],
       "limits": [
         "Not benchmarked: never called in the persona bench. Test on C14a and C14b."
@@ -104,7 +163,11 @@
         "Several people in one photo, each with their own new face (individual-faces mode, after detect_faces)."
       ],
       "antitype": [
-        {"job": "A face swap on one person", "use": "swap_head_in_photo", "why": "Only the face changes; hair and head shape stay, so the person is less recognisable (C14b 2.0 to 2.3)."}
+        {
+          "job": "A face swap on one person",
+          "use": "swap_head_in_photo",
+          "why": "Only the face changes; hair and head shape stay, so the person is less recognisable (C14b 2.0 to 2.3)."
+        }
       ],
       "limits": [],
       "deciding_question": "One person, or several people each with their own new face?",
@@ -117,8 +180,16 @@
         "One person in a short clip; motion and framing are kept."
       ],
       "antitype": [
-        {"job": "Only part of the clip", "use": "trim_media first, then this tool (MCP-27)", "why": "Asked for the first 5 s, it delivered all 10 s (C15a)."},
-        {"job": "A face swap in a photo", "use": "swap_head_in_photo", "why": "User's choice for photos."}
+        {
+          "job": "Only part of the clip",
+          "use": "trim_media first, then this tool (MCP-27)",
+          "why": "Asked for the first 5 s, it delivered all 10 s (C15a)."
+        },
+        {
+          "job": "A face swap in a photo",
+          "use": "swap_head_in_photo",
+          "why": "User's choice for photos."
+        }
       ],
       "limits": [
         "The new face is a blend; graders did not recognise the portrait (C15a 2.7). Warn the user. No head swap exists for video.",
@@ -134,12 +205,352 @@
         "A product or person with clear edges."
       ],
       "antitype": [
-        {"job": "A logo with thin letters", "use": "remove the background from the logo without words, then add_words_to_media (MCP-25)", "why": "The letters fade or smear (A06c: 2.7)."},
-        {"job": "A logo on a video", "use": "none yet (MCP-31)", "why": "It only makes the PNG; nothing puts it on the video (E29a: 1.3)."}
+        {
+          "job": "A logo with thin letters",
+          "use": "remove the background from the logo without words, then add_words_to_media (MCP-25)",
+          "why": "The letters fade or smear (A06c: 2.7)."
+        },
+        {
+          "job": "A logo on a video",
+          "use": "none yet (MCP-31)",
+          "why": "It only makes the PNG; nothing puts it on the video (E29a: 1.3)."
+        }
       ],
       "limits": [],
       "deciding_question": "Is there text in the picture? Where will the cut-out be used?",
       "bench": "Right tool: 9 runs, average 1.6 (most of it E29a, a job no tool finishes)."
+    },
+    "reframe_media": {
+      "family": "image by code",
+      "does": "Changes the shape of a picture or video by code: crop, pad (bars of one colour), fill (over a blurred copy) or auto. 16:9, 9:16 or 1:1. 0 credits.",
+      "type": [
+        "A new shape for the user's picture or video, nothing redrawn (B12a/b/d, E25a, J50a, J51b).",
+        "After a tool that keeps its own shape: edit_image, edit_video, create_video_from_image, add_subtitles_to_video (MCP-26)."
+      ],
+      "antitype": [
+        {
+          "job": "4:5",
+          "use": "none yet (MCP-34)",
+          "why": "Its shapes are 16:9, 9:16 and 1:1 (B12c, A03, G34b)."
+        },
+        {
+          "job": "Two people who take turns, each centred",
+          "use": "trim_media per speaker, reframe_media each with its own focus, join_videos (MCP-27)",
+          "why": "One focus per call (E25b)."
+        }
+      ],
+      "limits": [
+        "Not benchmarked: added in cbbe722, after the bench.",
+        "Crop loses the edges: set `focus` on the subject (B12d, the shoe on the left), or use pad or fill to keep everything."
+      ],
+      "deciding_question": "Crop (lose the edges), or keep everything with bars (pad) or a blurred copy (fill)? Where is the subject?",
+      "bench": "0 runs."
+    },
+    "trim_media": {
+      "family": "video by code",
+      "does": "Cuts a video or sound file from `start` to `end` seconds by code. Picture and sound kept. 0 credits.",
+      "type": [
+        "Shorten the user's clip, keep the first N seconds, cut a clip into parts (E26a/b, J49c, J50b).",
+        "Music under 15 s: after generate_music (MCP-28).",
+        "A frame at a chosen time: trim to it, then get_last_frame (G33b).",
+        "Only part of a clip for a face swap: trim first (C15a)."
+      ],
+      "antitype": [
+        {
+          "job": "A picture",
+          "use": "none: it cuts video and sound only",
+          "why": "Pictures are refused."
+        }
+      ],
+      "limits": [
+        "Not benchmarked: added in cbbe722, after the bench.",
+        "It does not choose the part: 'the best 10 seconds' needs a look at the clip first (E26a, MCP-07)."
+      ],
+      "deciding_question": "Which part, from when to when?",
+      "bench": "0 runs."
+    },
+    "add_words_to_media": {
+      "family": "image by code",
+      "does": "Draws exact words on a picture or video by code: title, caption, price, name, watermark. Always spelled right. 0 credits.",
+      "type": [
+        "Exact words on a picture: headline, flyer text, a logo's name, a meme (A02, A03, A06a/b, B11a/c/d, G33, G34, G39a, J49b).",
+        "A watermark or caption on a video, for the whole clip or from start to end (E29c).",
+        "After making the picture without words (MCP-25)."
+      ],
+      "antitype": [
+        {
+          "job": "Words that must look printed on an object (a sign, a label)",
+          "use": "edit_image, or make the object plain, then add the words here and tell the user",
+          "why": "Drawn words sit on top; they do not follow the object (B11b, A01d)."
+        },
+        {
+          "job": "A logo picture on a video",
+          "use": "none yet (MCP-31)",
+          "why": "It draws words, not pictures (E29a)."
+        }
+      ],
+      "limits": [
+        "Not benchmarked: added in cbbe722, after the bench.",
+        "Places: top, middle, bottom, corners. Sizes: small, normal, large. No free position or font choice."
+      ],
+      "deciding_question": "The exact words, where, and how big? On an object, or over the picture?",
+      "bench": "0 runs."
+    },
+    "mix_audio": {
+      "family": "sound",
+      "does": "Lays sound files over each other into one sound file: a voice over music, a podcast intro. Sound only. 0 credits.",
+      "type": [
+        "A voice over music, music first then the voice (F32a, MCP-28)."
+      ],
+      "antitype": [
+        {
+          "job": "Sound on the user's video",
+          "use": "none yet (MCP-29)",
+          "why": "It outputs sound only, no picture (E27, E28)."
+        }
+      ],
+      "limits": [
+        "Not benchmarked: added in cbbe722, after the bench."
+      ],
+      "deciding_question": "Which tracks, from when, and how loud?",
+      "bench": "0 runs."
+    },
+    "join_videos": {
+      "family": "video by code",
+      "does": "Joins videos end to end with hard cuts, or sound files into one sound file. 0 credits.",
+      "type": [
+        "Several clips into one film (E25b, J50b, C15a).",
+        "Voice lines made one at a time into one sound file (F31b, F32b)."
+      ],
+      "antitype": [
+        {
+          "job": "A single clip",
+          "use": "no call",
+          "why": "Called on one clip for no reason in 24 runs (average 2.0)."
+        },
+        {
+          "job": "Sound on a video",
+          "use": "none yet (MCP-29)",
+          "why": "It refuses a mix of video and sound files."
+        }
+      ],
+      "limits": [
+        "Every clip is fitted to the first one's size."
+      ],
+      "deciding_question": "Which clips, in what order, with sound or silent?",
+      "bench": "Right tool: 1 run. Wrong tool: 24 runs, average 2.0."
+    },
+    "get_last_frame": {
+      "family": "video by code",
+      "does": "Takes the last frame of a video as a picture. 0 credits.",
+      "type": [
+        "Continue a clip: the last frame becomes the start of create_video_from_image (J50b).",
+        "A frame at a chosen time: trim_media to it first (G33b)."
+      ],
+      "antitype": [
+        {
+          "job": "Seeing what is in the video",
+          "use": "none: one frame shows only the end",
+          "why": "Used to 'look' at clips in 12 runs (average 1.9)."
+        }
+      ],
+      "limits": [],
+      "deciding_question": "Is the end of the clip what is needed?",
+      "bench": "Right tool: 3 runs. Wrong tool: 12 runs, average 1.9."
+    },
+    "detect_faces": {
+      "family": "faces",
+      "does": "Finds the faces in a picture or video, for a swap that maps each face.",
+      "type": [
+        "Before swap_face_in_photo or swap_face_in_video in individual-faces mode, when several people each get their own face."
+      ],
+      "antitype": [
+        {
+          "job": "Any job that is not a per-face swap",
+          "use": "no call",
+          "why": "Called as an extra step in 30 runs (average 1.9); its face crops were delivered as results (C14b, G33b)."
+        }
+      ],
+      "limits": [],
+      "deciding_question": "Do several people each get a different face?",
+      "bench": "Right tool: 5 runs, average 2.0. Wrong tool: 30 runs, average 1.9."
+    },
+    "generate_image": {
+      "family": "image make",
+      "does": "Makes pictures from text. Shapes 1:1, 16:9, 9:16. Many models.",
+      "type": [
+        "Product shots, illustrations, scenes (A01, A04: 3.3 to 4.5).",
+        "Pictures without words, then add_words_to_media for exact words (MCP-25)."
+      ],
+      "antitype": [
+        {
+          "job": "Exact words in the picture",
+          "use": "generate_image without words, then add_words_to_media",
+          "why": "Headlines misspelt or changed: 'CEAN UP YOUR BACH' (A02b), 'Fresh Green Arrivals' for 'Bring home some green' (A02c), a logo name wrong (A06b 2.7)."
+        }
+      ],
+      "limits": [
+        "Shapes: only 1:1, 16:9, 9:16 in the aspect setting; 4:5 needs another step.",
+        "Exact counts and colours drift: about 25 balloons for 3 (A04c), clear glass for amber (A01d).",
+        "A vague user's details get lost: a silver bottle on white for 'matte black on marble' (A01a); ask, do not guess."
+      ],
+      "deciding_question": "Are there exact words? Exact counts or colours that must be right? What shape?",
+      "bench": "Right tool: 202 runs, average 3.3."
+    },
+    "create_video_from_text": {
+      "family": "video make",
+      "does": "Makes a video from text. 1 to 60 s; 16:9, 9:16, 1:1.",
+      "type": [
+        "A short clip of a scene (J49c 3.2)."
+      ],
+      "antitype": [
+        {
+          "job": "Changing the user's video",
+          "use": "the video by code tools",
+          "why": "It makes a new video, nothing of the user's is kept."
+        },
+        {
+          "job": "A label or exact words in the video",
+          "use": "add_words_to_media after",
+          "why": "Labels missing (I46b)."
+        }
+      ],
+      "limits": [
+        "Motion of objects can be wrong: the frisbee passes through the dog (D19a).",
+        "Most of its runs are video composition items; for single clips the bench has few cases."
+      ],
+      "deciding_question": "How long, what shape, with sound or silent?",
+      "bench": "Right tool: 13 runs, average 2.3."
+    },
+    "create_video_from_image": {
+      "family": "video make",
+      "does": "Animates a picture into a video. 1 to 60 s. Keeps the picture's shape.",
+      "type": [
+        "Bring a picture to life (C17a/b 4.0, G37 reels 3.0 to 3.3).",
+        "Continue a clip from its last frame (J50b)."
+      ],
+      "antitype": [
+        {
+          "job": "A still end card",
+          "use": "none yet (MCP-32)",
+          "why": "It adds motion and the card came out 2 s instead of 9 (E29b)."
+        }
+      ],
+      "limits": [
+        "The motion asked for may not happen: a push-in zoom for a quarter turn of the bottle (D18a).",
+        "No shape setting: reframe_media after if a shape was asked."
+      ],
+      "deciding_question": "What should move, and how long?",
+      "bench": "Right tool: 8 runs, average 3.1."
+    },
+    "upscale_image": {
+      "family": "image edit (redraws)",
+      "does": "Enlarges a picture. Modes: pro, preserve, balanced, creative.",
+      "type": [
+        "Make a sharp picture bigger (B13c 4.8)."
+      ],
+      "antitype": [
+        {
+          "job": "Restore an old photo, keep the faces",
+          "use": "test edit_image first; use mode preserve",
+          "why": "Faces were regenerated with broader smiles and different features (B13a 2.0)."
+        }
+      ],
+      "limits": [
+        "Scale is a factor (2x): a 640 px long edge is not hit exactly (B13b: 480x480).",
+        "A very blurry photo is only slightly cleaner (B13b 2.0)."
+      ],
+      "deciding_question": "Bigger only, or also fixed? How big?",
+      "bench": "Right tool: 11 runs, average 3.5."
+    },
+    "generate_headshot": {
+      "family": "faces",
+      "does": "Makes a professional headshot from a photo of a person.",
+      "type": [
+        "A professional headshot (A05b 4.0)."
+      ],
+      "antitype": [
+        {
+          "job": "A square headshot or a set background",
+          "use": "edit_image, or reframe_media 1:1 after",
+          "why": "It returned 928x1152 portrait, framed to the waist, and an office background for 'plain grey' (A05a 3.0)."
+        }
+      ],
+      "limits": [
+        "No shape or background setting."
+      ],
+      "deciding_question": "Shape and background, or the tool's own?",
+      "bench": "Right tool: 8 runs, average 3.5."
+    },
+    "create_meme": {
+      "family": "image make",
+      "does": "Makes a meme from a topic on a known template.",
+      "type": [
+        "A meme about a topic, the template chosen by the tool (G39b 3.5)."
+      ],
+      "antitype": [
+        {
+          "job": "A meme with the user's own picture and exact words",
+          "use": "add_words_to_media",
+          "why": "It uses its templates and writes its own caption."
+        }
+      ],
+      "limits": [
+        "Captions can break mid-word or overflow the panel, and drift off the topic (G39b: a weekend joke for 'Mondays')."
+      ],
+      "deciding_question": "The user's picture and words, or a template and a joke on a topic?",
+      "bench": "Right tool: 6 runs, average 3.5."
+    },
+    "create_talking_photo": {
+      "family": "talking video",
+      "does": "Makes a photo of a person speak given words.",
+      "type": [
+        "A photo of the user saying a line (C17a/b 4.0)."
+      ],
+      "antitype": [
+        {
+          "job": "A set shape",
+          "use": "reframe_media after",
+          "why": "It keeps the photo's shape: 1024x1536 for 'square' (C17a/b)."
+        }
+      ],
+      "limits": [
+        "Resolution 480p or 720p."
+      ],
+      "deciding_question": "The exact line, and the shape?",
+      "bench": "Right tool: 5 runs, average 4.0."
+    },
+    "create_spoken_ad_video": {
+      "family": "talking video",
+      "does": "Makes a short ad video of a person speaking (UGC ad). Models kling-3.0, ltx-2.5, veo3.1.",
+      "type": [
+        "A talking ad from a picture and a line (C17b 4.0, H43a 4.0)."
+      ],
+      "antitype": [],
+      "limits": [
+        "Length: 5 s came back for 8 s asked (C17a/b); check the length setting."
+      ],
+      "deciding_question": "Length, line, shape?",
+      "bench": "4 runs, average 3.8."
+    },
+    "create_lip_sync_video": {
+      "family": "talking video",
+      "does": "Makes a person in a video mouth a given audio track.",
+      "type": [
+        "The person on screen says new words (an on-screen presenter)."
+      ],
+      "antitype": [
+        {
+          "job": "A voice-over with no presenter, or the original footage kept as it is",
+          "use": "none yet (MCP-29)",
+          "why": "It re-made the footage at 832x448, details changed (E28a); black clips and burned-in captions (E28c 1.7)."
+        }
+      ],
+      "limits": [
+        "Few runs (5)."
+      ],
+      "deciding_question": "Is a person on screen who should speak the words?",
+      "bench": "5 runs, average 2.4."
     }
   }
 }
