@@ -160,6 +160,21 @@ class OnlyWhenNeededTests(unittest.TestCase):
         self.assertLess(len(idx), 1500)
 
 
+class LookRowTests(unittest.TestCase):
+    def test_a_vague_picture_asks_for_the_look(self):
+        """A01a: 'make a product pic of a water bottle' → the look is asked."""
+        out = tool_plan.plan("new_picture", "make a product pic of a water bottle", {"look": "ask", "shape": "ask"})
+        self.assertEqual([q["id"] for q in out["questions"]], ["look", "shape"])
+
+    def test_a_given_look_goes_into_the_plan(self):
+        out = tool_plan.plan("new_picture", "matte black bottle on marble", {"look": "matte black, on marble, soft light"})
+        look = next(d for d in out["decisions"] if d["id"] == "look")
+        self.assertEqual(look["value"], "matte black, on marble, soft light")
+
+    def test_the_index_lists_the_look_row(self):
+        self.assertIn("new_picture: look,", tool_plan.sheet_index())
+
+
 class SwitchTests(unittest.TestCase):
     def test_off_by_default(self):
         env = {k: v for k, v in os.environ.items() if k != "MAGIC_HOUR_TOOL_PLAN"}

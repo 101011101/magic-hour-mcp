@@ -30,6 +30,22 @@
       },
       "rows": [
         {
+          "id": "look",
+          "kind": "required",
+          "ask": "What should it look like: the colour and material of the subject, the setting or background, and the light?",
+          "read_from": [
+            "Colours, materials, finishes ('matte black', 'amber glass', 'white leather').",
+            "A setting or surface ('on marble', 'on a café table', 'plain white background').",
+            "Light or mood ('soft light', 'premium', 'warm').",
+            "Only the subject named ('a water bottle') → open: ask."
+          ],
+          "answers": {
+            "any": "Put every detail in the prompt word for word."
+          },
+          "default": "A clean product look: the subject centred on a plain light background, soft light.",
+          "why": "A01a: the user had 'matte black on marble' in mind; without the question the bottle came out steel on grey (2). With the planner asking: 4, 4, 4. generate_image limit: a vague user's details get lost (A01a)."
+        },
+        {
           "id": "exact_words",
           "kind": "deciding",
           "ask": "Should the picture have any words on it? If so, what exactly should they say?",
