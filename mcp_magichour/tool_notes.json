@@ -1,5 +1,5 @@
 {
-  "_about": "Tool notes for tool management (MCP-21). Read by plan_tool_call (MCP-23, not built yet). Shape (user, 2026-11-13): family = the kind of tool; type = the jobs to use it for; antitype = the jobs it looks right for but must not be used for, each with the tool to use instead; limits = what goes wrong even on its own jobs. Evidence: persona bench of 2026-11-10/11 (Benchmark/audit/audit-1.html); case ids and scores as in mcp-upgrade/prd/tool-management/failures.md. Not yet confirmed by the user. best_settings: from the bench's recorded calls, settings compared within the same case (2026-11-13); free plan, 640px or 480p.",
+  "_about": "Tool notes for tool management (MCP-21). Read by plan_tool_call (MCP-23, not built yet). Shape (user, 2026-11-13): family = the kind of tool; type = the jobs to use it for; antitype = the jobs it looks right for but must not be used for, each with the tool to use instead; limits = what goes wrong even on its own jobs. Evidence: persona bench of 2026-11-10/11 (Benchmark/audit/audit-1.html); case ids and scores as in mcp-upgrade/prd/tool-management/failures.md. Not yet confirmed by the user. best_settings: from the bench's recorded calls, settings compared within the same case (2026-11-13); free plan, 640px or 480p. Tier rule (user, 2026-11-13): free-tier models only. Image models' tiers are from docs/openapi.json; video models have no tier list there, so a video model counts as free when the free-tier bench used it.",
   "families": {
     "image edit (redraws)": "A model redraws the user's picture. Nothing is kept exactly.",
     "image by code": "The user's picture is kept exactly; code cuts, reshapes or writes on it.",
@@ -57,7 +57,8 @@
           "model": "flux-2-klein"
         },
         "evidence": "Same case: qwen-edit beat flux-2-klein in 15 of 19 cases (3.15 vs 2.58); qwen-image-2.1 beat qwen-edit 6 of 9 (3.74 vs 3.21) and flux-2-klein 3 of 4 (3.54 vs 2.25). flux-2-klein also ignores aspect_ratio (4:5 asked: 2.0; 9:16: 1.8), qwen follows it (4:5: 3.6).",
-        "conflict": "The upstream description of edit_image (openapi_policies.py, #179) suggests flux-2-klein for a Free account. plan_tool_call's output must name the model."
+        "conflict": "The upstream description of edit_image (openapi_policies.py, #179) suggests flux-2-klein for a Free account. plan_tool_call's output must name the model.",
+        "tier": "free (all models named here are free-tier)"
       }
     },
     "edit_video": {
@@ -427,7 +428,8 @@
           "model": "z-image-turbo, flux-2-klein",
           "style.tool": "ai-photo-generator, movie-poster-generator"
         },
-        "evidence": "Same case: qwen-image-2.1 beat flux-2-klein in 11 of 14 cases (3.24 vs 2.43) and z-image-turbo 6 of 8 (3.37 vs 2.45). style.tool ai-illustration-generator beat none 8 of 8 (3.57 vs 2.74); ai-photo-generator lost to none 5 of 5 (2.60 vs 3.20); movie-poster-generator lost 2 of 2."
+        "evidence": "Same case: qwen-image-2.1 beat flux-2-klein in 11 of 14 cases (3.24 vs 2.43) and z-image-turbo 6 of 8 (3.37 vs 2.45). style.tool ai-illustration-generator beat none 8 of 8 (3.57 vs 2.74); ai-photo-generator lost to none 5 of 5 (2.60 vs 3.20); movie-poster-generator lost 2 of 2.",
+        "tier": "free (all models named here are free-tier)"
       }
     },
     "create_video_from_text": {
@@ -461,7 +463,8 @@
         "avoid": {
           "model": "default"
         },
-        "evidence": "Same case: ltx-2.5 beat default in 11 of 16 cases (2.24 vs 1.97). minimax-h3: 23 runs, 2.52, no same-case comparison."
+        "evidence": "Same case: ltx-2.5 beat default in 11 of 16 cases (2.24 vs 1.97). minimax-h3: 23 runs, 2.52, no same-case comparison.",
+        "tier": "free (all models named here are free-tier)"
       }
     },
     "create_video_from_image": {
@@ -603,5 +606,32 @@
       "deciding_question": "Is a person on screen who should speak the words?",
       "bench": "5 runs, average 2.4."
     }
+  },
+  "free_models": {
+    "generate_image": [
+      "qwen-image-2.1",
+      "flux-2-klein",
+      "z-image-turbo",
+      "krea-2",
+      "flux-schnell"
+    ],
+    "edit_image": [
+      "qwen-image-2.1",
+      "qwen-edit",
+      "flux-2-klein",
+      "krea-2"
+    ],
+    "create_video_from_text": [
+      "ltx-2.5 (the free default)",
+      "minimax-h3 (used on the free-tier bench)"
+    ],
+    "create_video_from_image": [
+      "ltx-2.5 (the free default)",
+      "minimax-h3 (used on the free-tier bench)"
+    ],
+    "create_spoken_ad_video": [
+      "ltx-2.5 (the free default)"
+    ],
+    "_resolution": "Free plan: 640px for pictures, 480p for video in the bench."
   }
 }

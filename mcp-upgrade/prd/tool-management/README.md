@@ -27,6 +27,10 @@ A separate workflow from video composition (user, 2026-11-13). Its own planner, 
 
 A few tools in order on existing media (trim, then subtitles) is tool management. A multi-clip film made from text and references is video composition.
 
+## Tier
+
+- Free-tier models only (user, 2026-11-13). The planner never names a paid model. Free models per tool: `free_models` in [tool notes](../../../mcp_magichour/tool_notes.json).
+
 ## Isolation
 
 Rule (user, 2026-11-13): tool management does not touch video composition.
