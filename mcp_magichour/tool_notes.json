@@ -516,14 +516,12 @@
       "bench": "Right tool: 11 runs, average 3.5.",
       "best_settings": {
         "use": {
-          "style.mode": "preserve"
+          "scale_factor": 2
         },
-        "avoid": {
-          "style.mode": "balanced"
-        },
-        "evidence": "preserve: 20 runs, 3.10; balanced: 2 runs, 2.0. No same-case comparison; weak."
+        "avoid": {},
+        "evidence": "Undecided. Persona bench: preserve 3.10 (20 runs) vs balanced 2.0 (2 runs), no same-case pair. B13a same case, one run each: balanced 3 (wlive1), preserve 2 (w24on, faces redrawn with broader smiles). Test both on B13a/B13b before choosing."
       },
-      "test": "Test run wlive1: B13a 2 → 3 with mode preserve: clean 640 sepia enlargement, faces smoothed and slightly altered (limit confirmed)."
+      "test": "Test run wlive1: B13a 2 → 3 with mode preserve: clean 640 sepia enlargement, faces smoothed and slightly altered (limit confirmed). w24on B13a with preserve: 2 (faces redrawn); B13b with the planner: 4."
     },
     "generate_headshot": {
       "family": "faces",

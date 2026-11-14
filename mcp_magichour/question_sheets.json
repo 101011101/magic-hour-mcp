@@ -124,8 +124,7 @@
           "aspect_ratio": "the shape asked, else auto"
         },
         "upscale_image": {
-          "scale_factor": 2,
-          "style.mode": "preserve"
+          "scale_factor": 2
         }
       },
       "rows": [
@@ -221,11 +220,11 @@
             "'Restore', 'clean up', 'old photo', 'scratches', 'blurry' → also fixed."
           ],
           "answers": {
-            "bigger": "upscale_image, scale 2, preserve.",
-            "fixed": "upscale_image preserve, and tell the user faces may be smoothed."
+            "bigger": "upscale_image, scale 2.",
+            "fixed": "upscale_image, scale 2, and tell the user faces may be redrawn slightly."
           },
           "default": "Bigger.",
-          "why": "upscale_image antitype and limits: faces regenerated (B13a 2.0); preserve 3 in wlive1, faces still smoothed."
+          "why": "upscale_image antitype and limits: faces regenerated (B13a 2.0); preserve 3 in wlive1, faces still smoothed. Mode undecided: preserve scored 2 and balanced 3 on B13a (one run each)."
         },
         {
           "id": "colour_only",
@@ -285,10 +284,10 @@
           ],
           "answers": {
             "none": "Go ahead: an adult's own face, or a person who agreed.",
-            "any of these": "Refuse; offer an invented person instead."
+            "any of these": "Refuse plainly. Offer an invented or illustrated person instead (for a child: a generic illustrated child). Do not ask for another photo of the person."
           },
           "default": "none",
-          "why": "C14c, J54a, J54b."
+          "why": "C14c, J54a, J54b. w24on J54b: declined, but kept asking for the boy's photo and offered no illustrated alternative."
         },
         {
           "id": "photo_or_video",
