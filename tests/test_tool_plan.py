@@ -91,10 +91,17 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(length["value"], "15 s.")
 
     def test_a_gap_is_reported(self):
-        out = tool_plan.plan("change_video", "add music to this clip", {
+        out = tool_plan.plan("change_video", "put my logo on this clip", {
             "keep_or_remake": "keep", "shape_how": "n/a", "range": "n/a", "new_ending": "n/a", "words": "n/a",
-            "subtitle_language": "n/a", "has_speech": "n/a", "sound_on_video": "yes", "logo_or_card": "n/a"})
-        self.assertIn("sound_on_video", out["gaps"])
+            "subtitle_language": "n/a", "has_speech": "n/a", "sound_on_video": "n/a", "logo_or_card": "yes"})
+        self.assertIn("logo_or_card", out["gaps"])
+
+    def test_music_on_the_users_video_plans_add_sound_to_video(self):
+        """MCP-29: no longer a gap."""
+        out = tool_plan.plan("change_video", "add warm music to this clip, keep my voice", {
+            "keep_or_remake": "keep", "sound_on_video": "keep"})
+        self.assertNotIn("sound_on_video", out["gaps"])
+        self.assertIn("add_sound_to_video", out["tools"])
 
     def test_faces_in_a_photo_plan_head_swap(self):
         out = tool_plan.plan("faces", "put my face on the astronaut", {
