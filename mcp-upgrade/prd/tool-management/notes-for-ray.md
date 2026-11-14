@@ -24,6 +24,7 @@ Each of these makes a result look worse than it is, or stops a run.
 
 - `join()` (media_tools.py, line 163) starts `"ffmpeg"` from the PATH; the rest of the file uses `ffmpeg_exe()`, which also finds the ffmpeg that `imageio-ffmpeg` ships. On a server with no ffmpeg on the PATH (pip install only), `join` fails with "No such file or directory: 'ffmpeg'". This is also why `tests/test_media_frame.py` errors on a machine without a system ffmpeg.
 - Tool management's `add_sound_to_video` does not call `join` for that reason.
+- **Blocker (2026-11-14):** `join_videos` uses `join`, so every chain that joins video clips fails on such a server: run wnew E29b failed this way (`[Errno 2] No such file or directory: 'ffmpeg'`), and `join_production_clips` failed in the same chat. The server is set up to deploy on Vercel, which normally has no system ffmpeg, so film joins in production likely fail too. Tool composition's video chains (MCP-27: split by speaker, new ending, cut several parts) wait for this fix (user, 2026-11-14). The fix is one line: start `ffmpeg_exe()` instead of `"ffmpeg"` in `join()`.
 
 ## 4. Dry runs refuse `plan_tool_call`
 
