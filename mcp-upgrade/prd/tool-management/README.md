@@ -17,6 +17,8 @@ A separate workflow from video composition (user, 2026-11-13). Its own planner, 
 
 ## How a request flows (`plan_tool_call`)
 
+When (user, 2026-11-13): only when the answer would materially change the result: something material is missing or ambiguous and only the user can say, or the request hits a known pitfall (the user's own picture or video, faces, exact words, music under 15 s, subtitles, a talking photo, side by side, a logo on a video). A clear new picture, clip or sound goes straight to the tool. One call: the description carries a short index of every sheet's rows, so the host sends its answers with the family. Rows it leaves out take their default (the user is told); only rows marked `ask` become questions.
+
 1. **Predict the family.** The host names a tool family from the request (for example sound, edit and trim, face and character, image, subtitles and text). A family, not one tool, so a wrong guess stays close.
 2. **Fill the family's question sheet** from the user's words and files. Two kinds of rows:
    - Deciding rows pick the tool inside the family. Example from video composition: a presenter on screen → lip sync; no presenter → voice cloner.

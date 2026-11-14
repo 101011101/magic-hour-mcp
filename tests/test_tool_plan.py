@@ -129,6 +129,30 @@ class DryRunFixTests(unittest.TestCase):
         self.assertIn("several_in_one", out["gaps"])
 
 
+class OnlyWhenNeededTests(unittest.TestCase):
+    """User, 2026-11-13: the planner only when the answer would materially change the result."""
+
+    def test_one_call_with_answers_gives_the_plan(self):
+        out = tool_plan.plan("change_picture", "make this wide photo square", {"keep_or_redraw": "keep", "shape_how": "blurred"})
+        self.assertTrue(out["ready"])
+        self.assertIn("reframe_media", out["tools"])
+
+    def test_rows_left_out_take_their_default_and_the_user_is_told(self):
+        out = tool_plan.plan("sound", "a music bed", {"on_its_own": "on its own"})
+        self.assertTrue(out["ready"])
+        length = next(d for d in out["decisions"] if d["id"] == "length")
+        self.assertTrue(length["tell_the_user"])
+
+    def test_only_rows_marked_ask_become_questions(self):
+        out = tool_plan.plan("new_picture", "a poster", {"shape": "ask"})
+        self.assertEqual([q["id"] for q in out["questions"]], ["shape"])
+
+    def test_the_description_says_when_not_to_call_and_lists_the_rows(self):
+        idx = tool_plan.sheet_index()
+        self.assertIn("change_picture: keep_or_redraw(keep|redraw)", idx)
+        self.assertLess(len(idx), 1500)
+
+
 class SwitchTests(unittest.TestCase):
     def test_off_by_default(self):
         env = {k: v for k, v in os.environ.items() if k != "MAGIC_HOUR_TOOL_PLAN"}

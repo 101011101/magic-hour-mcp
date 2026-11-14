@@ -102,7 +102,7 @@ def plan(family: str, request: str, answers: dict[str, str] | None) -> dict:
     if unknown:
         raise ToolError(f"Unknown rows for {family}: {', '.join(unknown)}. Rows: {', '.join(rows)}.")
 
-    missing_host = [i for i, r in rows.items() if host_only(r) and answers.get(i, ASK) == ASK]
+    missing_host = [i for i, r in rows.items() if host_only(r) and "applies" not in r and answers.get(i, ASK) == ASK]
     if missing_host:
         raise ToolError(f"Answer these rows yourself from the files or the rules, not by asking the user: {', '.join(missing_host)}.")
 
@@ -114,8 +114,9 @@ def plan(family: str, request: str, answers: dict[str, str] | None) -> dict:
                 and not _words_option(r):
             raise ToolError(f"Row {i} ({r['kind']}): {value!r} is not an option. Options: {', '.join(options(r))}.")
 
-    open_rows = [r for i, r in rows.items() if answers.get(i, ASK) == ASK and "applies" not in r] + \
-                [r for i, r in rows.items() if answers.get(i) == ASK and "applies" in r]
+    # Only rows the host marks 'ask' go to the user (user, 2026-11-13: ask only when the answer would materially
+    # change the result). A row left out takes its default (and the user is told) or, if it has `applies`, does not apply.
+    open_rows = [r for i, r in rows.items() if answers.get(i) == ASK]
     if open_rows:
         asked, defaulted = open_rows[:MAX_QUESTIONS], open_rows[MAX_QUESTIONS:]
         return {"ready": False, "stage": "ask_the_user", "family": family,
@@ -127,7 +128,7 @@ def plan(family: str, request: str, answers: dict[str, str] | None) -> dict:
 
     decisions, texts = [], []
     for i, r in rows.items():
-        value = answers.get(i, NOT_APPLICABLE)
+        value = answers.get(i, NOT_APPLICABLE if "applies" in r else YOUR_CALL)
         if value == NOT_APPLICABLE:
             continue
         key = _match(r, value) if value != YOUR_CALL else None
@@ -159,6 +160,16 @@ def plan(family: str, request: str, answers: dict[str, str] | None) -> dict:
                      + "Tell the user every value chosen for them (tell_the_user).")}
 
 
+def sheet_index() -> str:
+    """One line per family: its row ids, deciding options in brackets, * for rows the host answers itself."""
+    lines = []
+    for family, sheet in sheets()["families"].items():
+        rows = [r["id"] + ("*" if host_only(r) and r["id"] != "consent" else "")
+                + (f"({'|'.join(options(r))})" if r["kind"] == "deciding" else "") for r in sheet["rows"]]
+        lines.append(f"{family}: {', '.join(rows)}")
+    return "\n".join(lines)
+
+
 def register_tool_plan(mcp: FastMCP) -> None:
     if not enabled():
         return
@@ -167,13 +178,20 @@ def register_tool_plan(mcp: FastMCP) -> None:
         name="plan_tool_call",
         title="Plan a single tool call",
         description=(
-            "Call this before a single create or edit: one picture, one clip, one sound, or a change to the user's own "
-            "picture or video (a new shape, a cut, words, a face, subtitles). Not for a film of several shots: use "
-            "plan_request for that. Pick the family from the request: new_picture, change_picture, faces, change_video, "
-            "new_video, talking, sound. First call with the family only: it returns the family's question sheet. Fill "
-            "every row from the user's words and files and call again with `answers`. It returns at most 3 questions "
-            "for the user, or the plan: which tools to call in order, the free-tier settings, and each tool's known "
-            "faults. Read-only; spends no credits and creates nothing."
+            "Call this only when the answer would materially change the result of a single create or edit, that is: "
+            "(1) something the result depends on is missing or ambiguous and only the user can say (which person, "
+            "which part of the clip, the shape, the exact words, a vague request); or (2) the request hits a known "
+            "pitfall: a change to the user's own picture or video (new shape, words on it, a cut, sharpen or "
+            "restore), a face or head swap, exact words in a new picture, music under 15 s or on a video, subtitles, "
+            "a talking photo, pictures side by side, a logo on a video. Otherwise (a clear new picture, clip or "
+            "sound) call the tool directly. Not for a film of several shots: use plan_request. "
+            "Send the family and `answers` in ONE call. Rows (* = answer from the files yourself; options in "
+            "brackets):\n" + sheet_index() + "\n"
+            "Answer a row with an option, the user's own words, 'your_call' or 'n/a'; mark 'ask' ONLY for a row "
+            "whose answer would change the result and that the user's words and files do not answer. Rows you leave "
+            "out take their default and you tell the user. Returns at most 3 questions, or the plan: which tools in "
+            "order, free-tier settings, each tool's known faults, and gaps (what no tool can do). Call with the "
+            "family only to see the full sheet. Read-only; spends no credits and creates nothing."
         ),
         annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False),
     )
