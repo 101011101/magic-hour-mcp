@@ -1,0 +1,112 @@
+{
+  "_about": "Tool notes for tool management (MCP-21). What each tool does well, how it fails, what to use instead, and the question that decides. Read by plan_tool_call (MCP-23, not built yet). Evidence: persona bench of 2026-11-10/11 (Benchmark/audit/audit-1.html), case ids as in mcp-upgrade/prd/tool-management/failures.md. Written 2026-11-13; not yet confirmed by the user.",
+  "tools": {
+    "edit_image": {
+      "does": "Redraws the whole picture from the user's picture and a prompt.",
+      "good_for": [
+        "Change one object or the background: colour of a car, night for sunset, a beach behind a person (B07a/b/d, B09a-d: 3.3 to 4.7).",
+        "Remove an object or clutter (B08a-c: 3.3 to 4.0).",
+        "A style: film look, anime, black and white (B10a-c: 4.0 to 4.7).",
+        "The same character or product in new scenes (C16a/b: 4.0)."
+      ],
+      "fails_on": [
+        "A new shape. It keeps the input's shape (flux-2-klein): a wide photo asked to be square comes back 640x384 (B12a-d: 1.0 to 1.3).",
+        "Exact words. Letters are misspelt or moved (B11a 2.3, J49b 2.3).",
+        "Two pictures in one frame. Both are redrawn and cropped (G35a/b: 1.7 to 2.0).",
+        "Colour only, nothing else changed. Small details change too (B07c, J49a)."
+      ],
+      "use_instead": {
+        "a new shape": "reframe_media",
+        "exact words, a caption, a meme": "add_words_to_media",
+        "pictures side by side": "none yet (MCP-30)",
+        "colour only": "none yet (MCP-35); edit_image is close for black and white"
+      },
+      "bench": "Right tool: 158 runs, average 3.6. Wrong tool: 129 runs, average 2.6.",
+      "deciding_question": "Should the picture be redrawn, or kept exactly and only reshaped, cut or written on?"
+    },
+    "edit_video": {
+      "does": "Re-generates the whole video from the user's video and a prompt. Nothing is kept as it was.",
+      "good_for": [
+        "Not shown in the bench: it was never the right tool in 36 runs."
+      ],
+      "fails_on": [
+        "A new shape. Output is about 832x448 or 832x512 whatever was asked (E25a/b: 1.0, J49c).",
+        "Trimming. It re-renders the footage instead of cutting it (E26a/b: 2.0).",
+        "A watermark or words. The mark is missing (E29c: 1.0)."
+      ],
+      "use_instead": {
+        "a new shape": "reframe_media",
+        "a shorter clip, the best part": "trim_media",
+        "words or a watermark": "add_words_to_media"
+      },
+      "bench": "Wrong tool: 36 runs, average 1.7.",
+      "deciding_question": "Should the video be re-generated, or kept and only cut, reshaped or written on?"
+    },
+    "generate_music": {
+      "does": "Makes a music track from a style prompt. Sound only, no picture.",
+      "good_for": [
+        "A music bed of 15 s or more (F30b/c: 4.0)."
+      ],
+      "fails_on": [
+        "Shorter than 15 s. The API's minimum duration is 15 s, so a 10 s request comes back 15 s (F30a 2.3; E27a, E27c).",
+        "Music on the user's video. It makes a separate file; nothing puts it on the video (E27a-c: 2.0)."
+      ],
+      "use_instead": {
+        "under 15 s": "generate_music with duration 15, then trim_media to the length asked (MCP-28)",
+        "music on the user's video": "none yet (MCP-29)"
+      },
+      "bench": "Right tool: 40 runs, average 2.6.",
+      "deciding_question": "How long, and is it on its own or under the user's video?"
+    },
+    "add_subtitles_to_video": {
+      "does": "Transcribes the speech in the video and burns it in as subtitles.",
+      "good_for": [
+        "Subtitles in the language that is spoken (E24a: 3.0)."
+      ],
+      "fails_on": [
+        "Another language. It writes the spoken language: Spanish asked, English delivered (E24b: 2.0).",
+        "A clip with no speech. The job fails instead of saying so (E24c).",
+        "The first line is sometimes missing (E24a).",
+        "A new shape. It has no shape setting (E24d, E25c)."
+      ],
+      "use_instead": {
+        "another language": "none yet (MCP-33); check translate_video first",
+        "a new shape": "reframe_media first, then this tool (MCP-27)"
+      },
+      "bench": "Right tool: 22 runs, average 2.4.",
+      "deciding_question": "Same language as the speech, or translated? Does the clip have speech?"
+    },
+    "swap_face_in_video": {
+      "does": "Puts a face from a picture onto a person in the video.",
+      "good_for": [
+        "One person, short clip; the result keeps the original motion and framing."
+      ],
+      "fails_on": [
+        "Recognisable identity. The new face is a blend; graders did not recognise the portrait (C15a 2.7, C15c 1.3).",
+        "Two faces in one clip. Both barely change and the sound was lost (C15c: 1.0 to 1.3).",
+        "Part of a clip. Asked for the first 5 s, it delivered all 10 s (C15a)."
+      ],
+      "use_instead": {
+        "part of a clip": "trim_media first, then this tool (MCP-27)"
+      },
+      "bench": "Right tool: 10 runs, average 1.8.",
+      "deciding_question": "Which person, and which part of the clip? Warn the user that the face may only look similar."
+    },
+    "remove_image_background": {
+      "does": "Cuts the subject out of a picture onto a transparent background.",
+      "good_for": [
+        "A product or person with clear edges."
+      ],
+      "fails_on": [
+        "A logo with thin letters. The letters fade or smear, the moon looks ghosted (A06c: 2.7).",
+        "A logo on a video. It only makes the PNG; nothing puts it on the video (E29a: 1.3)."
+      ],
+      "use_instead": {
+        "a logo with words": "remove the background from the logo without words, then add_words_to_media (MCP-25), and check the result",
+        "a logo on a video": "none yet (MCP-31)"
+      },
+      "bench": "Right tool: 9 runs, average 1.6 (most of it E29a, a job no tool finishes).",
+      "deciding_question": "Is there text in the picture? Where will the cut-out be used?"
+    }
+  }
+}
