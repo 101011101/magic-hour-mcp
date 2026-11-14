@@ -87,6 +87,14 @@ Better with the planner on: A01a +2, E26a +1, B13b +1, C17a, J54b. Worse: B13a â
 
 Holds across all 3 runs: the vague user (A01a), upscale for a blurry photo (B13b). No case is worse in every run. Not shown: 'the best part' (E26a) and the refusal fix (J54b: the host skips the planner).
 
+## Planner only when needed (2026-11-13)
+
+User: call the planner only when the answer would materially change the result. Change c21954f (triggers in the description, one call, only 'ask' rows become questions), then d70cda1 (a vague request named with an example).
+
+- Check run w24on-r4, 15 chats, 689 credits: where the planner was used it was called once (before: 2 to 3). Clear requests skipped it (C14c, J54b, J50a 4). Held: B13b 4, C14a 4 (head swap), E26a 4; B13a 3. Average 3.17 (planner always 3.25, off 2.81; one run). Time per chat: no clear change (78 s vs 74 s; a few long chats).
+- Lost: A01a, vague user, 'make a product pic of a water bottle': the host found it clear, skipped the planner and generated a steel bottle on grey (2; was 4, 4, 4).
+- After d70cda1, A01a three runs: 4, 4, 4 (30 credits).
+
 ## Setup faults found (tell Ray)
 
 - The runner uploads attachments straight to Magic Hour (`get_upload_urls`). Our code tools can only read files that went through `upload_media` (a kept copy), so every reframe, trim or words case fails for that reason alone. For this run the attachments were uploaded through `upload_media` and the chats pointed at them.
