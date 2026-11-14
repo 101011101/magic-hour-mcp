@@ -53,6 +53,7 @@ Rule (user, 2026-11-13): tool management does not touch video composition.
 | Doc | Covers | Code |
 |---|---|---|
 | [tool notes](../../../mcp_magichour/tool_notes.json) | each tool: family, type (use it for), antitype (do not, use instead), limits, deciding question (24 tools) | `tool_notes.json` |
+| [tool tests](tool-tests.md) | targeted runs that confirm the notes (wlive1: 14 cases) | — |
 | [failures](failures.md) | each tool-management item, old MCP against new, what failed | — |
 | [api tools](api-tools.md) | one MCP tool per Magic Hour API operation (upstream base) | `openapi_*.py`, `workflow_guidance.py` |
 

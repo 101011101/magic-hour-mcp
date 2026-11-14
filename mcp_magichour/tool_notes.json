@@ -59,7 +59,8 @@
         "evidence": "Same case: qwen-edit beat flux-2-klein in 15 of 19 cases (3.15 vs 2.58); qwen-image-2.1 beat qwen-edit 6 of 9 (3.74 vs 3.21) and flux-2-klein 3 of 4 (3.54 vs 2.25). flux-2-klein also ignores aspect_ratio (4:5 asked: 2.0; 9:16: 1.8), qwen follows it (4:5: 3.6).",
         "conflict": "The upstream description of edit_image (openapi_policies.py, #179) suggests flux-2-klein for a Free account. plan_tool_call's output must name the model.",
         "tier": "free (all models named here are free-tier)"
-      }
+      },
+      "test": "Test run wlive1: A05a 5 (headshot by edit_image, flux-2-klein). Direct B07a: qwen-image-2.1 made a true navy, flux-2-klein a brighter royal blue; both kept the street. Small gap on a colour edit; the bench gap is on shape and words."
     },
     "edit_video": {
       "family": "video edit (re-generates)",
@@ -110,7 +111,8 @@
       ],
       "limits": [],
       "deciding_question": "How long, and on its own or under the user's video?",
-      "bench": "Right tool: 40 runs, average 2.6."
+      "bench": "Right tool: 40 runs, average 2.6.",
+      "test": "Test run wlive1: F30a: the agent asked 15 s and cut to 10 s (antitype confirmed)."
     },
     "add_subtitles_to_video": {
       "family": "subtitles",
@@ -167,10 +169,11 @@
         }
       ],
       "limits": [
-        "Not benchmarked: never called in the persona bench. Test on C14a and C14b."
+        "C14a not yet tested with head swap."
       ],
       "deciding_question": "Which picture gives the head, and which picture (and which person) receives it?",
-      "bench": "0 runs."
+      "bench": "0 runs in the persona bench; 1 test run (wlive1, C14b: 4).",
+      "test": "Test run wlive1: C14b 1.5 → 4 (asked which person, then head swap onto the right one). C14a used swap_face_in_photo (4), so head swap on C14a is still untested."
     },
     "swap_face_in_photo": {
       "family": "faces",
@@ -267,7 +270,8 @@
         "Crop loses the edges: set `focus` on the subject (B12d, the shoe on the left), or use pad or fill to keep everything."
       ],
       "deciding_question": "Crop (lose the edges), or keep everything with bars (pad) or a blurred copy (fill)? Where is the subject?",
-      "bench": "0 runs."
+      "bench": "0 runs in the persona bench; 3 test runs (wlive1).",
+      "test": "Test run wlive1 (2026-11-13, happy user, 1 run each): B12a 1 → 4, B12d 1 → 3 (whole shoe kept with matching padding; it stays small and off-centre), E25a 1 → 4 (9:16 crop with her centred)."
     },
     "trim_media": {
       "family": "video by code",
@@ -290,7 +294,8 @@
         "It does not choose the part: 'the best 10 seconds' needs a look at the clip first (E26a, MCP-07)."
       ],
       "deciding_question": "Which part, from when to when?",
-      "bench": "0 runs."
+      "bench": "0 runs in the persona bench; 2 test runs (wlive1).",
+      "test": "Test run wlive1: J49c 2.5 → 5 (first 5 s kept exactly). E26b 3: the cut was right, but the agent picked the part blind (half of it a static lead-in); it cannot see the clip (MCP-07)."
     },
     "add_words_to_media": {
       "family": "image by code",
@@ -317,7 +322,8 @@
         "Places: top, middle, bottom, corners. Sizes: small, normal, large. No free position or font choice."
       ],
       "deciding_question": "The exact words, where, and how big? On an object, or over the picture?",
-      "bench": "0 runs."
+      "bench": "0 runs in the persona bench; 3 test runs (wlive1).",
+      "test": "Test run wlive1: B11a 2 → 4, E29c 1 → 4 (watermark), A02a 4 (generate_image without words, then this tool: headline exact)."
     },
     "mix_audio": {
       "family": "sound",
@@ -336,7 +342,8 @@
         "Not benchmarked: added in cbbe722, after the bench."
       ],
       "deciding_question": "Which tracks, from when, and how loud?",
-      "bench": "0 runs."
+      "bench": "0 runs.",
+      "test": "Test run wlive1: F30a 2.5 → 4: 15 s generate_music, cut to 10 s with a fade-out. Also used in C17a to fit a voice line."
     },
     "join_videos": {
       "family": "video by code",
@@ -515,7 +522,8 @@
           "style.mode": "balanced"
         },
         "evidence": "preserve: 20 runs, 3.10; balanced: 2 runs, 2.0. No same-case comparison; weak."
-      }
+      },
+      "test": "Test run wlive1: B13a 2 → 3 with mode preserve: clean 640 sepia enlargement, faces smoothed and slightly altered (limit confirmed)."
     },
     "generate_headshot": {
       "family": "faces",
@@ -572,7 +580,8 @@
         "Resolution 480p or 720p."
       ],
       "deciding_question": "The exact line, and the shape?",
-      "bench": "Right tool: 5 runs, average 4.0."
+      "bench": "Right tool: 5 runs, average 4.0.",
+      "test": "Test run wlive1: C17a 4 → 2: mouth closed in the sampled frames, lip movement not evident. One run; earlier runs scored 4."
     },
     "create_spoken_ad_video": {
       "family": "talking video",
