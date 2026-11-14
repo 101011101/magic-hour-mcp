@@ -68,7 +68,7 @@ class PlanTests(unittest.TestCase):
     def test_every_open_question_in_one_batch_no_limit(self):
         """User, 2026-11-13: no question limit; one batch."""
         out = tool_plan.plan("new_picture", "make me a picture", {"look": "ask", "shape": "ask", "exact_words": "ask",
-                             "several_sizes": "ask", "transparent": "ask", "meme_kind": "n/a"})
+                             "set": "ask", "transparent": "ask", "meme_kind": "n/a"})
         self.assertFalse(out["ready"])
         self.assertEqual(len(out["questions"]), 5)
         self.assertNotIn("defaulted", out)
@@ -120,7 +120,7 @@ class PlanTests(unittest.TestCase):
 
     def test_plan_settings_are_free_tier(self):
         out = tool_plan.plan("new_picture", "a candle product shot", {
-            "exact_words": "none", "shape": "1:1", "several_sizes": "one", "transparent": "no", "meme_kind": "n/a"})
+            "exact_words": "none", "shape": "1:1", "set": "one", "transparent": "no", "meme_kind": "n/a"})
         self.assertEqual(out["settings"]["generate_image"]["model"], "qwen-image-2.1")
 
 
@@ -129,7 +129,7 @@ class DryRunFixTests(unittest.TestCase):
 
     def test_the_words_themselves_answer_exact_words(self):
         out = tool_plan.plan("new_picture", "logo KwickFixx", {"exact_words": "KwickFixx", "shape": "1:1",
-                             "several_sizes": "one", "transparent": "no", "meme_kind": "n/a"})
+                             "set": "one", "transparent": "no", "meme_kind": "n/a"})
         d = next(d for d in out["decisions"] if d["id"] == "exact_words")
         self.assertEqual(d["value"], "KwickFixx")
         self.assertIn("generate_image with the exact words in the prompt", d["instruction"])   # generation first (user, 2026-11-14)
@@ -204,10 +204,10 @@ class CompositionTests(unittest.TestCase):
         """Dry run wcomp G36a: shape said one generation per shape, several_sizes said reframe one."""
         out = tool_plan.plan("new_picture", "a coffee ad in 1:1, 9:16 and 16:9", {
             "look": "steaming coffee cup, cream and dark green", "exact_words": "Daybreak Coffee", "shape": "1:1, 9:16, 16:9",
-            "several_sizes": "several", "transparent": "no"})
+            "set": "set", "transparent": "no"})
         d = {x["id"]: x["instruction"] for x in out["decisions"]}
-        self.assertIn("SAME prompt", d["several_sizes"])
-        self.assertIn("several_sizes decides", d["shape"])
+        self.assertIn("ONE master picture first", d["set"])
+        self.assertIn("`set` decides", d["shape"])
 
 
 class HandoffRuleTests(unittest.TestCase):
@@ -224,6 +224,25 @@ class GenerationFirstTests(unittest.TestCase):
         src = inspect.getsource(tool_plan.register_tool_plan)
         self.assertIn("ANY picture with words in it", src)
         self.assertIn("Always call this before add_words_to_media or reframe_media", src)
+
+
+class SetAndExactEditTests(unittest.TestCase):
+    def test_a_set_is_made_from_one_master(self):
+        """Run wgen G34a, G37a: separate generations broke the set."""
+        out = tool_plan.plan("new_picture", "3 matching carousel slides", {"look": "cosy cafe", "exact_words": "Slow Sunday",
+                             "shape": "1:1", "set": "set", "transparent": "no"})
+        d = {x["id"]: x["instruction"] for x in out["decisions"]}
+        self.assertIn("FROM the master with edit_image", d["set"])
+        self.assertIn("create_video_from_image", d["set"])
+
+    def test_an_exact_follow_up_edit_has_a_deterministic_fallback(self):
+        """Run wgen J49b: 'about half again as big, same font and centre point' drifted when regenerated."""
+        answers = {r["id"]: "n/a" for r in tool_plan.sheets()["families"]["change_picture"]["rows"] if "applies" in r}
+        answers.update({"keep_or_redraw": "redraw", "exact_change": "exact"})
+        out = tool_plan.plan("change_picture", "bigger text, same font and centre", answers)
+        d = {x["id"]: x["instruction"] for x in out["decisions"]}
+        self.assertIn("add_words_to_media", d["exact_change"])
+        self.assertIn("compare", d["exact_change"])
 
 
 class SwitchTests(unittest.TestCase):

@@ -76,26 +76,26 @@
             "'4:5', 'portrait post' → 4:5."
           ],
           "answers": {
-            "1:1, 16:9, 9:16": "generate_image aspect_ratio (one shape; for several shapes, several_sizes decides).",
+            "1:1, 16:9, 9:16": "generate_image aspect_ratio (one shape; for several shapes, `set` decides).",
             "4:5": "generate_image 1:1, then edit_image (qwen-image-2.1, aspect_ratio 4:5); reframe_media has no 4:5 (MCP-34)."
           },
           "default": "1:1.",
           "why": "generate_image limit: aspect setting is 1:1, 16:9, 9:16 only. A03 4:5 flyers made by edit_image with qwen: 3.6."
         },
         {
-          "id": "several_sizes",
+          "id": "set",
           "kind": "deciding",
-          "ask": "One size, or the same design in several sizes? If several: the same picture reshaped, or the design laid out anew for each shape?",
+          "ask": "One picture, or a set that must match (several sizes, carousel slides, a poster with a story and a reel)?",
           "read_from": [
-            "'In three sizes', '1:1, 9:16 and 16:9', 'for feed and stories'."
+            "'In three sizes', '1:1, 9:16 and 16:9', 'for feed and stories' → a set of sizes.",
+            "'Carousel', 'slides', 'a series', 'matching', 'pack', 'campaign' → a set."
           ],
           "answers": {
             "one": "As in `shape`.",
-            "several": "One generate_image per shape with the SAME prompt, look, words and model (the design laid out for each shape). This replaces `shape`'s one-shape instruction.",
-            "same picture reshaped": "Make one picture, then edit_image with each other aspect_ratio, asking to extend the scene (reframe_media only if the extension fails)."
+            "set": "Make ONE master picture first (generate_image, qwen-image-2.1, the first size or slide, words in the prompt). Then make every other piece FROM the master with edit_image (qwen-image-2.1, the master as the input image): same style, palette, typography and layout, changing only what that piece needs (its aspect_ratio, its words). A video in the set: create_video_from_image from the master or the matching piece, not create_video_from_text, so it keeps the look. This replaces `shape`'s one-shape instruction."
           },
-          "default": "several: the design laid out anew for each shape.",
-          "why": "G36a/b asked for matching sizes, 'rearranged to fit'. Separate generations scored 3.7 (persona bench, new side). Dry run wcomp G36a: the shape and several_sizes rows gave two different instructions; now several_sizes decides."
+          "default": "set when the user names several sizes or pieces.",
+          "why": "Run wgen: separate generations broke the set (G34a 'look like a set' not done: borders differ; G37a 'matching event pack' not done: the reel was photoreal, the poster illustrated; G36a earlier: the green shapes differ). A master plus edits from it keeps one design."
         },
         {
           "id": "transparent",
@@ -286,6 +286,22 @@
           },
           "default": "Side by side.",
           "why": "MCP-30, put_pictures_side_by_side (2026-11-14). Before: edit_image redrew and cropped both photos (G35a 2.0, G35b 1.7). Not benchmarked yet."
+        },
+        {
+          "id": "exact_change",
+          "kind": "deciding",
+          "applies": "a follow-up that asks for an exact change to a picture already made (bigger or smaller text by an amount, the same font, the same position, move one thing, 'leave everything else alone')",
+          "ask": "(Read from the user's words.) Does the follow-up ask for an exact, measurable change with everything else kept?",
+          "read_from": [
+            "'About half again as big', 'same font and centre point', 'move it 2 cm left', 'leave everything else alone' → exact.",
+            "'Make it pop', 'a bit bigger', 'try another style' → not exact."
+          ],
+          "answers": {
+            "not exact": "edit_image on the delivered picture with the change described.",
+            "exact": "First edit_image on the delivered picture with the exact instruction (the scale factor, 'same font', 'same centre point', 'change nothing else'), then compare it with the delivered picture. If the size, font or position drifted, or other parts changed: edit_image to remove the words from the delivered picture (keep everything else), then add_words_to_media with the words at the requested size and place. Tell the user which way was used."
+          },
+          "default": "not exact.",
+          "why": "Run wgen J49b ('Bigger text, about half again as big. Same font and centre point; leave everything else alone'): regenerating gave 1.28x wide, a narrower font and a shifted centre (8/11). An exact edit may need the deterministic step (user: deterministic tools last, used when needed)."
         }
       ]
     },
