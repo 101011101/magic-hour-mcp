@@ -217,6 +217,15 @@ class HandoffRuleTests(unittest.TestCase):
         self.assertIn("not a project id", rules)
 
 
+class GenerationFirstTests(unittest.TestCase):
+    def test_the_description_routes_words_and_shapes_through_the_planner(self):
+        """Dry run wgen: A02b, G37a, B12b, G33b skipped the planner and drew words or reframed (user: generation first)."""
+        import inspect
+        src = inspect.getsource(tool_plan.register_tool_plan)
+        self.assertIn("ANY picture with words in it", src)
+        self.assertIn("Always call this before add_words_to_media or reframe_media", src)
+
+
 class SwitchTests(unittest.TestCase):
     def test_off_by_default(self):
         env = {k: v for k, v in os.environ.items() if k != "MAGIC_HOUR_TOOL_PLAN"}
