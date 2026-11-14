@@ -180,7 +180,9 @@ def register_tool_plan(mcp: FastMCP) -> None:
         description=(
             "Call this only when the answer would materially change the result of a single create or edit, that is: "
             "(1) something the result depends on is missing or ambiguous and only the user can say (which person, "
-            "which part of the clip, the shape, the exact words, a vague request); or (2) the request hits a known "
+            "which part of the clip, the shape, the exact words), or the request is vague: it names only the subject, "
+            "with no look, setting, colour, shape or words (for example 'make a product pic of a water bottle'): call "
+            "this and mark the open rows 'ask', because the user may have details in mind; or (2) the request hits a known "
             "pitfall: a change to the user's own picture or video (new shape, words on it, a cut, sharpen or "
             "restore), a face or head swap, exact words in a new picture, music under 15 s or on a video, subtitles, "
             "a talking photo, pictures side by side, a logo on a video. Otherwise (a clear new picture, clip or "

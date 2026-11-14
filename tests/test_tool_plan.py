@@ -147,6 +147,13 @@ class OnlyWhenNeededTests(unittest.TestCase):
         out = tool_plan.plan("new_picture", "a poster", {"shape": "ask"})
         self.assertEqual([q["id"] for q in out["questions"]], ["shape"])
 
+    def test_the_description_names_a_vague_request_with_an_example(self):
+        """Check run w24on-r4, A01a: 'make a product pic of a water bottle' went straight to generate_image (2, was 4)."""
+        import inspect
+        src = inspect.getsource(tool_plan.register_tool_plan)
+        self.assertIn("names only the subject", src)
+        self.assertIn("a product pic of a water bottle", src)
+
     def test_the_description_says_when_not_to_call_and_lists_the_rows(self):
         idx = tool_plan.sheet_index()
         self.assertIn("change_picture: keep_or_redraw(keep|redraw)", idx)
