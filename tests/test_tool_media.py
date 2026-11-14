@@ -87,7 +87,7 @@ class NewPictureToolTests(unittest.TestCase):
         """B07c, J49a: warmer, nothing redrawn."""
         out = recolour(self.grey, self.dir / "warm.png", warmth=0.5)
         r, g, b = mean_rgb(out)
-        self.assertGreater(r, b + 10)
+        self.assertGreater(r, b + 40)   # clearly warmer (warmth 0.15 per unit was too weak: B07c)
         from PIL import Image
         self.assertEqual(Image.open(out).size, (400, 300))
 
@@ -103,14 +103,22 @@ class NewPictureToolTests(unittest.TestCase):
         self.assertAlmostEqual(info["seconds"], 2, delta=0.3)
 
     def test_side_by_side_keeps_each_picture_whole(self):
-        """G35a: before and after, side by side, photos unchanged."""
+        """G35a: before and after, side by side, photos unchanged, no empty white space (run wnew had white bands)."""
         from PIL import Image
         out = side_by_side([self.red, self.wide], self.dir / "sbs.png", "row", "16:9", labels=["Before", "After"])
         sheet = Image.open(out).convert("RGB")
         self.assertEqual(sheet.size, (1280, 720))
-        self.assertEqual(sheet.getpixel((320, 400)), (200, 40, 40))   # the red picture, whole, in the left cell
-        self.assertEqual(sheet.getpixel((960, 360)), (40, 40, 200))   # the wide blue picture in the right cell
-        self.assertEqual(sheet.getpixel((960, 100)), (255, 255, 255))  # padding above the wide picture: not stretched
+        self.assertEqual(sheet.getpixel((320, 420)), (200, 40, 40))   # the red picture, whole, in the left cell
+        self.assertEqual(sheet.getpixel((960, 400)), (40, 40, 200))   # the wide blue picture in the right cell
+        above = sheet.getpixel((960, 200))                             # filled with a blurred copy, not white
+        self.assertNotEqual(above, (255, 255, 255))
+        self.assertLess(sum(sheet.getpixel((640 + 320, 10))), 100)      # the label band at the top of the cell
+
+    def test_side_by_side_without_labels_or_with_a_colour(self):
+        """Not limited to before and after: plain side by side, any background."""
+        from PIL import Image
+        out = side_by_side([self.red, self.wide, self.grey], self.dir / "three.png", "row", "16:9", background="white")
+        self.assertEqual(Image.open(out).convert("RGB").getpixel((5, 5)), (255, 255, 255))
 
     def test_side_by_side_needs_two_to_four(self):
         with self.assertRaises(ValueError):

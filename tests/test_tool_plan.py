@@ -132,7 +132,7 @@ class DryRunFixTests(unittest.TestCase):
                              "several_sizes": "one", "transparent": "no", "meme_kind": "n/a"})
         d = next(d for d in out["decisions"] if d["id"] == "exact_words")
         self.assertEqual(d["value"], "KwickFixx")
-        self.assertIn("add_words_to_media", d["instruction"])
+        self.assertIn("generate_image with the exact words in the prompt", d["instruction"])   # generation first (user, 2026-11-14)
 
     def test_consent_none_is_an_option(self):
         out = tool_plan.plan("faces", "my face", {"consent": "none", "photo_or_video": "photo", "which_person": "n/a",

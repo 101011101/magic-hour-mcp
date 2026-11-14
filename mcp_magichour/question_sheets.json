@@ -2,6 +2,9 @@
   "_about": "Question sheets for tool management (MCP-22). Read by plan_tool_call (MCP-23, not built yet) with tool_notes.json. One sheet per request family: what the user asks for, not how the tool works. Each row: kind (deciding = picks the tool; required = the result fails if it is wrong), ask (plain words for the user), read_from (how to answer it from the user's words or files first), answers (what each answer means for the tool and settings), default (used on 'your call' or when the user does not answer), why (the tool note and benchmark cases behind it). A row is asked only when it applies and the user's words and files do not answer it. Drafted 2026-11-13; not yet confirmed by the user.",
   "rules": [
     "Answer every row from the user's words and attached files first. Ask only the deciding and required rows that are still open.",
+    "Use as few tool calls as possible: one call that does the whole job beats a chain. Add a step only when the result needs it (user, 2026-11-14).",
+    "Tool priority (user, 2026-11-14): generation tools first (generate_image, edit_image, the video and audio generators), because they cover more cases. Deterministic code tools (reframe_media, add_words_to_media, trim_media, adjust_colours, put_pictures_side_by_side, put_picture_on_video, make_card_clip, mix_audio, add_sound_to_video, join_videos) last: only when generation cannot do the job, or the user asks for their media to stay exactly as it is.",
+    "Words: text that is part of a designed picture (a headline, a poster, a flyer, a logo, a thumbnail, a carousel slide, a card) goes in the generation prompt, quoted exactly, with where it goes. add_words_to_media is only for captions or overlays on top of existing media (a caption on the user's photo, a watermark, subtitles-style lines on a video). After generating words, check the spelling in the result; if it is wrong, fix it with edit_image.",
     "Ask as few questions as possible: only those whose answer would change the result and that the user's words and files do not answer. Ask them all together in one message, once, in plain words, each with what happens if the user skips it. Never ask a second round: anything still open after the user answers takes its default.",
     "'Your call', 'you pick', or no answer: use the row's default and tell the user what was chosen.",
     "Keep every concrete detail the user gave (counts, colours, materials, names, exact words) in the tool's prompt word for word. A01a: 'matte black on marble' became a silver bottle on white when the details were dropped.",
@@ -57,10 +60,10 @@
           ],
           "answers": {
             "none": "generate_image; say 'no text' in the prompt.",
-            "exact words": "generate_image with no words in the prompt, then add_words_to_media with the exact words (MCP-25)."
+            "exact words": "generate_image with the exact words in the prompt, quoted, and where they go (qwen-image-2.1). Check the spelling in the result; if wrong, edit_image to fix the words."
           },
           "default": "No words.",
-          "why": "generate_image antitype: headlines misspelt or changed (A02b 'CEAN UP YOUR BACH', A02c, A06b). Test wlive1: A02a 4 with the chain."
+          "why": "User, 2026-11-14: words in a designed picture are generated, not drawn on top. Spelling risk: flux-2-klein misspelt headlines in the bench (A02b 'CEAN UP YOUR BACH'); qwen-image-2.1 is the model to use; check and fix with edit_image."
         },
         {
           "id": "shape",
@@ -88,8 +91,8 @@
           ],
           "answers": {
             "one": "As in `shape`.",
-            "several": "One generate_image per shape with the SAME prompt, look and model (the design laid out for each shape), then add_words_to_media on each with the same words, placed to fit that shape. This replaces `shape`'s one-shape instruction.",
-            "same picture reshaped": "Make one picture, then reframe_media for each other shape (fill or pad), then add_words_to_media on each."
+            "several": "One generate_image per shape with the SAME prompt, look, words and model (the design laid out for each shape). This replaces `shape`'s one-shape instruction.",
+            "same picture reshaped": "Make one picture, then edit_image with each other aspect_ratio, asking to extend the scene (reframe_media only if the extension fails)."
           },
           "default": "several: the design laid out anew for each shape.",
           "why": "G36a/b asked for matching sizes, 'rearranged to fit'. Separate generations scored 3.7 (persona bench, new side). Dry run wcomp G36a: the shape and several_sizes rows gave two different instructions; now several_sizes decides."
@@ -103,7 +106,7 @@
           ],
           "answers": {
             "no": "Nothing extra.",
-            "yes": "generate_image with no words, remove_image_background, then add_words_to_media."
+            "yes": "generate_image with the words in the prompt, then remove_image_background; check the letters after the cut-out."
           },
           "default": "No.",
           "why": "remove_image_background antitype: thin letters fade or smear (A06c 2.7)."
@@ -118,7 +121,7 @@
             "'Make a meme about X' with no picture or text → template."
           ],
           "answers": {
-            "own": "add_words_to_media on the picture (top and bottom).",
+            "own": "add_words_to_media on the user's picture (top and bottom caption: text on top of existing media).",
             "template": "create_meme."
           },
           "default": "Template when no picture is attached, else own.",
@@ -157,17 +160,17 @@
             "'Change X to Y', 'remove', 'replace', 'make it look like', 'put it on a new background' → redraw."
           ],
           "answers": {
-            "keep": "Image by code: reframe_media for the shape, add_words_to_media for words.",
+            "keep": "For a new shape: edit_image (qwen-image-2.1) with the new aspect_ratio, asking to extend the scene around the picture and keep the subject unchanged (generation first). reframe_media only if the extension changes the subject or the user wants nothing added. For a caption on top of the photo: add_words_to_media.",
             "redraw": "edit_image with qwen-image-2.1."
           },
           "default": "Keep.",
-          "why": "edit_image antitype: a new shape came back 640x384 (B12a-d: 1.0 to 1.3); words misspelt (B11a). Test wlive1: B12a 1 → 4, B11a 2 → 4 with the code tools."
+          "why": "edit_image antitype: a new shape came back 640x384 (B12a-d: 1.0 to 1.3); words misspelt (B11a). Test wlive1: B12a 1 → 4, B11a 2 → 4 with the code tools. User, 2026-11-14: extend the image with generation before reframing (B12b)."
         },
         {
           "id": "shape_how",
           "kind": "required",
           "applies": "a new shape",
-          "ask": "To fit the new shape, may I cut the edges, or should I keep the whole picture with bars or a blurred copy around it?",
+          "ask": "To fit the new shape, may I extend the scene around the picture, or should I keep it exactly and add bars or a blurred copy?",
           "read_from": [
             "'Keep the whole', 'don't crop', 'don't cut off' → pad or fill.",
             "'Plain padding', 'bars', 'match the background' → pad, colour of the background.",
@@ -175,11 +178,12 @@
             "'Crop', 'zoom in', 'fill the frame' → crop."
           ],
           "answers": {
+            "extend": "edit_image with the new aspect_ratio, extending the scene (default).",
             "crop": "reframe_media how=crop, focus on the subject.",
-            "bars": "reframe_media how=pad, color from the user or the picture's background.",
+            "bars": "reframe_media how=pad, color from the user or the background.",
             "blurred": "reframe_media how=fill."
           },
-          "default": "fill.",
+          "default": "extend (edit_image); reframe_media only if the user wants nothing added.",
           "why": "reframe_media type and limits (B12a fill 4, B12d pad 3)."
         },
         {
@@ -218,14 +222,14 @@
           "id": "on_object",
           "kind": "deciding",
           "applies": "words on the picture",
-          "ask": "Should the words look printed on something in the scene (a sign, a label), or sit on top of the photo like a caption?",
+          "ask": "Should the words sit on top of the photo like a caption, or be part of the picture (a sign, a label, a headline in the design)?",
           "read_from": [
             "'Chalkboard saying', 'a sign that reads', 'on the label' → on an object.",
             "'Caption', 'over the photo', 'text on top' → on top."
           ],
           "answers": {
-            "on top": "add_words_to_media.",
-            "on an object": "edit_image to add the object with the words; tell the user the letters may be misspelt."
+            "on top": "add_words_to_media (a caption on top of the user's photo, B11a).",
+            "part of the picture": "edit_image with the exact words in the prompt (a sign, a label, a headline that belongs to the design)."
           },
           "default": "On top.",
           "why": "add_words_to_media antitype: drawn words do not follow an object (B11b)."
@@ -473,7 +477,7 @@
           ],
           "answers": {
             "watermark": "add_words_to_media: corner, size small, style shadow, opacity 0.6.",
-            "title or caption": "add_words_to_media with place and start/end."
+            "title or caption": "add_words_to_media with place and start/end (text on top of the user's video)."
           },
           "default": "Whole clip.",
           "why": "E29c 1 → 4 in wlive1 with the watermark settings."

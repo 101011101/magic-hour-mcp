@@ -67,7 +67,7 @@ def recolour(source: Path, out: Path, warmth: float = 0.0, saturation: float = 1
     w = max(-1.0, min(1.0, warmth))
     picture = source.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp")
     sat = max(0.0, min(2.0, saturation))
-    steps = [f"colorchannelmixer=rr={1 + 0.15 * w:.3f}:gg=1:bb={1 - 0.15 * w:.3f}"]   # warmer: more red, less blue
+    steps = [f"colorchannelmixer=rr={1 + 0.4 * w:.3f}:gg={1 + 0.08 * w:.3f}:bb={1 - 0.4 * w:.3f}"]   # warmer: more red, less blue (0.15 was too weak: B07c, run wnew)
     steps.append(f"eq=saturation={sat:.3f}:brightness={max(-0.5, min(0.5, brightness)):.3f}:contrast={max(0.5, min(2.0, contrast)):.3f}")
     if sat == 0:
         steps.append("format=gray")   # black and white exactly, no tint left by the colour conversion
@@ -85,32 +85,44 @@ SHEET_SIZES = {"16:9": (1280, 720), "1:1": (1080, 1080), "9:16": (720, 1280), "4
 
 
 def side_by_side(pictures: list[Path], out: Path, layout: str = "row", aspect: str = "16:9", gap: int = 0,
-                 background: str = "white", labels: list[str] | None = None) -> Path:
+                 background: str = "blur", labels: list[str] | None = None) -> Path:
     """2 to 4 pictures in one, each whole: scaled to fit its cell, never cropped or stretched. layout: row, column or
-    grid (2x2). labels: one per picture, drawn exactly at the top-left of its cell on a dark band."""
-    from PIL import Image, ImageDraw, ImageFont
+    grid (2x2). background: blur (the default: each cell filled with a blurred, darkened copy of its own picture, so no
+    empty space shows; G35a, run wnew, had white bands) or a colour. labels: one per picture, exact, in a bold band
+    across the top of its cell."""
+    from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
     if not 2 <= len(pictures) <= 4:
         raise ValueError("give 2 to 4 pictures")
     width, height = SHEET_SIZES[aspect]
     cols, rows = {"row": (len(pictures), 1), "column": (1, len(pictures)), "grid": (2, (len(pictures) + 1) // 2)}[layout]
     cell_w, cell_h = (width - gap * (cols - 1)) // cols, (height - gap * (rows - 1)) // rows
-    sheet = Image.new("RGB", (width, height), background)
+    sheet = Image.new("RGB", (width, height), "white" if background == "blur" else background)
     draw = ImageDraw.Draw(sheet)
-    size = max(14, round(min(cell_w, cell_h) * 0.07))
-    font = next((ImageFont.truetype(f, size) for f in media_tools.FONTS if Path(f).exists()), None) or ImageFont.load_default(size)
+    size = max(16, round(min(cell_w, cell_h) * 0.1))
+    bold = ("/System/Library/Fonts/Supplemental/Arial Bold.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
+    font = next((ImageFont.truetype(f, size) for f in (*bold, *media_tools.FONTS) if Path(f).exists()), None) or ImageFont.load_default(size)
     for i, path in enumerate(pictures):
         pic = Image.open(path).convert("RGB")
-        scale = min(cell_w / pic.width, cell_h / pic.height)
-        pic = pic.resize((max(1, round(pic.width * scale)), max(1, round(pic.height * scale))), Image.LANCZOS)
         x0, y0 = (i % cols) * (cell_w + gap), (i // cols) * (cell_h + gap)
-        x, y = x0 + (cell_w - pic.width) // 2, y0 + (cell_h - pic.height) // 2
-        sheet.paste(pic, (x, y))
+        if background == "blur":
+            cover = max(cell_w / pic.width, cell_h / pic.height)
+            wide = pic.resize((round(pic.width * cover) + 1, round(pic.height * cover) + 1), Image.LANCZOS)
+            left, top = (wide.width - cell_w) // 2, (wide.height - cell_h) // 2
+            bg = wide.crop((left, top, left + cell_w, top + cell_h)).filter(ImageFilter.GaussianBlur(22))
+            sheet.paste(Image.blend(bg, Image.new("RGB", bg.size, (0, 0, 0)), 0.25), (x0, y0))
+        band = 0
         if labels and i < len(labels) and labels[i]:
-            pad = round(size * 0.4)
             box = draw.textbbox((0, 0), labels[i], font=font)
-            draw.rectangle((x + pad, y + pad, x + pad * 3 + box[2] - box[0], y + pad * 3 + box[3] - box[1]), fill=(0, 0, 0))
-            draw.text((x + pad * 2 - box[0], y + pad * 2 - box[1]), labels[i], font=font, fill="white")
+            band = (box[3] - box[1]) + round(size * 0.9)
+        scale = min(cell_w / pic.width, (cell_h - band) / pic.height)
+        fitted = pic.resize((max(1, round(pic.width * scale)), max(1, round(pic.height * scale))), Image.LANCZOS)
+        x, y = x0 + (cell_w - fitted.width) // 2, y0 + band + (cell_h - band - fitted.height) // 2
+        sheet.paste(fitted, (x, y))
+        if band:
+            draw.rectangle((x0, y0, x0 + cell_w - 1, y0 + band - 1), fill=(20, 20, 20))
+            draw.text((x0 + (cell_w - (box[2] - box[0])) // 2 - box[0], y0 + (band - (box[3] - box[1])) // 2 - box[1]),
+                      labels[i], font=font, fill="white")
     sheet.save(out)
     return out
 
@@ -249,14 +261,16 @@ def register_tool_media(mcp: FastMCP) -> None:
             "stays whole and unchanged (scaled to fit, never cropped, stretched or redrawn); a before-and-after, a "
             "comparison, a collage. 0 credits. `pictures`: file_paths, URLs or finished image project ids, in order "
             "(left to right, top to bottom). `aspect`: 16:9, 1:1, 9:16 or 4:5. `labels`: one per picture, drawn exactly "
-            "at its top-left (for example ['Before', 'After']). `gap` in pixels; `background` a colour. Returns "
+            "in a bold band across the top of its picture (for example ['Before', 'After'], or none for plain side by side). "
+            "`gap` in pixels; `background`: blur (default: each cell filled with a blurred copy of its picture, no empty space) "
+            "or a colour. Returns "
             "download_url and file_path."
         ),
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=True),
     )
     async def put_pictures_side_by_side(pictures: list[str], layout: Literal["row", "column", "grid"] = "row",
                                         aspect: Literal["16:9", "1:1", "9:16", "4:5"] = "16:9", labels: list[str] | None = None,
-                                        gap: int = 0, background: str = "white") -> dict:
+                                        gap: int = 0, background: str = "blur") -> dict:
         if not 2 <= len(pictures) <= 4:
             raise ToolError("Give 2 to 4 pictures.")
         with tempfile.TemporaryDirectory() as folder:
