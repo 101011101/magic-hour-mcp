@@ -105,7 +105,7 @@
         },
         {
           "job": "Music on the user's video",
-          "use": "none yet (MCP-29)",
+          "use": "generate_music or a voice, then add_sound_to_video (MCP-29)",
           "why": "It makes a separate file; nothing puts it on the video (E27a-c: 2.0)."
         }
       ],
@@ -334,7 +334,7 @@
       "antitype": [
         {
           "job": "Sound on the user's video",
-          "use": "none yet (MCP-29)",
+          "use": "generate_music or a voice, then add_sound_to_video (MCP-29)",
           "why": "It outputs sound only, no picture (E27, E28)."
         }
       ],
@@ -605,7 +605,7 @@
       "antitype": [
         {
           "job": "A voice-over with no presenter, or the original footage kept as it is",
-          "use": "none yet (MCP-29)",
+          "use": "generate_music or a voice, then add_sound_to_video (MCP-29)",
           "why": "It re-made the footage at 832x448, details changed (E28a); black clips and burned-in captions (E28c 1.7)."
         }
       ],
@@ -614,6 +614,34 @@
       ],
       "deciding_question": "Is a person on screen who should speak the words?",
       "bench": "5 runs, average 2.4."
+    },
+    "add_sound_to_video": {
+      "family": "video by code",
+      "does": "Lays music and/or a voice-over on the user's video by code: the picture is kept, nothing is generated, 0 credits. Built for tool management (MCP-29), on the shared media_tools.add_sound.",
+      "type": [
+        "Music under the user's clip (E27a-c).",
+        "A voice-over on the user's clip, or a narration in place of its sound (E28a-c).",
+        "Music under speech in the clip, the speech kept clear (E27c, radio calls): original=keep."
+      ],
+      "antitype": [
+        {
+          "job": "Sound on its own, no video",
+          "use": "mix_audio",
+          "why": "This tool needs a video."
+        },
+        {
+          "job": "Making the music or the voice",
+          "use": "generate_music, or the voice generator, first",
+          "why": "It only mixes sound that exists."
+        }
+      ],
+      "limits": [
+        "Not benchmarked yet; tested on generated test clips (tests/test_tool_media.py).",
+        "A voice longer than the video is read up to a little faster, then the last frame is held: the video gets longer.",
+        "original=keep keeps everything heard in the clip clear, not only speech (it finds sound by loudness)."
+      ],
+      "deciding_question": "Keep the video's own sound clear, lower it, or replace it?",
+      "bench": "0 runs."
     }
   },
   "free_models": {

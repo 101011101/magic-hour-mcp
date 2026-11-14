@@ -42,6 +42,7 @@ Rule (user, 2026-11-13): tool management does not touch video composition.
 - No changes to: `plan_request.py`, `video_production.py`, `video_production_tool.py`, `gates.py`, `media_tools.py`, `openapi_policies.py`. No imports from the first four. A helper that is needed is copied, not shared.
 - Tool knowledge goes in `plan_tool_call`'s output, never in the API tools' descriptions (`openapi_policies.py`): the host reads those during video composition too.
 - Read only: `upload_media`, `kept_files.py`, the benchmark runs.
+- New tools (`tool_media.py`) reuse the shared media code unchanged: `media_tools` (ffmpeg work) and `media_helpers_tool` (fetch a file, deliver a result). `media_helpers_tool` itself imports from `video_production_tool`; tool management imports nothing from the protected files directly.
 
 ## Open (decide with the user)
 
@@ -57,6 +58,7 @@ Rule (user, 2026-11-13): tool management does not touch video composition.
 | [tool notes](../../../mcp_magichour/tool_notes.json) | each tool: family, type (use it for), antitype (do not, use instead), limits, deciding question (24 tools) | `tool_notes.json` |
 | [question sheets](../../../mcp_magichour/question_sheets.json) | 7 request families, each with deciding and required rows, read-from cues, defaults and evidence | `question_sheets.json` |
 | [notes for Ray](notes-for-ray.md) | runner faults, the flux-2-klein line in `edit_image`, the dry-run free list | — |
+| new tools | `add_sound_to_video` (MCP-29) | `tool_media.py`, `tests/test_tool_media.py` |
 | [tool tests](tool-tests.md) | targeted runs that confirm the notes (wlive1: 14 cases) | — |
 | [failures](failures.md) | each tool-management item, old MCP against new, what failed | — |
 | [api tools](api-tools.md) | one MCP tool per Magic Hour API operation (upstream base) | `openapi_*.py`, `workflow_guidance.py` |

@@ -66,6 +66,8 @@ Chains of tools that exist today. Each chain goes in the tool notes and in `plan
 Later, after composition. Each new tool goes in a new file of tool management, not in the shared `media_helpers_tool.py`. Scores: old → new on the persona bench.
 
 - [ ] **MCP-29 · Sound on the user's video.** Lay music or a voice-over on a video, music lowered under speech. `mix_audio` makes sound only; `media_tools.add_sound` does it but only the production join uses it. Cases: E27a/b/c (2.0), E28a (2.0), E28b (1.7), E28c (1.3). First check: is routing these to the production join (`source`, MCP-14) enough?
+  - [x] 2026-11-13 · Built `add_sound_to_video` (`mcp_magichour/tool_media.py`, same switch as the planner): music and/or a voice-over on the user's video by code, 0 credits; the video's own sound kept clear (keep), lowered (under) or removed (replace); a long voice read a little faster, then the last frame held; loudness set. On the shared `media_tools.add_sound`, unchanged. 6 tests on generated clips (`tests/test_tool_media.py`). Sheets: `sound_on_video` now points to it (was a GAP). Found: `media_tools.join` calls `ffmpeg` by name (notes for Ray).
+  - [ ] Test on E27a-c, E28a-c (live run).
 - [ ] **MCP-30 · Pictures side by side.** Two or more pictures in one frame by code, no redraw. Cases: G35a (2.0), G35b (1.7).
 - [ ] **MCP-31 · A picture on a video.** A logo in a corner for the whole clip. Case: E29a (1.3).
 - [ ] **MCP-32 · A still as a video clip.** A card of N seconds, to join to a clip. Case: E29b (2.0, old only).

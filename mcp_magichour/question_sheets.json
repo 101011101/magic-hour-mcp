@@ -377,7 +377,8 @@
         "join_videos",
         "get_last_frame",
         "create_video_from_image",
-        "edit_video"
+        "edit_video",
+        "add_sound_to_video"
       ],
       "settings": {
         "create_video_from_image": {
@@ -496,18 +497,21 @@
         },
         {
           "id": "sound_on_video",
-          "kind": "deciding",
+          "kind": "required",
           "applies": "music or a voice-over on the user's video",
-          "ask": "I can make the music (or the voice) as a separate file, but I can't put it on your video yet. Do you want the file?",
+          "ask": "Should your video's own sound stay clear with the music under it, be lowered, or be replaced by the new sound?",
           "read_from": [
-            "'Add music to this clip', 'put a voice-over on this'."
+            "'Keep my voice', 'under the radio calls', 'keep the conversation' → keep.",
+            "'Replace the sound', 'instead of the conversation', 'new soundtrack' → replace.",
+            "'Add some music' alone → under."
           ],
           "answers": {
-            "yes": "generate_music (or the voice generator) as a file; say how to add it.",
-            "no": "Stop."
+            "keep": "Make the sound (generate_music, or the voice generator), then add_sound_to_video original=keep.",
+            "under": "Make the sound, then add_sound_to_video original=under.",
+            "replace": "Make the sound, then add_sound_to_video original=replace."
           },
-          "default": "Offer the file.",
-          "why": "GAP MCP-29: E27a-c 2.0, E28a-c 1.3 to 2.0. Check first whether video composition's join can do it (MCP-14)."
+          "default": "keep when the video has speech, else under.",
+          "why": "MCP-29, add_sound_to_video (2026-11-13): E27a-c 2.0 and E28a-c 1.3 to 2.0 had no tool. Not benchmarked yet."
         },
         {
           "id": "logo_or_card",
@@ -623,7 +627,8 @@
         "create_lip_sync_video",
         "create_spoken_ad_video",
         "trim_media",
-        "reframe_media"
+        "reframe_media",
+        "add_sound_to_video"
       ],
       "settings": {
         "create_talking_photo": {
@@ -644,7 +649,7 @@
           "answers": {
             "photo": "create_talking_photo.",
             "video with a presenter": "create_lip_sync_video; tell the user the footage may be re-made.",
-            "no presenter": "Voice-over: see change_video sound_on_video (GAP MCP-29)."
+            "no presenter": "Voice-over on the video: make the voice, then add_sound_to_video (change_video sound_on_video)."
           },
           "default": "—",
           "why": "Ray's finding: narration with a presenter uses lip sync, without one the voice cloner. create_lip_sync_video antitype (E28a, E28c)."
@@ -698,7 +703,8 @@
         "trim_media",
         "mix_audio",
         "join_videos",
-        "ai_voice_generator_create_audio"
+        "ai_voice_generator_create_audio",
+        "add_sound_to_video"
       ],
       "settings": {
         "generate_music": {
@@ -715,7 +721,7 @@
           ],
           "answers": {
             "on its own": "This sheet.",
-            "on the video": "change_video sound_on_video (GAP MCP-29)."
+            "on the video": "Make the sound, then add_sound_to_video (change_video sound_on_video)."
           },
           "default": "—",
           "why": "E27a-c."
