@@ -94,6 +94,7 @@ User: call the planner only when the answer would materially change the result. 
 - Check run w24on-r4, 15 chats, 689 credits: where the planner was used it was called once (before: 2 to 3). Clear requests skipped it (C14c, J54b, J50a 4). Held: B13b 4, C14a 4 (head swap), E26a 4; B13a 3. Average 3.17 (planner always 3.25, off 2.81; one run). Time per chat: no clear change (78 s vs 74 s; a few long chats).
 - Lost: A01a, vague user, 'make a product pic of a water bottle': the host found it clear, skipped the planner and generated a steel bottle on grey (2; was 4, 4, 4).
 - After d70cda1, A01a three runs: 4, 4, 4 (30 credits).
+- After the look row (4f8c397), A01a three runs: 4, 4, 4 (30 credits). The planner asks look, exact words and shape every time; the prompt carries 'matte black … marble … soft light' word for word.
 
 ## Setup faults found (tell Ray)
 
