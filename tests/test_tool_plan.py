@@ -65,13 +65,23 @@ class PlanTests(unittest.TestCase):
         with self.assertRaises(ToolError):
             tool_plan.plan("faces", "put my face on this", {"photo_or_video": "ask"})
 
-    def test_at_most_three_questions_the_rest_defaulted(self):
-        out = tool_plan.plan("new_picture", "make me a picture", {"shape": "ask", "exact_words": "ask",
+    def test_every_open_question_in_one_batch_no_limit(self):
+        """User, 2026-11-13: no question limit; one batch."""
+        out = tool_plan.plan("new_picture", "make me a picture", {"look": "ask", "shape": "ask", "exact_words": "ask",
                              "several_sizes": "ask", "transparent": "ask", "meme_kind": "n/a"})
         self.assertFalse(out["ready"])
-        self.assertEqual(len(out["questions"]), 3)
-        self.assertEqual([d["id"] for d in out["defaulted"]], ["transparent"])
+        self.assertEqual(len(out["questions"]), 5)
+        self.assertNotIn("defaulted", out)
         self.assertTrue(all(q["if_skipped"] for q in out["questions"]))
+
+    def test_never_a_second_round(self):
+        """After the user was asked once, a row still marked 'ask' takes its default."""
+        out = tool_plan.plan("new_picture", "make me a picture", {"look": "matte black on marble", "shape": "ask"},
+                             questions_asked=True)
+        self.assertTrue(out["ready"])
+        shape = next(d for d in out["decisions"] if d["id"] == "shape")
+        self.assertTrue(shape["tell_the_user"])
+        self.assertEqual(shape["value"], "1:1.")
 
     def test_square_from_the_users_words_gives_reframe_not_edit_image(self):
         """B12a: 'make this wide photo square' → keep, fill → reframe_media, with its notes."""
@@ -205,7 +215,7 @@ class SwitchTests(unittest.TestCase):
                 async with Client(create_mcp()) as client:
                     return next(t for t in await client.list_tools() if t.name == "plan_tool_call").inputSchema
         s = asyncio.run(schema())
-        self.assertEqual(set(s["properties"]), {"family", "request", "answers"})
+        self.assertEqual(set(s["properties"]), {"family", "request", "answers", "questions_asked"})
         self.assertIn("change_video", json.dumps(s["properties"]["family"]))
 
 

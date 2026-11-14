@@ -4,7 +4,7 @@ Tool management is separate from video composition (mcp-upgrade/prd/tool-managem
 module imports nothing from plan_request, video_production, video_production_tool or gates.
 
 The host model fills a question sheet (question_sheets.json) from the user's words; this code checks it and returns
-either the questions still open (at most 3) or the plan: what each answer means, the family's free-tier settings, and
+either the questions still open (one batch, once) or the plan: what each answer means, the family's free-tier settings, and
 the notes (tool_notes.json) for every tool the plan names. The server calls no model and spends no credits.
 Switch: MAGIC_HOUR_TOOL_PLAN=on registers the tool; anything else (the default) leaves the server as before.
 """
@@ -22,7 +22,6 @@ from fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
 HERE = Path(__file__).parent
-MAX_QUESTIONS = 3
 ASK, YOUR_CALL, NOT_APPLICABLE = "ask", "your_call", "n/a"
 Family = Literal["new_picture", "change_picture", "faces", "change_video", "new_video", "talking", "sound"]
 
@@ -85,7 +84,7 @@ def _sheet_view(family: str) -> dict:
     }
 
 
-def plan(family: str, request: str, answers: dict[str, str] | None) -> dict:
+def plan(family: str, request: str, answers: dict[str, str] | None, questions_asked: bool = False) -> dict:
     """Check the host's answers against the family's sheet; return the sheet, the open questions, or the plan."""
     all_sheets = sheets()["families"]
     if family not in all_sheets:
@@ -116,15 +115,17 @@ def plan(family: str, request: str, answers: dict[str, str] | None) -> dict:
 
     # Only rows the host marks 'ask' go to the user (user, 2026-11-13: ask only when the answer would materially
     # change the result). A row left out takes its default (and the user is told) or, if it has `applies`, does not apply.
+    # One batch, no limit on its size, and only once (user, 2026-11-13): after the user was asked, rows still marked
+    # 'ask' take their default instead of a second round.
     open_rows = [r for i, r in rows.items() if answers.get(i) == ASK]
-    if open_rows:
-        asked, defaulted = open_rows[:MAX_QUESTIONS], open_rows[MAX_QUESTIONS:]
+    if open_rows and not questions_asked:
         return {"ready": False, "stage": "ask_the_user", "family": family,
-                "questions": [{"id": r["id"], "ask": r["ask"], "if_skipped": r["default"]} for r in asked],
-                "defaulted": [{"id": r["id"], "default": r["default"]} for r in defaulted],
-                "next": ("Ask the user these questions in ONE message, numbered, each with what happens if they skip it. "
-                         f"Then call again with their answers ('{YOUR_CALL}' for any they hand over). Rows in `defaulted` "
-                         f"take their default: send '{YOUR_CALL}' for them and tell the user what was chosen.")}
+                "questions": [{"id": r["id"], "ask": r["ask"], "if_skipped": r["default"]} for r in open_rows],
+                "next": ("Ask the user ALL these questions in ONE message, numbered, in plain words, each with what "
+                         "happens if they skip it. This is the only time the user is asked. Then call again with their "
+                         f"answers ('{YOUR_CALL}' for any they skip or hand over) and questions_asked=true.")}
+    if questions_asked:
+        answers = {i: (YOUR_CALL if v == ASK else v) for i, v in answers.items()}
 
     decisions, texts = [], []
     for i, r in rows.items():
@@ -191,11 +192,14 @@ def register_tool_plan(mcp: FastMCP) -> None:
             "brackets):\n" + sheet_index() + "\n"
             "Answer a row with an option, the user's own words, 'your_call' or 'n/a'; mark 'ask' ONLY for a row "
             "whose answer would change the result and that the user's words and files do not answer. Rows you leave "
-            "out take their default and you tell the user. Returns at most 3 questions, or the plan: which tools in "
+            "out take their default and you tell the user. Mark as few rows 'ask' as you can. Returns every open question "
+            "in one batch (ask the user once, all together), or the plan: which tools in "
             "order, free-tier settings (free models only), each tool's known faults, and gaps (what no tool can do). Call with the "
             "family only to see the full sheet. Read-only; spends no credits and creates nothing."
         ),
         annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False),
     )
-    def plan_tool_call(family: Family, request: str, answers: dict[str, str] | None = None) -> dict:
-        return plan(family, request, answers)
+    def plan_tool_call(family: Family, request: str, answers: dict[str, str] | None = None,
+                       questions_asked: bool = False) -> dict:
+        """questions_asked: true once the user has been asked this plan's questions; nothing is asked again."""
+        return plan(family, request, answers, questions_asked)

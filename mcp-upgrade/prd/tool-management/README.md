@@ -24,7 +24,7 @@ When (user, 2026-11-13): only when the answer would materially change the result
    - Deciding rows pick the tool inside the family. Example from video composition: a presenter on screen → lip sync; no presenter → voice cloner.
    - Required rows must be right, or the result fails (aspect, which face, the time range).
    - Every other parameter is loose: the server's default, never asked.
-3. **Ask what is left open.** Only deciding and required rows, in one batch, with a cap.
+3. **Ask what is left open.** Only rows whose answer would change the result and that the user's words and files do not answer. All in one batch, no limit on its size, asked once: after the user answers, anything still open takes its default (user, 2026-11-13).
 4. **Return** the tool (or the tools in order), its parameters, and the notes on that tool's known faults. The host then calls the API tool directly.
 
 A few tools in order on existing media (trim, then subtitles) is tool management. A multi-clip film made from text and references is video composition.

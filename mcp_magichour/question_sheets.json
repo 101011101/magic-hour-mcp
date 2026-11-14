@@ -2,7 +2,7 @@
   "_about": "Question sheets for tool management (MCP-22). Read by plan_tool_call (MCP-23, not built yet) with tool_notes.json. One sheet per request family: what the user asks for, not how the tool works. Each row: kind (deciding = picks the tool; required = the result fails if it is wrong), ask (plain words for the user), read_from (how to answer it from the user's words or files first), answers (what each answer means for the tool and settings), default (used on 'your call' or when the user does not answer), why (the tool note and benchmark cases behind it). A row is asked only when it applies and the user's words and files do not answer it. Drafted 2026-11-13; not yet confirmed by the user.",
   "rules": [
     "Answer every row from the user's words and attached files first. Ask only the deciding and required rows that are still open.",
-    "Ask at most 3 questions, in one message, in plain words. Each says what happens if the user skips it.",
+    "Ask as few questions as possible: only those whose answer would change the result and that the user's words and files do not answer. Ask them all together in one message, once, in plain words, each with what happens if the user skips it. Never ask a second round: anything still open after the user answers takes its default.",
     "'Your call', 'you pick', or no answer: use the row's default and tell the user what was chosen.",
     "Keep every concrete detail the user gave (counts, colours, materials, names, exact words) in the tool's prompt word for word. A01a: 'matte black on marble' became a silver bottle on white when the details were dropped.",
     "Free-tier models only (tool_notes.json, free_models). Never name a paid model.",
