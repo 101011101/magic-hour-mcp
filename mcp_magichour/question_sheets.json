@@ -5,7 +5,7 @@
     "Ask at most 3 questions, in one message, in plain words. Each says what happens if the user skips it.",
     "'Your call', 'you pick', or no answer: use the row's default and tell the user what was chosen.",
     "Keep every concrete detail the user gave (counts, colours, materials, names, exact words) in the tool's prompt word for word. A01a: 'matte black on marble' became a silver bottle on white when the details were dropped.",
-    "Prefer free-tier models (tool_notes.json, free_models): they cost less. Use a paid model only when it would clearly improve the result (or the user asks for it) and the user's plan allows it; tell the user the extra cost first.",
+    "Free-tier models only (tool_notes.json, free_models). Never name a paid model.",
     "Keep the user's media unless the user asked for it to be redrawn or re-made.",
     "When no tool does the job (a GAP row), say so plainly and offer the nearest real option. Do not send the user's media through a tool that redraws it instead.",
     "A request for a film of several shots or scenes goes to video composition (plan_request), not to these sheets."

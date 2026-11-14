@@ -31,7 +31,7 @@ A few tools in order on existing media (trim, then subtitles) is tool management
 
 ## Tier
 
-- Free-tier models first, because they cost less (user, 2026-11-13). A paid model only when it clearly improves the result (or the user asks), the user's plan allows it, and the user is told the extra cost first. The sheets' settings name free models; free models per tool: `free_models` in [tool notes](../../../mcp_magichour/tool_notes.json). The tests so far ran on the free plan only, so nothing is measured yet about when a paid model is worth it.
+- Free-tier models only (user, 2026-11-13, final). The planner never names a paid model. Free models per tool: `free_models` in [tool notes](../../../mcp_magichour/tool_notes.json).
 
 ## Isolation
 
@@ -46,7 +46,7 @@ Rule (user, 2026-11-13): tool management does not touch video composition.
 ## Open (decide with the user)
 
 - Name of the planner: `plan_tool_call` (proposed).
-- Decided (user, 2026-11-13): order of work is the existing tools first, then tool composition (chains of existing tools), then new tools. New tools are tool-management tickets MCP-29 to MCP-35; composition is MCP-25 to MCP-28. See [tickets](../../tickets/TICKETS.md).
+- Decided (user, 2026-11-13): order of work is the existing tools first, then new tools (MCP-29 to MCP-35), then tool composition (chains of existing tools, MCP-25 to MCP-28). See [tickets](../../tickets/TICKETS.md).
 - `media_helpers_tool.py` holds those tools and is shared with video composition. New tools for tool management go in a new file, so the isolation rule holds.
 - Families (2026-11-13, proposed): the sheets use 7 request families (new picture, change picture, faces, change video, new video, talking, sound). The notes keep tool families (how a tool works); a sheet points to the tools behind it.
 

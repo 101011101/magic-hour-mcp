@@ -11,7 +11,7 @@
 
 A separate workflow. Changes no video composition file ([rule](../prd/tool-management/README.md#isolation)).
 
-Order (user, 2026-11-13): first make the existing tools very good (MCP-21 to MCP-24). Then tool composition (MCP-25 to MCP-28), then new tools (MCP-29 to MCP-35). With good single tools, composition and new tools are easier.
+Order (user, 2026-11-13): first make the existing tools very good (MCP-21 to MCP-24). Then new tools (MCP-29 to MCP-35), then tool composition (MCP-25 to MCP-28).
 
 #### 1. Existing tools
 
@@ -32,6 +32,7 @@ Order (user, 2026-11-13): first make the existing tools very good (MCP-21 to MCP
   - [x] 2026-11-13 · Best settings from the bench's recorded calls (4,565 calls, compared within the same case): `edit_image` and `generate_image` do best with `qwen-image-2.1` and worst with `flux-2-klein` (lost 15 of 19 and 11 of 14 cases); `ai-illustration-generator` for illustrations (8 of 8), never `ai-photo-generator` (0 of 5); `ltx-2.5` over default for text to video (11 of 16). The upstream `edit_image` description suggests `flux-2-klein` to Free accounts. In `tool_notes.json`, `best_settings`.
   - [x] 2026-11-13 · User: free-tier models only. The recommended models (`qwen-image-2.1`, `qwen-edit`, `ltx-2.5`) are free-tier; free models per tool listed in `tool_notes.json` (`free_models`).
   - [x] 2026-11-13 · Corrected (user): free models are the priority because they cost less, not a hard limit. Rules, notes, planner text and README now say: free first; a paid model only when it clearly improves the result (or the user asks), the plan allows it, and the user is told the cost. Not measured yet: when a paid model is worth it (all tests ran on the free plan).
+  - [x] 2026-11-13 · Final (user): free-tier models only. Rules, notes, planner text, README and test back to free only; no paid-model comparison.
   - [x] 2026-11-13 · Tool tests, run wlive1: 14 cases, happy user, 699 credits. Average 2.4 → 3.8. Ray's code tools confirmed on shape, words and trim; head swap 1.5 → 4 on C14b. [Results](../prd/tool-management/tool-tests.md). Setup faults for Ray listed there.
   - [x] 2026-11-13 · Open checks: head swap on C14a is clearly the right person, face swap a blend (10 credits); C17a run again: 4 (first run 2). Tool tests total 1,101 credits.
   - 12 API tools never called and asked for by no case (for example `colorize_photo`, `swap_head_in_photo`, `restyle_video`): short notes from their descriptions; tests later.
