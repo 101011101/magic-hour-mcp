@@ -169,11 +169,11 @@
         }
       ],
       "limits": [
-        "C14a not yet tested with head swap."
+        "Choosing one person among several is not a setting; ask which person first (C14b worked)."
       ],
       "deciding_question": "Which picture gives the head, and which picture (and which person) receives it?",
-      "bench": "0 runs in the persona bench; 1 test run (wlive1, C14b: 4).",
-      "test": "Test run wlive1: C14b 1.5 → 4 (asked which person, then head swap onto the right one). C14a used swap_face_in_photo (4), so head swap on C14a is still untested."
+      "bench": "0 runs in the persona bench; 2 tests (C14b 4 in wlive1; C14a by eye, wlive1-direct).",
+      "test": "Test run wlive1: C14b 1.5 → 4 (asked which person, then head swap onto the right one). C14a used swap_face_in_photo (4), so head swap on C14a is still untested. C14a, direct call (wlive1-direct): the head swap is clearly the woman in the portrait (curly hair, face shape), suit, stars and retro look kept; the agent's face swap from wlive1 kept the astronaut's head and looked like a blend."
     },
     "swap_face_in_photo": {
       "family": "faces",
@@ -577,11 +577,13 @@
         }
       ],
       "limits": [
-        "Resolution 480p or 720p."
+        "Resolution 480p or 720p.",
+        "The clip is as long as asked even when the speech is shorter: an 8 s clip with 4.5 s of speech ends with 3 s of silence (wlive2 C17a). Ask the length from the line, or trim_media after.",
+        "Lip movement failed in 1 of 2 test runs."
       ],
       "deciding_question": "The exact line, and the shape?",
       "bench": "Right tool: 5 runs, average 4.0.",
-      "test": "Test run wlive1: C17a 4 → 2: mouth closed in the sampled frames, lip movement not evident. One run; earlier runs scored 4."
+      "test": "Test runs: wlive1 C17a 2 (mouth closed in the sampled frames); wlive2 C17a 4 (mouth moves with the speech, square, no captions). One bad run in two."
     },
     "create_spoken_ad_video": {
       "family": "talking video",

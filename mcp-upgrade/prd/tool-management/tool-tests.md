@@ -24,12 +24,18 @@ Targeted runs on chosen benchmark cases, to confirm the [tool notes](../../../mc
 | C14a my face on the astronaut | 4 | 4 | `swap_face_in_photo` (not head swap) |
 | B13a restore an old scan | 2 | 3 | `upscale_image` preserve |
 | A05a LinkedIn headshot | 4.5 | 5 | `edit_image` (`flux-2-klein`) |
-| C17a photo speaks a line | 4 | 2 | voice → `mix_audio` → `create_talking_photo` (mouth did not move) |
+| C17a photo speaks a line | 4 | 2, then 4 (wlive2) | voice → `mix_audio` → `create_talking_photo` (mouth did not move) |
 | **Average** | **2.4** | **3.8** | |
 
 Confirmed: Ray's code tools fix the shape, words and trim cases when the agent can read the file; music needs 15 s then a cut; head swap after asking which person. Not confirmed: C17a dropped (one run). Still weak: picking "the best part" of a clip blind (E26b), faces on an old photo (B13a).
 
 Grader faults seen again: the aspect and length checks measure every saved file, including the source and intermediate files (E25a, J49c, F30a, C17a), so a check fails although the delivered file is right.
+
+## Open checks (2026-11-13)
+
+- **C14a with head swap**, direct call, 10 credits, judged by eye (`wlive1-direct/C14a-sheet.jpg`): the head swap is clearly the woman in the portrait (curly hair, face shape), with the suit, stars and retro look kept. The face swap from wlive1 kept the astronaut's head and looked like a blend. Confirms head swap for faces in photos.
+- **C17a again** (run wlive2), 392 credits: score 4 (the first run: 2). The mouth moves with the speech, square, no captions. The first run's closed mouth was one bad run in two. New limit: the speech lasts about 4.5 s of the 8 s clip, so the end is 3 s of silence.
+- Spend for all tool tests so far: 1,101 credits (684 + 15 + 10 + 392).
 
 ## Setup faults found (tell Ray)
 
