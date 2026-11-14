@@ -199,6 +199,17 @@ class LookRowTests(unittest.TestCase):
         self.assertIn("new_picture: look,", tool_plan.sheet_index())
 
 
+class CompositionTests(unittest.TestCase):
+    def test_several_sizes_decides_and_shape_does_not_contradict_it(self):
+        """Dry run wcomp G36a: shape said one generation per shape, several_sizes said reframe one."""
+        out = tool_plan.plan("new_picture", "a coffee ad in 1:1, 9:16 and 16:9", {
+            "look": "steaming coffee cup, cream and dark green", "exact_words": "Daybreak Coffee", "shape": "1:1, 9:16, 16:9",
+            "several_sizes": "several", "transparent": "no"})
+        d = {x["id"]: x["instruction"] for x in out["decisions"]}
+        self.assertIn("SAME prompt", d["several_sizes"])
+        self.assertIn("several_sizes decides", d["shape"])
+
+
 class SwitchTests(unittest.TestCase):
     def test_off_by_default(self):
         env = {k: v for k, v in os.environ.items() if k != "MAGIC_HOUR_TOOL_PLAN"}
