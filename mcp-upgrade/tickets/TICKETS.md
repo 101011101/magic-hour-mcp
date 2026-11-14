@@ -47,6 +47,7 @@ Order (user, 2026-11-13): first make the existing tools very good (MCP-21 to MCP
   - [x] 2026-11-13 · Row `look` added to new_picture (colour, material, setting, light; default a clean product look). In those runs the planner asked words, shape, transparency; the look was asked by the host on its own. 28 tests pass.
   - [x] 2026-11-13 · Re-check A01a with the look row, three runs (30 credits): 4, 4, 4. The planner now asks look, exact words and shape every time; 'matte black on marble, soft light' reaches the prompt word for word.
   - [ ] Decide the switch default (user). Before turning it on: a check with ChatGPT as host (all runs used Claude).
+  - [ ] ChatGPT check, paused (user, 2026-11-13). Ready to run with Ray's GPT driver (`V2/bench/mcp/run.mjs --local --mcp-url`) once a working OPENAI_API_KEY is in `~/mh-bench/.env` (the key given was refused: 401).
 - Folded in: MCP-17 (jobs with no tool) feeds MCP-20 and MCP-29 to MCP-35. MCP-12 (trim) is tool management; `trim_media` exists since cbbe722. MCP-16 (what may not be guessed) feeds the required rows.
 
 #### 2. Tool composition (combining existing tools)
