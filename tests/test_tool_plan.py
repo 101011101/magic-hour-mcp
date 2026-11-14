@@ -107,6 +107,28 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(out["settings"]["generate_image"]["model"], "qwen-image-2.1")
 
 
+class DryRunFixTests(unittest.TestCase):
+    """Found in the dry run w24on (2026-11-13)."""
+
+    def test_the_words_themselves_answer_exact_words(self):
+        out = tool_plan.plan("new_picture", "logo KwickFixx", {"exact_words": "KwickFixx", "shape": "1:1",
+                             "several_sizes": "one", "transparent": "no", "meme_kind": "n/a"})
+        d = next(d for d in out["decisions"] if d["id"] == "exact_words")
+        self.assertEqual(d["value"], "KwickFixx")
+        self.assertIn("add_words_to_media", d["instruction"])
+
+    def test_consent_none_is_an_option(self):
+        out = tool_plan.plan("faces", "my face", {"consent": "none", "photo_or_video": "photo", "which_person": "n/a",
+                             "which_part": "n/a", "headshot_look": "n/a"})
+        self.assertTrue(out["ready"])
+
+    def test_side_by_side_is_a_gap(self):
+        answers = {r["id"]: "n/a" for r in tool_plan.sheets()["families"]["change_picture"]["rows"] if "applies" in r}
+        answers.update({"keep_or_redraw": "keep", "several_in_one": "separately"})
+        out = tool_plan.plan("change_picture", "before and after side by side", answers)
+        self.assertIn("several_in_one", out["gaps"])
+
+
 class SwitchTests(unittest.TestCase):
     def test_off_by_default(self):
         env = {k: v for k, v in os.environ.items() if k != "MAGIC_HOUR_TOOL_PLAN"}

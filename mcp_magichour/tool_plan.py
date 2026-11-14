@@ -59,6 +59,11 @@ def _match(row: dict, value: str) -> str | None:
     return None
 
 
+def _words_option(row: dict) -> str | None:
+    """The 'exact words' option of a deciding row: hosts send the words themselves (dry run w24on, A02d, A06b)."""
+    return next((k for k in options(row) if k.lower() == "exact words"), None)
+
+
 def _tools_named(texts: list[str]) -> list[str]:
     known = notes()["tools"]
     found: list[str] = []
@@ -105,7 +110,8 @@ def plan(family: str, request: str, answers: dict[str, str] | None) -> dict:
         r = rows[i]
         if value == NOT_APPLICABLE and "applies" not in r:
             raise ToolError(f"Row {i} always applies; give a value, '{YOUR_CALL}' or '{ASK}'.")
-        if r["kind"] == "deciding" and value not in (ASK, YOUR_CALL, NOT_APPLICABLE) and _match(r, value) is None:
+        if r["kind"] == "deciding" and value not in (ASK, YOUR_CALL, NOT_APPLICABLE) and _match(r, value) is None \
+                and not _words_option(r):
             raise ToolError(f"Row {i} ({r['kind']}): {value!r} is not an option. Options: {', '.join(options(r))}.")
 
     open_rows = [r for i, r in rows.items() if answers.get(i, ASK) == ASK and "applies" not in r] + \
@@ -125,6 +131,8 @@ def plan(family: str, request: str, answers: dict[str, str] | None) -> dict:
         if value == NOT_APPLICABLE:
             continue
         key = _match(r, value) if value != YOUR_CALL else None
+        if key is None and value != YOUR_CALL and r["kind"] == "deciding":
+            key = _words_option(r)   # the user's own words for an 'exact words' option
         if key is not None:
             instruction = r["answers"][key]
         else:   # 'your call', or a required row's own words: the default, and every option to apply it with
