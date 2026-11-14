@@ -413,7 +413,11 @@ def grade(chat_dir: Path, model: str, force: bool, new_checklist: bool) -> dict 
 
     # 1. checklist (cached)
     key = hashlib.sha256(json.dumps(turns, sort_keys=True).encode()).hexdigest()[:16]
-    cache = out_dir / "checklist.items.json"
+    # one checklist per case, shared by every run of it, so runs are scored against the same checks (the same case got
+    # 6 checks in one run and 3 in another when each run built its own)
+    shared = OUT_ROOT / "_checklists" / f"{chat.get('item') or cid}.json"
+    shared.parent.mkdir(parents=True, exist_ok=True)
+    cache = shared
     cached = json.loads(cache.read_text()) if cache.exists() else None
     if cached and cached.get("key") == key and not new_checklist:
         checks = cached["checks"]
@@ -427,6 +431,7 @@ def grade(chat_dir: Path, model: str, force: bool, new_checklist: bool) -> dict 
             checks.append({"id": f"C{i + 1}", "turn": c["turn"], "quote": c["quote"], "check": c["check"],
                            "superseded_by": c.get("superseded_by_turn"), "quote_found": norm(c["quote"]) in norm(src)})
         cache.write_text(json.dumps({"key": key, "model": model, "checks": checks}, indent=1))
+    (out_dir / "checklist.items.json").write_text(json.dumps({"key": key, "shared": str(shared), "checks": checks}, indent=1))
 
     # 2. deliverable
     sel = select_deliverables(chat_dir)

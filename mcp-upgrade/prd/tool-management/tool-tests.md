@@ -138,6 +138,24 @@ User: call the planner only when the answer would materially change the result. 
 
 - The audio grades are low because `voices_list` saved about 100 preview clips first and the grader read only the first files; the final audio was not judged.
 
+## Generation first, run wgen (2026-11-14)
+
+- The user's review of the results page: words in a designed picture are generated, not drawn on top; a picture's new shape by extending it; fewest calls; deterministic tools last. 13 cases, happy user, one run each. Dry runs first: the rule only reached hosts that called the planner (A02b, G37a, B12b, G33b skipped it); the planner's description now says to call it for any picture with words and before add_words_to_media or reframe_media (f764753); re-dry clean. Live: 410 credits.
+- Every generated word was spelled right with qwen-image-2.1 (KwickFixx, the picnic flyer's date, time and place, all three slides, MORNINGS MADE EASY). Most picture cases took one call instead of two.
+- Graded with the checklist grader (`scripts/checklist_grade.py`), one shared checklist per case, against the previous new run of the same case:
+
+| Case | Before | Now | |
+|---|---|---|---|
+| A02a, A02b, A02d, A03a, A06a, A06b | all | all | one generation each |
+| G33b thumbnail from a frame | 5/7 | **7/7** | recognisable face, big letters (before: face redrawn, words thin) |
+| G34a carousel set | 8/8 | 7/8 | borders differ between separately generated slides |
+| G37a poster, story, reel | 14/14 | 13/14 | the reel is photoreal, the poster illustrated |
+| J49b text 1.5x bigger, same font and centre | 9/11 | 8/11 | regeneration cannot hit an exact size, font and centre |
+| B12b, B07c, G35a | all | all | B12b: the user asked for a blurred copy, so reframe_media is right |
+| **Pass rate** | **96%** | **96%** | |
+
+- Weak spots of generation first: keeping a set consistent (separate generations) and exact follow-up edits. The checklist grader is near its ceiling on clear requests; quality shows in its notes, not its score.
+
 ## Setup faults found (tell Ray)
 
 - The runner uploads attachments straight to Magic Hour (`get_upload_urls`). Our code tools can only read files that went through `upload_media` (a kept copy), so every reframe, trim or words case fails for that reason alone. For this run the attachments were uploaded through `upload_media` and the chats pointed at them.

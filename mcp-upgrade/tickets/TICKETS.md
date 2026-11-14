@@ -14,6 +14,7 @@ A separate workflow. Changes no video composition file ([rule](../prd/tool-manag
 Order (user, 2026-11-13): first make the existing tools very good (MCP-21 to MCP-24). Then new tools (MCP-29 to MCP-35), then tool composition (MCP-25 to MCP-28).
 
 Tool priority (user, 2026-11-14, after reviewing the results page): generation tools first, because they cover more cases; deterministic code tools last, only when generation cannot do the job or the media must stay exactly as it is. Fewest tool calls. Words that are part of a designed picture (headline, poster, logo, thumbnail, slide, card) go in the generation prompt; add_words_to_media only for captions or overlays on existing media (B11a is right). A picture's new shape: extend it with edit_image first, reframe_media as the fallback (B12b). Done in the sheets, notes and planner rules; to re-test: A02a, A02b, A02d, A03a, A06a, A06b, G33b, G34a, G37a, J49b, B12b. Also fixed: adjust_colours warmth was too weak (B07c barely changed: red +4, blue −7); side by side filled white space (G35a): cells now filled with a blurred copy of the picture, bold label bands, labels optional.
+  - [x] 2026-11-14 · Re-tested (run wgen, 410 credits, checklist grader): pass rate 96% before and after; fewer calls; all generated words spelled right (qwen-image-2.1). Better: G33b. Weaker: sets made of separate generations (G34a, G37a) and exact follow-up edits (J49b). [Results](../prd/tool-management/tool-tests.md).
 
 #### 1. Existing tools
 
