@@ -9,19 +9,49 @@
 
 ### Tool management (user, 2026-11-13)
 
-A separate workflow. Changes no video composition file ([rule](../prd/tool-management/README.md#isolation)). In order:
+A separate workflow. Changes no video composition file ([rule](../prd/tool-management/README.md#isolation)).
+
+Order (user, 2026-11-13): first make the existing tools very good (MCP-21 to MCP-24). Then tool composition (MCP-25 to MCP-28), then new tools (MCP-29 to MCP-35). With good single tools, composition and new tools are easier.
+
+#### 1. Existing tools
 
 - [ ] **MCP-19 · Clean up the tool-management PRD.** [PRD](../prd/tool-management/README.md).
   - [x] 2026-11-13 · Flow (predict the family, fill the sheet, ask what is open, return tool + notes), the two sheets, the isolation rule. "How they meet" in ARCHITECTURE corrected: `plan_request` no longer sends edits to tool management.
-  - [ ] Decide: the planner's name (`plan_tool_call` proposed); missing tools (MCP-17) here or a separate track.
+  - [ ] Decide: the planner's name (`plan_tool_call` proposed).
+  - [x] 2026-11-13 · Decided (user): missing tools are tool-management tickets (MCP-29 to MCP-35), after the existing tools are good.
 - [ ] **MCP-20 · Failure list.** Each tool-management item: old against new, better / same / worse, tool called against the right tool, the failure. From the existing runs (`Benchmark/audit`, `Benchmark/personas`, MCP-17's failure modes), 0 credits. Then the user's notes. [List](../prd/tool-management/failures.md).
   - [x] 2026-11-13 · Scored from the audit page: 118 cases, 41 better · 33 same · 32 worse · 12 not run live. 10 patterns proposed (most low scores: no tool does the job, not a wrong pick). Next: the user's notes and the right tool for each case.
   - [x] 2026-11-13 · Proposed right tool for all 118 cases (`scripts/tool_right_tools.py`). Correction: the bench ran before cbbe722 added `reframe_media`, `trim_media`, `add_words_to_media`, `mix_audio`, so shape, exact words, watermark and trim may already be covered (not measured). 15 cases still hit a gap (re-checked against the follow-up turns of the J cases: still 15). Next: the user corrects the column and adds notes.
-- [ ] **MCP-21 · Tool behaviour tests → tool notes.** Run each tool on the cases the failure list points to. Write the notes file: what each tool does well, how it fails, the deciding question. Costs credits: a budget for each family, agreed first.
+- [ ] **MCP-21 · Tool notes for the existing tools.** What each tool does well, how it fails, the deciding question.
+  - Write them from the existing persona-bench runs first, 0 credits (user, 2026-11-13: the existing tools were already tested). Enough runs for: `edit_image` 302, `generate_image` 263, `create_video_from_text` 157, `create_video_from_image` 79, `generate_music` 43, `detect_faces` 41, `edit_video` 36, `add_subtitles_to_video` 34, `join_videos` 33, `get_last_frame` 26.
+  - Small tests only where the runs cannot decide, budget agreed first: `edit_image` or `generate_headshot` for a headshot (A05); `upscale_image` or `edit_image` to restore an old photo (B13a); `create_talking_photo` or lip sync (8 and 5 runs); what `translate_video` does (0 runs).
+  - Never run in the bench: `reframe_media`, `trim_media`, `add_words_to_media`, `mix_audio` (added in cbbe722 after the bench). Their test is the re-run of the cases they should fix (MCP-24).
+  - 12 API tools never called and asked for by no case (for example `colorize_photo`, `swap_head_in_photo`, `restyle_video`): short notes from their descriptions; tests later.
 - [ ] **MCP-22 · Families and question sheets.** Group the tools. For each family, the deciding rows and the required rows, from the notes.
 - [ ] **MCP-23 · Build `plan_tool_call`.** `mcp_magichour/tool_plan.py`, behind `MAGIC_HOUR_TOOL_PLAN` (default `off`). Contract tests in `tests/test_tool_plan.py`. A test that the build changes no video composition file.
 - [ ] **MCP-24 · Benchmark the planner.** Family predicted right, tool picked right, item scores against the old MCP and against the switch off. Ship only if not worse on tool management, and video composition unchanged.
-- Folded in: MCP-17 (jobs with no tool) feeds MCP-20 and MCP-21. MCP-12 (trim) is tool management. MCP-16 (what may not be guessed) feeds the required rows.
+- Folded in: MCP-17 (jobs with no tool) feeds MCP-20 and MCP-29 to MCP-35. MCP-12 (trim) is tool management; `trim_media` exists since cbbe722. MCP-16 (what may not be guessed) feeds the required rows.
+
+#### 2. Tool composition (combining existing tools)
+
+Chains of tools that exist today. Each chain goes in the tool notes and in `plan_tool_call`'s output as steps in order. Cases from the [failure list](../prd/tool-management/failures.md). After MCP-21 to MCP-24.
+
+- [ ] **MCP-25 · Make, then add exact words.** Make the picture or video without words, then `add_words_to_media`. Image models misspell; code does not. Cases: A01d, A02a–d, A03a–d, A06a–d, B11a/c/d, G33a/c, G34a–c, G36a/b, G39a, J49b, J50c, E29c (watermark).
+- [ ] **MCP-26 · Make or edit, then change the shape.** `reframe_media` after `generate_image`, `edit_image` or a video tool, which keep their own shape. Cases: B12a/b/d, E25a, J50a, J51b, G36a/b, G37a/b.
+- [ ] **MCP-27 · Cut and rebuild the user's video.** `trim_media`, `get_last_frame`, `create_video_from_image`, `reframe_media`, `join_videos` in order. Cases: E25b (trim per speaker, reframe each, join), E25c (reframe, then subtitles), E26a/b (best part, cut the boring parts), J49c (keep the first 5 s), J50b (keep the start, new ending from the last frame), C15a (trim, then face swap), G33b (a frame at a chosen time: trim to it, then last frame).
+- [ ] **MCP-28 · Build sound from parts.** Voice lines and music made one at a time, then `join_videos` (sound files) or `mix_audio`. Cases: F31b (two voices), F32a (voice over music), F32b (podcast of two hosts). Needs the voice generator (hidden upstream, MCP-11).
+
+#### 3. New tools (no tool does the job today)
+
+Later, after composition. Each new tool goes in a new file of tool management, not in the shared `media_helpers_tool.py`. Scores: old → new on the persona bench.
+
+- [ ] **MCP-29 · Sound on the user's video.** Lay music or a voice-over on a video, music lowered under speech. `mix_audio` makes sound only; `media_tools.add_sound` does it but only the production join uses it. Cases: E27a/b/c (2.0), E28a (2.0), E28b (1.7), E28c (1.3). First check: is routing these to the production join (`source`, MCP-14) enough?
+- [ ] **MCP-30 · Pictures side by side.** Two or more pictures in one frame by code, no redraw. Cases: G35a (2.0), G35b (1.7).
+- [ ] **MCP-31 · A picture on a video.** A logo in a corner for the whole clip. Case: E29a (1.3).
+- [ ] **MCP-32 · A still as a video clip.** A card of N seconds, to join to a clip. Case: E29b (2.0, old only).
+- [ ] **MCP-33 · Translated subtitles.** Subtitles in another language, the voice kept. `add_subtitles_to_video` writes the spoken language. First check: what `translate_video` does (never called in the bench). Case: E24b (2.0).
+- [ ] **MCP-34 · 4:5 shape.** `reframe_media` has 16:9, 9:16 and 1:1. Ask Ray first: it is his file. Case: B12c (1.0); also asked in A03, G34b, J50a.
+- [ ] **MCP-35 · Colour change by code.** Warmer, cooler, black and white, without a redraw. Cases: B07c (3.7), J49a (3.3), B10c (4.7: `edit_image` already does it well; lowest priority).
 
 ### Video composition and shared
 

@@ -40,7 +40,7 @@ Rule (user, 2026-11-13): tool management does not touch video composition.
 ## Open (decide with the user)
 
 - Name of the planner: `plan_tool_call` (proposed).
-- Jobs with no tool: build the missing tools here, or a separate track. Since cbbe722, `reframe_media`, `trim_media`, `add_words_to_media` and `mix_audio` exist (not benchmarked yet). Still no tool for: sound on a video, a picture on a video, a still as a clip, pictures side by side, translated subtitles, a frame at a chosen time, colour change by code, 4:5 in `reframe_media`. See the [failure list](failures.md).
+- Decided (user, 2026-11-13): order of work is the existing tools first, then tool composition (chains of existing tools), then new tools. New tools are tool-management tickets MCP-29 to MCP-35; composition is MCP-25 to MCP-28. See [tickets](../../tickets/TICKETS.md).
 - `media_helpers_tool.py` holds those tools and is shared with video composition. New tools for tool management go in a new file, so the isolation rule holds.
 - The families: the list above is a proposal. Set after the failure list and the tool tests.
 
