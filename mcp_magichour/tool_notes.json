@@ -710,7 +710,7 @@
       "family": "video by code",
       "does": "Makes a still card as a clip (exact words on a flat colour, or a picture whole on that colour), with a silent sound track and the size of a given clip, so join_videos can add it. 0 credits. MCP-32.",
       "type": [
-        "An end card or title card for the user's clip (E29b), then join_videos."
+        "An end card or title card attached to the user's clip in one call (attach=after or before) (E29b)."
       ],
       "antitype": [
         {

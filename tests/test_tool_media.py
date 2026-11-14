@@ -10,7 +10,7 @@ from fastmcp import Client
 
 from mcp_magichour import media_tools
 from mcp_magichour.openapi_server import create_mcp
-from mcp_magichour.tool_media import card_clip, mix_onto_video, overlay_picture, recolour, side_by_side
+from mcp_magichour.tool_media import attach_card, card_clip, mix_onto_video, overlay_picture, recolour, side_by_side
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -134,6 +134,17 @@ class NewPictureToolTests(unittest.TestCase):
         out = overlay_picture(self.grey, self.logo, self.dir / "grey-with-logo.png", "bottom_left", size=0.25)
         from PIL import Image
         self.assertEqual(Image.open(out).size, (400, 300))
+
+    def test_card_attached_after_the_clip_in_one_file(self):
+        """E29b, run wnew: join_videos failed (media_tools.join calls ffmpeg by name); the card tool attaches it itself."""
+        card = card_clip(self.dir / "card.mp4", 2, ["Ready for takeoff?"], "black", (320, 240))
+        out = attach_card(self.film, card, self.dir / "with-card.mp4", "after")
+        info = media_tools.probe(out)
+        self.assertEqual((info["width"], info["height"]), (320, 240))
+        self.assertAlmostEqual(info["seconds"], 4, delta=0.4)
+        self.assertTrue(info["audio"])
+        from PIL import Image
+        self.assertLess(sum(Image.open(media_tools.last_frame(out, self.dir / "end.png")).convert("RGB").getpixel((5, 5))), 30)
 
     def test_end_card_matches_the_clip_and_can_be_joined(self):
         """E29b: a 2 s black card with exact words, the clip's size, with a sound track."""

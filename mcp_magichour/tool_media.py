@@ -146,6 +146,22 @@ def overlay_picture(base: Path, picture: Path, out: Path, place: str = "top_righ
 
 # ---- MCP-32: a still card as a clip
 
+def attach_card(video: Path, card: Path, out: Path, position: str = "after") -> Path:
+    """The user's clip with the card before or after it, one file, the clip's size; the clip's sound kept, the card
+    silent. Not media_tools.join: it calls "ffmpeg" by name (notes-for-ray.md), which failed in run wnew (E29b)."""
+    info = media_tools.probe(video)
+    w, h = info["width"] - info["width"] % 2, info["height"] - info["height"] % 2
+    sound = ["-f", "lavfi", "-t", f"{info['seconds']:.3f}", "-i", "anullsrc=r=48000:cl=stereo"] if not info["audio"] else []
+    clip_a = "2:a" if sound else "0:a"
+    graph = (f"[0:v]scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=24,format=yuv420p[v0];"
+             f"[1:v]scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=24,format=yuv420p[c];"
+             f"[{clip_a}]aresample=48000,aformat=channel_layouts=stereo[a0];[1:a]aresample=48000,aformat=channel_layouts=stereo[a1];"
+             + (f"[c][a1][v0][a0]" if position == "before" else f"[v0][a0][c][a1]") + "concat=n=2:v=1:a=1[v][a]")
+    media_tools._ffmpeg(["-i", str(video), "-i", str(card), *sound, "-filter_complex", graph, "-map", "[v]", "-map", "[a]",
+                         "-c:v", "libx264", "-c:a", "aac", str(out)])
+    return out
+
+
 def card_clip(out: Path, seconds: float, words: list[str] | None = None, background: str = "black",
               size: tuple[int, int] = (854, 480), picture: Path | None = None) -> Path:
     """A still card held for `seconds` (silent sound track, so join_videos can append it): words on a flat colour
@@ -291,14 +307,15 @@ def register_tool_media(mcp: FastMCP) -> None:
             "card, a title card), or a picture shown whole on that colour. It has a silent sound track, so join_videos "
             "can add it before or after the user's clip. `seconds`: how long. `words`: one line each, the first larger, "
             "spelled exactly. `background`: a colour such as black or #1B2A4A. `like_video`: the user's clip, to match "
-            "its size (else `aspect`). `picture`: optional, a file_path, URL or finished image project id. Returns "
-            "download_url and video_file_path."
+            "its size (else `aspect`). `picture`: optional, a file_path, URL or finished image project id. `attach`: "
+            "after (an end card) or before (a title card) returns the user's clip and the card as ONE file, the clip's "
+            "sound kept; no = the card alone. Returns download_url and video_file_path."
         ),
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=True),
     )
     async def make_card_clip(seconds: float, words: list[str] | None = None, background: str = "black",
                              like_video: str | None = None, aspect: Literal["16:9", "9:16", "1:1"] = "16:9",
-                             picture: str | None = None) -> dict:
+                             picture: str | None = None, attach: Literal["no", "before", "after"] = "no") -> dict:
         _need()
         if not words and not picture:
             raise ToolError("Give `words`, a `picture`, or both.")
@@ -315,4 +332,10 @@ def register_tool_media(mcp: FastMCP) -> None:
                 pic = (await _fetch_media(picture, Path(folder) / "p", ("image",)))[0]
             out = Path(folder) / "card.mp4"
             await asyncio.to_thread(card_clip, out, seconds, words, background, size, pic)
+            if attach != "no":
+                if not like_video:
+                    raise ToolError("To attach the card, give the user's clip as `like_video`.")
+                joined = Path(folder) / "clip-with-card.mp4"
+                await asyncio.to_thread(attach_card, clip, out, joined, attach)
+                out = joined
             return await _deliver(out, False)

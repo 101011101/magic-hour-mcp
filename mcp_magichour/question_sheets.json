@@ -535,11 +535,11 @@
           ],
           "answers": {
             "logo": "remove_image_background first if the logo has a background, then put_picture_on_video (place, size 0.15, opacity).",
-            "card": "make_card_clip with the words, background, seconds and like_video = the user's clip, then join_videos in order (clip then card for an end card).",
+            "card": "make_card_clip with the words, background, seconds, like_video = the user's clip and attach=after (an end card) or before (a title card): one file, the clip's sound kept.",
             "words only": "add_words_to_media."
           },
           "default": "Logo: top_right, size 0.15, the whole clip. Card: 2 s, black, white words, after the clip.",
-          "why": "MCP-31 put_picture_on_video, MCP-32 make_card_clip (2026-11-14). Before: no tool (E29a 1.3, E29b 2.0). Not benchmarked yet."
+          "why": "MCP-31 put_picture_on_video, MCP-32 make_card_clip (2026-11-14). Before: no tool (E29a 1.3, E29b 2.0). Not benchmarked yet. Run wnew E29b: join_videos failed (media_tools.join calls ffmpeg by name), so the card tool attaches the card itself."
         }
       ]
     },

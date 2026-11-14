@@ -96,6 +96,28 @@ User: call the planner only when the answer would materially change the result. 
 - After d70cda1, A01a three runs: 4, 4, 4 (30 credits).
 - After the look row (4f8c397), A01a three runs: 4, 4, 4 (30 credits). The planner asks look, exact words and shape every time; the prompt carries 'matte black … marble … soft light' word for word.
 
+## New tools, run wnew (2026-11-14)
+
+- The 13 cases the new tools are for, happy user, one run each, the planner and new tools on. Dry run first (wnew-dry, clean, 0 credits). Live: 103 credits (music, voices, two pictures); every new tool costs 0.
+- The grader cannot hear sound. For the sound cases the files were measured: picture size and length unchanged, loudness −16 LUFS in all six, and the agent chose keep for music under speech (E27a–c) and replace for a narration (E28b/c).
+
+| Case | Old MCP | Now | Tools used |
+|---|---|---|---|
+| B07c warmer colours only | 2 | **5** | `adjust_colours` warmth 0.3 |
+| B10c black and white | 4 | **5** | `adjust_colours` saturation 0 |
+| J49a warmer without recreating | 2 | **4** | `generate_image` → `adjust_colours` |
+| G35a before/after side by side | 2 | **4** | `put_pictures_side_by_side` with labels |
+| G35b imagine the renovation | 1 | **4** | `edit_image` → `put_pictures_side_by_side` |
+| E29a fox logo on the clip | 1 | **5** | `remove_image_background` → `put_picture_on_video` |
+| E27a warm music on my clip | 2 | **4** | `generate_music` → `add_sound_to_video` keep |
+| E27b music that fits | 2 | **4** | same |
+| E27c music under the radio calls | 2 | **4** | same |
+| E28a my voice-over on a silent clip | 2 | **4** | voice → `add_sound_to_video` replace |
+| E28b narration instead of the talk | 2 | **4** | voice → `add_sound_to_video` replace |
+| E28c narration fitted to 7 s | 2 | **4** | voice → `add_sound_to_video` replace |
+| E29b end card after the clip | 2 | 2, then **4** | First: `make_card_clip` → `join_videos` failed (`media_tools.join` calls ffmpeg by name). Fix: `make_card_clip` attach=after, one call, 0 credits (run wnew-e29b) |
+| **Average** | **2.0** | **4.2** | |
+
 ## Setup faults found (tell Ray)
 
 - The runner uploads attachments straight to Magic Hour (`get_upload_urls`). Our code tools can only read files that went through `upload_media` (a kept copy), so every reframe, trim or words case fails for that reason alone. For this run the attachments were uploaded through `upload_media` and the chats pointed at them.
