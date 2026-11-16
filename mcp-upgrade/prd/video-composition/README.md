@@ -15,3 +15,6 @@ The MCP makes the video from end to end. Overview: [ARCHITECTURE](../ARCHITECTUR
 3. `create_production_sound` makes the narration (voice cloner by default) and the music.
 4. `join_production_clips` downloads every piece, joins them with ffmpeg, places the sound, draws cards and captions, and measures the checklist.
 5. The host gives the user the film's link and reports every unmet checklist line.
+
+- Replace one clip of a finished film: plain tools, not the production tools. Start image = `get_last_frame` of the clip before; `end_image_file_path` = `get_first_frame` of the clip after (MCP-21, [production](production.md)).
+- Cards and captions are drawn by code at the join: a placeholder until the tool side's tools plug in (MCP-23).

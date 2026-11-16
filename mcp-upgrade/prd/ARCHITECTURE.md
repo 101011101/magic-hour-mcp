@@ -1,6 +1,6 @@
 # Architecture
 
-The Magic Hour MCP server on branch `video-production` (repo `101011101/magic-hour-mcp`, fork of `magichourhq/magic-hour-mcp`). Updated 2026-11-13.
+The Magic Hour MCP server on branch `video-production` (repo `101011101/magic-hour-mcp`, fork of `magichourhq/magic-hour-mcp`). Updated 2026-11-16.
 Tickets: [`../tickets/TICKETS.md`](../tickets/TICKETS.md).
 
 ## Two subsystems (user, 2026-11-12)
@@ -17,11 +17,20 @@ Tickets: [`../tickets/TICKETS.md`](../tickets/TICKETS.md).
 - Approval rule: a change is approved when the new build is better than the old MCP on video composition, and not worse on tool management.
 - Shared by both: [shared/](shared/) holds `plan_request` ([conversation](shared/conversation.md)) and the files ([media files](shared/media-files.md)).
 
+## Pipeline (user, 2026-11-14 and 2026-11-16)
+
+1. Conversation: the question sheet (from the note sheet and the tools) asks the user; the answers make a refined prompt. Sheets: [tool management](tool-management/README.md). Shared: [conversation](shared/conversation.md).
+2. The refined prompt goes to one tool, several tools (tool management), or video planning (video composition).
+- Why: the test prompts are specific on purpose. When a subsystem does a specific prompt well, the conversation turns the user's intent into a specific prompt. The free models do not read intent well.
+- Order of work: voice (MCP-22), tool behaviour check (tool side), composition clean-up, conversation, big benchmark, ship.
+
 ## How they meet
 
 - `plan_request` reads the chat. It sends a multi-clip film to video composition, and one clip, one picture or one edit to tool management.
 - Video composition calls API tools to make its parts. Tool management owns those API tools.
 - Both read and keep files through the same code (`upload_media`, `kept_files.py`).
+- Captions and cards: the join draws them by code now (a placeholder). The tool side's caption and card tools replace them through a hook in the join (MCP-23).
+- Replace one clip of a film: plain tools (`get_last_frame`, `get_first_frame`, `create_video_from_image` with an end frame) (MCP-21).
 
 ## Benchmark items (persona bench, `V2/bench/v1/items`)
 
@@ -43,3 +52,7 @@ Tickets: [`../tickets/TICKETS.md`](../tickets/TICKETS.md).
 - MCP-05, later: when the host calls the production tools.
 - MCP-07, later: read what is in each clip.
 - MCP-18: `plan_request` outside the video composition path.
+- MCP-22, next: voice that sounds less AI.
+- MCP-23, tool side: caption and card tools for the join.
+- MCP-24: hear the person who asks the question.
+- MCP-25, tool side: the top tools at about 99%.

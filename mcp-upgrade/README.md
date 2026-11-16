@@ -2,6 +2,8 @@
 
 Everything needed to continue the Magic Hour MCP upgrade in another repo. Written 4 November 2026. Read in this order.
 
+Current state (since 2026-11-12): [prd/ARCHITECTURE.md](prd/ARCHITECTURE.md) and [tickets/TICKETS.md](tickets/TICKETS.md). The files below are the 4 November start.
+
 | File | What it is |
 |---|---|
 | LEAD-THREAD.md | The 3 November conversation with Runbo, verbatim, plus the 31 October feedback and a line-by-line reading. |

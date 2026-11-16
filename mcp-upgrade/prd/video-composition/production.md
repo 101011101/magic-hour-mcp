@@ -29,7 +29,26 @@ Code: `video_production.py` (plan, split, questions, prompts), `video_production
 - A new idea with no person from before: a new clip, no reference (or its picture).
 - A change of place inside one shot that fits one call (a door): no cut.
 - The host groups beats into clips with `clip` on each beat (user's design, 2026-11-07).
-- One reference for each clip: last frame, picture, own still, or none.
+- One reference kind for each clip: last frame, pictures, own still, or none.
+- Pictures: each pictured subject in the clip is its own likeness guide (`@id`), not a pasted photo (user, 2026-11-14, W04).
+- Related beats stay in one clip, in motion or otherwise (user, 2026-11-13, W09). A logo reveal is one generated clip with the logo as its reference, not a clip and then a held still of the logo. Video generation, not a pasted logo.
+- A beat that does not depend on an earlier beat does not need that beat's clip (user, 2026-11-13, W03).
+- Why (W03, wide set): steps 3 and 4 started from the last frame of the step before. That frame showed the grooving machine, and the prompt said "Continue from it". The model kept cutting grooves: no rods, no second slat. The same step as a fresh 6 s clip showed the rods. One 12 s call written as two shots with a hard cut ("CUT at 6 s", a new angle, no machine in frame) also showed them.
+- Not done: start a new event with no person fresh, not from the last frame. A re-plan of 198 past productions (0 credits) changed 23 clips. Most of them need the last frame to keep a product or a process the same (H40a bottle, H40b candle, W07 plane, I47c water cycle).
+- Two separate actions in one clip: give each its own clip, or write them as two shots with a hard cut and the first action's tool out of frame. The `clip` field and the `continuity` question tell the host.
+
+## Models (user, 2026-11-14)
+
+- `minimax-h3` makes every scene clip up to 30 s: from text, from a last frame, with pictures. Longer: `ltx-2.5`. A still with exact words: `ltx-2.5`.
+- Why: a 60-clip sound test (9,246 credits). `minimax-h3` made the sound in every case. `ltx-2.5` missed wind, the background under a voice, a second speaker (from a last frame, 4 of 4), and the second line of a two-line clip (8 of 8). The sound line first in the prompt did not fix it. Page: sound-test-matrix.vercel.app.
+- Same price: 24 credits a second. The join cuts each clip to its planned length (`minimax-h3` runs about 0.3 s long).
+- Not `ltx-2.5` for a silent chained clip (tested w6, reverted by the user 2026-11-15). Cuts were smoother, but W02 lost the bottle's look (`ltx-2.5` takes no picture) and W07 was worse.
+
+## Product pictures (user, 2026-11-14, W04)
+
+- Fault: with no photo, the host made "reference" pictures with an image model. They invented the products (a Steam Deck with no trackpads; a Switch 2 with the first Switch's blue and red controllers).
+- Fix: a real photo as the subject's `picture`. Two free-licence Wikimedia Commons photos made both devices right in every shot.
+- A product with no picture is a question (below). Never a picture made by an image model.
 
 ## Beats and questions (user's design, 2026-11-07)
 
@@ -41,12 +60,19 @@ Code: `video_production.py` (plan, split, questions, prompts), `video_production
 | `words-<n>` | Words over a scene | card, model, still, accept | card |
 | `line-<n>` | A spoken line shares a clip with another beat | split, keep | split |
 | `colour-codes` | Colour codes in the story | words, keep | words |
+| `held-<n>` | A held picture card right after a scene made from the same picture (W09) | merge, keep | merge; keep when the beat is an end card |
+| `together-<n>` | A beat with `link: continues` in another clip than the beat before, and both fit in 15 s | join, keep | join |
+| `picture-<id>` | A product subject with no `picture` | web, user, none | web |
+| `continuity` | Every plan with 2 or more scene clips, once: the host checks its own plan for a split continuous motion or asset, and for two actions in one clip with no cut | ok, change | ok |
 
-- Words (user's pick, 2026-11-07): a card after the scene when the words can stand alone; `minimax-h3` over the scene when they must sit on the picture; never `ltx-2.5`. Not drawn over the scene by code.
+- Words (user's pick, 2026-11-07): a card after the scene when the words can stand alone; `minimax-h3` over the scene when they must sit on the picture; never `ltx-2.5`.
+- Words drawn over the scene by code (user, 2026-11-16): the `overlay` words route of `join_production_clips`, at the top, large. A title can sit over the first scene instead of a card. Why: W10b, title over the opening scene, first cut 0.01 → 0.98 picture match (w9). W04 (report of 2026-11-14) used it for its title.
 - Cards and held pictures are drawn by code at the join.
 - `in_scene_words` (a label, a sign): no question, best effort by the model.
 - Why `line-<n>`: the line was said 0 of 3 times inside a 12 s clip with another beat, 3 of 3 alone in a 4 s close-up (`ltx-2.5`, 2026-11-07).
-- Continue a clip (user's pick, 2026-11-07): keep the file, last frame, `ltx-2.5` (`minimax-h3` the other choice), silent join.
+- Spoken line prompt (user, 2026-11-16, W08, W05): the line gets a time slot sized by its words (3 words a second, 2 s or more), then a silent end: "stops talking, smiles and nods, mouth closed. Nobody speaks." A script label in the quote ("Maya: Then we walk.") becomes the speaker: `Maya says, word for word: "Then we walk."`.
+- Why: the prompt gave the model time to talk with no line to fill it. W08 "talks to the camera" over 8 s with a 3 s line: 4 s of made-up speech. A 5 s slot for 9 words: "Meet Streaks" said twice (w8). 3 s slot: the line once, then silence (w9). W05: the model said the names out loud (w6); clean after the change (w8).
+- Continue a clip: keep the file, start from its last frame, `minimax-h3` (Models above). The 2026-11-07 pick of `ltx-2.5` was removed (user, 2026-11-16); its behaviour is a tool note (MCP-20).
 
 ## The user's own clip (MCP-14, approved 2026-11-11)
 
@@ -55,12 +81,23 @@ Code: `video_production.py` (plan, split, questions, prompts), `video_production
 - A voice-over, music or captions on the user's clip: a plan with that one beat, `says` on it, then `create_production_sound` and the join.
 - Continue the user's clip: the next clip starts from the source clip's last frame (`link: continues`).
 
+## Replace one clip (MCP-21, user, 2026-11-16)
+
+- Replace a clip between two kept clips: start image = `get_last_frame` of the clip before; `end_image_file_path` = `get_first_frame` of the clip after. `minimax-h3`.
+- Plain tools, not the production tool. The `get_first_frame` description tells the host this path. Gate note: `end-frame-fits-between`.
+- Why (W12 fox, shot 2 replaced): with the start image only, the cut into shot 3 was 0.52 (w4). With both frames: 0.99 (direct test), 0.94 (fleet w10, shot 3 starts with fast motion). `ltx-2.5` with both frames: two jumps inside the clip, the action not shown.
+
 ## Results
 
 - 2026-11-07, A2, B2, B1, A4, paid: v1 22 yes · 3 partly · 2 no; this build 21 · 4 · 2. B2 line said, B1 9 lines yes, cards and logo exact.
 - 2026-11-10/11, fleet (163 cases × 3 users × old and new): see `Benchmark/audit/artifacts/`.
+- 2026-11-14, wide set W01–W15, old MCP and this build: report mcp-original-vs-new.vercel.app (the user's marks only).
+- 2026-11-15/16, reruns on the fixes (user's marks): W08 w9 works; W05 w8 works; W02 w9, W07 w9 pretty solid; W10b w9 works; W12 w10 pretty good. Page: Model Rule Test artifact.
 
 ## Open
 
-1. MCP-03: the join does not trim each clip to its planned length (`minimax-h3` clips run about 0.3 s long).
-2. MCP-10: A1 and A3 not rerun on this build. B1 label is best effort.
+1. MCP-10: A1 and A3 not rerun on this build. B1 label is best effort.
+2. MCP-21: one fleet run of the replace path (W12 w10). No path in the production tool.
+3. End card words shown twice (W02, W04): the drawn words and the caption of the same line. MCP-23, tool side.
+4. W02 w9: the 54 s close-up shows another cap shape. Not fixed.
+5. MCP-21 open line: one continuous 15 s generation where it makes sense (reviewer, 2026-11-14).

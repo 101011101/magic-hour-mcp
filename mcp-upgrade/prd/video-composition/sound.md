@@ -28,6 +28,8 @@ Code: `video_production.py` (`plan_sound`), `video_production_tool.py` (`create_
 
 - `music` in the story: one instrumental track (`/v1/ai-music-generator`), as long as the film.
 - The cloner path keeps the music (bug fixed 2026-11-10).
+- Sound effects: `sounds` on a beat ("a short whoosh as the lines meet"). The clip makes them, so that clip is made with sound (user, 2026-11-13, W09). Never music.
+- The clip's own sound comes from `minimax-h3` (user, 2026-11-14). `ltx-2.5` missed most background sound and second speakers ([production](production.md#models-user-2026-11-14)). The API has no sound-effects endpoint.
 - A clip never makes music (user, 2026-11-13). Music is always one separate track, added at the join. A clip with sound gets "No music." in its prompt; a clip without sound is made silent at the join.
 
 ## Voice-over and dialogue
@@ -60,9 +62,21 @@ Code: `video_production.py` (`plan_sound`), `video_production_tool.py` (`create_
 - The plan warns when a beat has more words than its seconds allow (`voice-over-pace`, 2.7 words a second, measured on the cloner).
 - Check: I46a 14% faster, E28c 15% faster, no hold, no word cut, length unchanged. 14 other films unchanged.
 
+## Captions fault (2026-11-13)
+
+- Fault: a caption is a one-frame picture over the film. The joined film starts at 0.021 s, and ffmpeg then dropped the pictures. W10 showed no tip words; W02 showed captions only in the first 8 s.
+- Fix: `-loop 1` on each picture and `overlay=shortest=1` (`media_tools.draw_captions`). Check: W10 and W02 joined again (0 credits), words and captions to the end.
+
+## Join (user, 2026-11-16, W05 w8)
+
+- Each clip's own sound is cut to its length plus 0.08 s and fades in and out over 0.08 s, so the cuts overlap. A clip whose quietest sound is 6 dB or more over the median of the clips is lowered, 12 dB at most. Why: W05 clip 4 rain at −37 dB, clips 1 to 3 at −46 to −48 dB, in a shelter. After: −49, −48, −46, −46 dB.
+
 ## Open
 
 - A later mix does not read the kept layers yet.
 - The `mix_audio` helper tool uses the volumes the host passes. It does not use the priority.
+- MCP-22, next: narration and dialogue sound AI-like; the UGC ad music was corny (reviewer, 2026-11-14).
+- MCP-23, tool side: caption style. Now white letters on a dark band; wanted white letters with a black outline.
+- MCP-24: the off-screen interviewer's question is not heard.
 
 1. The default preset voices are a proof of concept (user, 2026-11-11). Decide later which voices ship, and whether the user picks one.

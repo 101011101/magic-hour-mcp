@@ -3,7 +3,8 @@
 - One line for each ticket. Details are in the ticket file, if there is one.
 - "Proposed" = not from the user. Confirm or delete.
 - Nothing is committed. Nothing is deployed.
-- Updated: 2026-11-12.
+- Updated: 2026-11-16.
+- Next (user, 2026-11-16): MCP-22 voice, then the tool behaviour check (tool side), composition clean-up, conversation, big benchmark, ship.
 
 ## To do
 
@@ -30,6 +31,10 @@
   - [x] 2026-11-12 · `plan_request` is called only before `plan_video_production` (description; tool name `plan_video_production` in the sheet). The `create_video_from_image` description is the old one again.
   - Why: persona bench, 16 single-call video items, old against new: avg score 3.38 → 3.19 (happy), 3.38 → 3.31 (stupid), 3.38 → 3.25 (dumper). The tool-calling items show no clear gain: 25 better / 13 worse (happy), 22 / 24 (stupid), 21 / 21 (dumper).
   - [ ] Later: measure `plan_request` on single calls and tool calling, each on its own, against the old MCP. Turn it on there only when it is better.
+
+- [ ] **MCP-19 · A person partly off screen.** User, 2026-11-13. Consider a person who is partly or fully off screen, where only a part of them or what they hold shows (the interviewer's hand and microphone).
+  - Source: W06 (wide set, w1). The host wrote "An interviewer off camera holds a handheld microphone up to her". No microphone is in any frame.
+  - [ ] Test point-of-view words in the clip prompt (for example, "from the interviewer's point of view; their hand holds a microphone into the frame"). See if the object then shows.
 
 - [ ] **MCP-01 · Conversation: derive the parameters, ask only for the rest.** [Ticket](MCP-01-conversation.md). [Spec](../prd/shared/conversation.md).
   - [x] PRD, spec, 40 contract tests: `tests/test_plan_request.py`.
@@ -72,7 +77,44 @@
   - [x] After generation: clip length, clip size.
   - [x] Join: the film is silent when the story has no sound (`minimax-h3` adds music with audio off).
   - [ ] After generation: shots in order, no shot repeats, same people in all clips. Scored by eye until MCP-07.
-  - [ ] The join trims each clip to its planned length (minimax-h3 clips run ~0.3 s long; B2 31.8 s, 2026-11-07). Fleet 2026-11-12: 78 of 88 films within 0.5 s; the five-photo reels D20a/b/c ran 1.7–2.3 s long (1–2 s clips come back about 1.6 s or longer). `media_tools.join` puts each whole clip in; `check_outputs` allows ±1 s for each clip.
+  - [x] The join trims each clip to its planned length (done: `media_tools.join` `seconds`; W04 2026-11-14 40.3 s of 40 s) (minimax-h3 clips run ~0.3 s long; B2 31.8 s, 2026-11-07). Fleet 2026-11-12: 78 of 88 films within 0.5 s; the five-photo reels D20a/b/c ran 1.7–2.3 s long (1–2 s clips come back about 1.6 s or longer). `media_tools.join` puts each whole clip in; `check_outputs` allows ±1 s for each clip.
+  - [x] 2026-11-14 · `minimax-h3` for every scene clip up to 30 s (sound matrix, 60 clips). Real photos as likeness guides: several per clip, a `picture-<id>` question (web, user, none) for a product with no photo. [PRD](../prd/video-composition/production.md#models-user-2026-11-14).
+- [ ] **MCP-20 · Notes on the one-call video tools from the production findings.** Do at the merge with the tool routing branch (`origin/william`) (user, 2026-11-14).
+  - W06: the host made a one-shot street interview with `create_video_from_text`, `ltx-2.5`, sound on. The prompt asked for street sound under the voice. The film has no street sound. The production tool's model rule does not reach this call.
+  - Sound test (60 clips, 2026-11-14): `ltx-2.5` missed wind, the background under a voice, a second speaker and the second line of a two-line clip. `minimax-h3` made all of them. Same price.
+  - Original MCP on the wide set (`w0`, 2026-11-14): with no join, the host made each multi-shot film as one long `ltx-2.5` clip plus captions (W02 60 s, W03 30 s, W04 40 s, W07 30 s). W08 came back as 4 separate files.
+  - W08: a clip with a short spoken line and a long action ("talks to the camera") got 4 to 4.5 s of made-up speech. "No other words are spoken" did not fix it. The line in a time slot of its own, then a silent end ("stops talking and smiles, mouth closed"), gave clean speech (prompt test, 4 variants, 2026-11-14). Approved for the production tool 2026-11-16 (3 words a second, w9). The one-call tools need the same note.
+  - Limit: upstream parameter copy "describes selection without ranking models" (`openapi_policies.py`).
+  - Model choice on the plain tools (user, 2026-11-16): the production tool picks `minimax-h3` in code (`SCENE_MODEL`). The plain tools have no such rule; the host picks, and Free `default` is `ltx-2.5`.
+  - `ltx-2.5` behaviour for the note sheet: from one start frame it stays closer to that frame (7 November C2 0.98 against `minimax-h3` 0.88; W12 start frame only 0.83 against 0.52). Weak at sound, words, picture references, a start and an end frame, and the prompt's action.
+  - Replace one clip (W12 fox, MCP-21): start and end frame, `minimax-h3`. With both frames `ltx-2.5` jumped inside the clip and skipped the yawn. Now only the `get_first_frame` description tells the host the path, and nothing tells it the model (the gate note `end-frame-fits-between` shows only with gates on).
+- [x] **MCP-21 · Replace one clip and keep the clips around it.** User, 2026-11-15: a ticket. 2026-11-16: built, approved (end frame path, minimax-h3).
+  - W12 (fox), turn 2 "replace only shot 2, keep shots 1 and 3": the host used the plain tools (`get_last_frame`, `create_video_from_image`, `trim_media`, `join_videos`), not the production tool.
+  - Fault: shot 3 starts on the last frame of the old shot 2 (fox standing). The new shot 2 ends on another pose (fox sitting). Picture match at the 10 s cut: 0.52 (`minimax-h3`, w4), 0.83 (`ltx-2.5`, w3). Before the swap: 0.99 to 1.00.
+  - User's idea: `minimax-h3` for a first generation (no frame to keep, sound needed); `ltx-2.5` for a replacement clip that must fit between kept clips.
+  - Limit: a model change makes the cut smaller but does not remove it. The new clip must end where the old one ended.
+  - Options found: remake the next clip from the new clip's last frame (the user asked to keep it as it is); a short crossfade at that cut; tell the user the cut shows.
+  - Where: the plain tools' notes, or a "replace a clip" path in the production tool.
+  - [x] 2026-11-15 · End frame: `create_video_from_image` takes `end_image_file_path` (minimax-h3 and ltx-2.5, 480p). New tool `get_first_frame`. Replace path: start image = last frame of the clip before, end image = first frame of the clip after. Gate note `end-frame-fits-between`.
+  - [x] 2026-11-15 · Direct test on the w4 W12 clips (240 credits): cuts 0.99 at 5 s and 10 s on both models (was 0.52 at 10 s). minimax-h3 showed the yawn, no jump inside the clip. ltx-2.5: two jumps inside the clip (0.64, 0.65), no yawn. Result: minimax-h3, not ltx-2.5, for the replacement clip.
+  - [x] 2026-11-15 · Fleet w10 (480 credits): the host used `get_last_frame`, `get_first_frame` and `end_image_file_path` on its own, model minimax-h3. Cuts 1.00 (5 s) and 0.94 (10 s). The 0.94 is shot 3's own motion: its first 0.12 s change by 0.90. Was 0.52.
+  - [ ] Reviewer (2026-11-14): one continuous 15 s generation where it makes sense, not three 5 s clips. W12 asked for "three 5-second shots in order"; the plan made 3 chained clips (cuts 0.99 to 1.00). Not changed.
+- [ ] **MCP-22 · Voice that sounds less AI.** Next ticket (user, 2026-11-16). Source: reviewer feedback, 2026-11-14.
+  - Narration and dialogue sound AI-like. Try prompt words for a more real, natural voice.
+  - UGC ad: the dialogue did not sound real; the music was "really, really corny". The reviewer liked the old MCP's film better there.
+- [ ] **MCP-23 · Caption and card style from the tool side.** Tool side (user, 2026-11-16). Source: reviewer feedback, 2026-11-14.
+  - Now: the join draws captions and cards by code (`media_tools._caption_png`, default `band`: white letters on a dark band). A placeholder.
+  - Wanted: a hook in `join_production_clips` to swap in the tool side's caption and card tools. Agree the format with William: what the join sends, what comes back.
+  - Caption default: white letters with a black outline (meme style), not the band.
+  - Cards: better visuals. No background needed; a title can be words over the scene.
+  - No double captions: an end card's drawn words plus the caption of the same line (W02 w9, W04).
+- [ ] **MCP-24 · Hear the person who asks the question.** Planning and conversation. Source: reviewer feedback, 2026-11-14 (street interview). Only the answer was heard. Wanted: the interviewer's voice, not a caption. With MCP-19.
+- [ ] **MCP-25 · Top tools at about 99%.** Tool side (William). Source: reviewer feedback, 2026-11-14.
+  - Few tool calls in the wide set (one face swap, one photo). Test tool calls apart from video generation.
+  - Users by tool: image to video 9,772 · face swap video 5,324 · AI image editor 4,511 · text to video 4,169 · character replace 1,874 · video editor 1,514 · clothes changer 1,449 · face swap photo 1,291 · talking photo 890 · voice generator 652 · AI image 611 · extend 428 · head swap 379 · lip sync 319 · body swap 306 · voice cloner 291 · music generator 256 · image upscaler 217 · audio to video 217.
+- [ ] **MCP-26 · Sound on when the user does not answer.** User, 2026-11-16. Test later.
+  - Rule: no answer about sound = the refined prompt has sound.
+  - Conflict: `plan_request` rule 6b fills sound `none` on "your call" ([conversation](../prd/shared/conversation.md)). Change it when this ticket is done.
 - [ ] **MCP-05 · When to call the video production tool.** Instructions to the host agent, or code that reads the request and decides. Later (user, 2026-11-05).
 - [ ] **MCP-06 · Last frame, join and storage on the deployed server.**
   - [x] 2026-11-06 · ffmpeg: the server uses the ffmpeg on its PATH, else the one the `imageio-ffmpeg` package ships; ffprobe is no longer needed (`media_tools.probe` reads ffmpeg's own report). Install: `pip install -e ".[production]"`.
@@ -80,6 +122,7 @@
   - [ ] Deploy with the `production` extras and the token, then run B2 through the hosted server once.
 - [ ] **MCP-04 · Gates and checks.**
   - [x] 2026-11-06 · Checklist: `plan_video_production` returns `checklist` (what the story promises). `join_production_clips` returns `checked` (length, shape, card lengths, narration placed, music, captions, sound present or silent, measured on the file), `unchecked` (lines for the host to confirm by eye) and `not_met`. The host is told to report unmet lines, not to present them as done.
+  - [ ] Deterministic gates at the join: only checks that are 100% accurate. Do last, after the test sets (user, 2026-11-13). No black frames (`blackdetect`). No frozen picture outside cards (`freezedetect`). No clip under 1 s (flash cuts). No repeated clip (frame hashes across clips). The voice-over ends before the film ends. The user's clip span is unchanged (frames against the source). The user's clip sound is not silent when kept. No stretch (pixel shape against the source). Card colour matches its hex code (pixel sample). What is shown, and whether it stays the same, is not a gate: the host looks at frames, or the grader.
 - [ ] **MCP-07 · State manager.** Read what is in each clip. Later (user, 2026-11-05). Until then: assume each clip shows what its story text says.
 - [x] **MCP-08 · Voice-over, captions, music on a multi-clip film.** Closed: option E (user, 2026-11-05), `create_production_sound` and the join; see Done.
 - [ ] **MCP-09 · Todo list from the request, checked at the end.** User, 2026-11-05: break the prompt into a todo list, then check that each line is done, at least the easy checks.
