@@ -167,6 +167,23 @@ def register_media_helpers(mcp: FastMCP) -> None:
             return {"file_path": await _upload(frame)}
 
     @mcp.tool(
+        name="get_first_frame",
+        description=(
+            "Take the first frame of a video as a picture, uploaded to Magic Hour. `video`: a finished video project id, "
+            "a video URL, or a file_path from upload_media. Returns `file_path`, usable as `end_image_file_path` of "
+            "create_video_from_image. To replace one clip between two others: start image = get_last_frame of the clip "
+            "before, end image = get_first_frame of the clip after. Spends no credits."
+        ),
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=True),
+    )
+    async def get_first_frame(video: str) -> dict:
+        _need_ffmpeg()
+        with tempfile.TemporaryDirectory() as folder:
+            clip = await _fetch(video, Path(folder) / "video.mp4")
+            frame = await asyncio.to_thread(media_tools.first_frame, clip, Path(folder) / "first-frame.jpg")
+            return {"file_path": await _upload(frame)}
+
+    @mcp.tool(
         name="join_videos",
         description=(
             "Join videos end to end with hard cuts, in the order given, into one file. `videos`: finished video project ids, "

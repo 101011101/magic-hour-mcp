@@ -66,7 +66,11 @@ class Subject(BaseModel):
     words: str = Field(description=(
         "One person or thing and how it looks, in one sentence. These exact words go into every clip that shows it."))
     role: Literal["person", "copy", "product", "place"]
-    picture: str | None = Field(default=None, description="file_path of the user's picture of it, if the user gave one.")
+    picture: str | None = Field(default=None, description=(
+        "A real photo of it (file_path from upload_media, or a URL): the video uses it as a likeness guide in every clip "
+        "that shows it. Each pictured subject in a clip is its own guide. For a real, named product: the user's photo, or a "
+        "free-licence photo from the web (for example Wikimedia Commons; tell the user where it came from and its licence). "
+        "Never a picture made by an image model: it invents the product (W04: a Steam Deck with no trackpads)."))
 
 
 class Reference(BaseModel):
@@ -84,8 +88,8 @@ class Beat(BaseModel):
         "What is seen in this beat: one action, and the framing if it matters (wide, close). Quote a spoken line once, "
         "in the beat where it is said. For a card: how the card looks. A change of state that the model must show "
         "(a paper folded into a shape, a pour that fills a glass, a stage of a build) is one beat for each stage, "
-        "each with its own clip; a real product or object that must look right gets a reference picture (a subject's "
-        "`picture`, or a still you make first as `reference` file)."))
+        "each with its own clip; a real product or object that must look right gets a real photo as its subject's "
+        "`picture` (see `picture` on the subject)."))
     kind: Literal["scene", "card"] = "scene"
     place: str | None = Field(default=None, description="Short name of the place. The same name means the same place.")
     subjects: list[str] = Field(default_factory=list, description="ids of the subjects seen in this beat.")
@@ -107,7 +111,9 @@ class Beat(BaseModel):
         "words exact, with no generation call."))
     picture: str | None = Field(default=None, description=(
         "On a card: a picture to hold unchanged for the card's seconds (its file_path from upload_media, or a URL). Code "
-        "draws the card's exact_words over it. Use it only for a logo, a screenshot or a picture that must not change. "
+        "draws the card's exact_words over it. Use it only for a still logo, a screenshot or a picture that must not change. "
+        "A logo reveal, or a logo that forms or moves, is a scene beat with the logo as its subject's `picture`: the video "
+        "makes the motion, and the logo may change a little. Do not follow it with this card. "
         "A reel or slideshow of the user's photos looks static this way: make each photo a scene beat instead, with the "
         "photo as its reference (a subject's `picture`), so it moves, and put its words in exact_words (route overlay). "
         "With `background`: the picture at 80% on that colour; without it: as large as fits, over a blur of itself."))
@@ -120,9 +126,16 @@ class Beat(BaseModel):
     clip: int | None = Field(default=None, ge=1, description=(
         "The clip this beat is in: 1, 2, 3 ... in story order. You choose the clips: beats with the same number are made "
         "in one generation call. A card is a clip of its own. Set it on every beat (or on none, and the planner groups "
-        "them)."))
+        "them). Keep what should stay continuous in one clip: one motion that goes on (a logo forming, a jump and its "
+        "landing) or the same thing on screen. Split only when needed: the clip would be too long, or the next action "
+        "does not depend on this one (a new step). Two separate actions in one clip: the second one is often never made; "
+        "give it its own clip, or write the two as shots with a hard cut (\"CUT at 6 s\", a new camera angle, the first "
+        "action's tool out of frame)."))
     spoken: list[str] = Field(default_factory=list, description=(
         "A line a person on screen says out loud in this beat, word for word. Not the narrator (that is `says`)."))
+    sounds: list[str] = Field(default_factory=list, description=(
+        "Sound effects the clip itself makes in this beat, said plainly: \"a short whoosh as the lines meet\", \"a door slams\". "
+        "The clip is then made with sound. Never music: music is one track for the whole film (`music`)."))
     reference: Reference | None = Field(default=None, description=(
         "On the first beat of a clip: that clip's one reference, if you want to choose it. Without it the planner chooses."))
     source: str | None = Field(default=None, description=(
@@ -319,8 +332,13 @@ async def _api(method: str, path: str, body: dict | None = None) -> dict:
     return response.json()
 
 
+# Wikimedia refuses the default httpx User-Agent with 403 (w4 run, 2026-11-14: W04 and W07 got no real photo).
+CUT_OVERLAP = 0.08   # seconds of sound overlap at each cut
+USER_AGENT = "magic-hour-mcp/1.0 (https://github.com/magichourhq/magic-hour-mcp)"
+
+
 async def _download(url: str, out: Path) -> Path:
-    async with httpx.AsyncClient(timeout=httpx.Timeout(120.0), follow_redirects=True) as client:
+    async with httpx.AsyncClient(timeout=httpx.Timeout(120.0), follow_redirects=True, headers={"User-Agent": USER_AGENT}) as client:
         response = await client.get(url)
         response.raise_for_status()
         out.write_bytes(response.content)
@@ -426,7 +444,8 @@ async def make_clip(story: dict, n: int, made: dict[str, str]) -> dict:
     else:
         body["aspect_ratio"] = story["aspect"]
         if reference["kind"] in ("picture", "file"):
-            body["references"] = [{"name": reference["subject"], "file_path": reference["file"]}]
+            pictures = reference.get("pictures") or [{"subject": reference["subject"], "file": reference["file"]}]
+            body["references"] = [{"name": p["subject"], "file_path": p["file"]} for p in pictures]
     created = await _api("POST", "/v1/image-to-video" if "assets" in body else "/v1/text-to-video", body)
     return {"clip": n, "id": created["id"], "credits_charged": credits + int(created.get("credits_charged", 0)),
             "seconds": video["seconds"], "model": video["model"], "reference": reference["kind"],
@@ -557,7 +576,9 @@ async def join_clips(story: dict, made: dict[str, str], sound: dict[str, str] | 
         # a clip keeps its own sound when it was made with sound (the story's audio, or a spoken line in it)
         keep = [by_n[n]["steps"][0]["sound"] if by_n[n].get("made_by") == "user"
                 else bool(by_n[n]["steps"][0].get("audio", story.get("audio"))) for n in planned["join"]]
-        await asyncio.to_thread(media_tools.join, files, joined, keep, cut, size)
+        # user, 2026-11-14 (W05): no sound jump at a cut. The sound overlaps the cut, and a background much louder
+        # than the other clips' is turned down.
+        await asyncio.to_thread(media_tools.join, files, joined, keep, cut, size, CUT_OVERLAP, True)
         if overlays:   # exact words over a scene, drawn by code (words_route overlay)
             worded = Path(folder) / "worded.mp4" if sound_plan else FILMS_DIR / name
             await asyncio.to_thread(media_tools.draw_captions, joined, [dict(o, place="top", large=True) for o in overlays], worded)

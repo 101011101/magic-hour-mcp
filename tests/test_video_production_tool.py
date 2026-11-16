@@ -145,7 +145,7 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
         self.enterContext(patch.dict(os.environ, {"BLOB_READ_WRITE_TOKEN": ""}))
         self.enterContext(patch.dict(os.environ, {"MAGIC_HOUR_VOICE_OVER": "video"}))   # these tests cover the video-model narration; the cloner test sets its own
 
-        def fake_join(files, out, audio=True, seconds=None, size=None):
+        def fake_join(files, out, audio=True, seconds=None, size=None, overlap=0.0, even=False):
             self.joined.append(([f.name for f in files], audio))
             out.write_bytes(b"film")
             return out
@@ -190,6 +190,8 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
         return out
 
     async def call(self, name, **arguments):
+        if name == "plan_video_production":   # the host has checked the plan (the continuity question)
+            arguments["answers"] = {"continuity": "ok", **(arguments.get("answers") or {})}
         return data(await self.caller.call_tool(name, arguments))
 
     async def planned(self, prefix):
@@ -314,7 +316,7 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
         made = await self.call("create_production_clip", production=p["production"], clip=2)
         path, body = self.posts[0]
         self.assertEqual((path, len(self.posts)), ("/v1/text-to-video", 1))
-        self.assertEqual((body["model"], body["resolution"], body["end_seconds"], body["aspect_ratio"], body["audio"]), ("ltx-2.5", "480p", 13, "16:9", True))
+        self.assertEqual((body["model"], body["resolution"], body["end_seconds"], body["aspect_ratio"], body["audio"]), ("minimax-h3", "480p", 13, "16:9", True))   # the scene model (user, 2026-11-14)
         self.assertEqual(body["style"]["prompt"], p["clips"][1]["steps"][-1]["prompt"])
         self.assertEqual((made["id"], made["clip"], made["credits_charged"]), ("job-1", 2, 144))
 
@@ -344,12 +346,13 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.posts[1][1]["assets"], {"image_file_path": "https://images.example.test/still/output.png"})
         self.assertEqual(made["credits_charged"], 154)
 
-    async def test_a_picture_is_the_one_named_reference(self):
+    async def test_each_pictured_subject_is_a_named_reference(self):
         p = await self.planned("c5")
         await self.call("create_production_clip", production=p["production"], clip=2)
         path, body = self.posts[0]
         self.assertEqual((path, body["model"]), ("/v1/text-to-video", "minimax-h3"))
-        self.assertEqual(body["references"], [{"name": "presenter", "file_path": "bench-presenter.png"}])
+        self.assertEqual(body["references"], [{"name": "presenter", "file_path": "bench-presenter.png"},
+                                              {"name": "bottle", "file_path": "bench-mockup-fragrance.png"}])   # each pictured subject (W04)
 
     async def test_the_join_takes_every_finished_clip_in_story_order(self):
         p = await self.planned("c4")
@@ -641,3 +644,19 @@ class SheetRuleTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DownloadTests(unittest.IsolatedAsyncioTestCase):
+    async def test_a_download_names_its_client(self):
+        """Wikimedia answers 403 to the default httpx User-Agent (W04, W07, 2026-11-14)."""
+        import tempfile
+        from mcp_magichour import video_production_tool as vpt
+        seen = {}
+
+        def answer(request):
+            seen["ua"] = request.headers.get("user-agent")
+            return httpx.Response(200, content=b"jpg")
+        real = httpx.AsyncClient
+        with patch.object(vpt.httpx, "AsyncClient", lambda **kw: real(transport=httpx.MockTransport(answer), **kw)), tempfile.TemporaryDirectory() as d:
+            await vpt._download("https://commons.wikimedia.org/wiki/Special:FilePath/x.jpg", Path(d) / "x.jpg")
+        self.assertEqual(seen["ua"], vpt.USER_AGENT)

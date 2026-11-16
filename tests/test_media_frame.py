@@ -29,6 +29,12 @@ class FrameTests(unittest.TestCase):
         self.assertAlmostEqual(info["seconds"], 6.0, delta=0.15)
         self.assertEqual((info["width"], info["height"]), (480, 854))
 
+    def test_the_first_and_last_frames_are_different_pictures_of_the_clip(self):
+        clip = self.clip("f.mp4", "320x240", 2)
+        first, last = m.first_frame(clip, self.dir / "first.jpg"), m.last_frame(clip, self.dir / "last.jpg")
+        self.assertTrue(first.stat().st_size and last.stat().st_size)
+        self.assertNotEqual(first.read_bytes(), last.read_bytes())   # testsrc has a moving counter
+
     def test_reframe_returns_the_new_size(self):
         got = m.reframe(self.clip("w.mp4", "854x480", 1), "9:16", self.dir / "r.mp4")
         self.assertEqual((got["width"], got["height"], got["way"]), (480, 854, "fill"))

@@ -51,6 +51,14 @@ NOTES: dict[str, tuple[tuple[str, ...], str, str]] = {
                              "Image-to-video from the last frame of a clip continues it; joined after the clip, the cut is hard to see.",
                              "Approach C2 (ltx-2.5): similarity across the join 0.98. C3 (minimax-h3): 0.88, a small jump. "
                              "C4 (minimax-h3 with the clip as a reference, no start frame): 0.41, a visible jump."),
+    "end-frame-fits-between": (("create_video_from_image", "get_first_frame", "get_last_frame", "minimax-h3", "ltx-2.5"),
+                               "A clip made to replace one between two others, with the clip before's last frame as the start image and "
+                               "the clip after's first frame as `end_image_file_path`, joins both cuts smoothly. minimax-h3 kept the "
+                               "planned action; ltx-2.5 made two jumps inside the clip and skipped the action.",
+                               "W12 fox, shot 2 replaced (15 November): cut after the new shot 0.99 on both models; before, from the start "
+                               "image only, 0.52 (minimax-h3). Inside the new shot: minimax-h3 lowest 0.98 and the yawn shown; ltx-2.5 0.64 "
+                               "and 0.65 (a jump to a close-up and back), no yawn. One run per model. Fleet w10: the host used this path on its "
+                               "own; cuts 1.00 and 0.94, where shot 3 itself changes 0.90 in its first 0.12 s (the fox moves fast)."),
     "last-frame-keeps-place": (("create_video_from_image", "get_last_frame"),
                                "A clip that starts from another clip's last frame keeps that clip's place, also when the prompt names a new place.",
                                "S2 and C7 chained: winter stayed spring; the sea stayed behind the autumn bench."),

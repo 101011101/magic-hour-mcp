@@ -1,12 +1,18 @@
 """The host groups the beats into clips; the planner obeys, tracks the request and advises (user, 2026-11-07)."""
 
 import json
+import re
 import unittest
 from copy import deepcopy
 from pathlib import Path
 
 from mcp_magichour import video_production as vp
 from mcp_magichour.video_production_tool import plan_story
+
+
+def risks(story: dict, planned: dict) -> list[dict]:
+    """The questions about known risks: all but the host's own continuity check."""
+    return [q for q in vp.questions(story, planned) if q["id"] != "continuity"]
 
 STORIES = Path(__file__).parent / "fixtures" / "stories"
 B2_REQUEST = ('Make a 30-second 16:9 short film called Walk Anyway. Start on a title card for 2 seconds: white text "WALK ANYWAY". '
@@ -63,9 +69,24 @@ class SpokenLineTests(unittest.TestCase):
         story["audio"] = False
         planned = plan_story(story)
         clip = planned["clips"][2]
-        self.assertIn('Said out loud on screen, once, word for word: "You came back."', clip["steps"][-1]["prompt"])
+        self.assertIn('The speaker says, word for word: "You came back."', clip["steps"][-1]["prompt"])
+        self.assertIn("stops talking, smiles and nods, mouth closed. Nobody speaks.", clip["steps"][-1]["prompt"])
         self.assertTrue(clip["steps"][-1]["audio"])
         self.assertIn('Said on screen once, word for word: "You came back."', [l["want"] for l in planned["checklist"]])
+
+    def test_a_script_label_in_a_spoken_line_names_the_speaker_and_is_not_said(self):
+        story = self.line_story([1, 2, 2, 3, 4, 5])
+        story["beats"][3]["spoken"] = ["Maya: You came back."]
+        prompt = plan_story(story)["clips"][2]["steps"][-1]["prompt"]
+        self.assertIn('Maya says, word for word: "You came back."', prompt)
+        self.assertNotIn('"Maya:', prompt)
+
+    def test_lines_past_the_beats_time_follow_the_line_before_with_no_empty_slot(self):
+        story = self.line_story([1, 2, 2, 3, 4, 5])
+        story["beats"][3]["spoken"] = ["Maya: one two three four five six seven eight nine ten eleven twelve thirteen fourteen"] * 3
+        prompt = plan_story(story)["clips"][2]["steps"][-1]["prompt"]
+        self.assertIn('Then Maya says, word for word:', prompt)
+        self.assertIsNone(re.search(r"\b(\d+)-\1 s:", prompt))   # no "4-4 s" slot
 
     def test_a_spoken_line_with_another_beat_is_a_question_and_split_gives_it_its_own_clip(self):
         story = self.line_story([1, 2, 2, 3, 3, 4])
@@ -78,7 +99,7 @@ class SpokenLineTests(unittest.TestCase):
         planned = plan_story(answered)
         self.assertIn([4], [c["beats"] for c in planned["clips"]])
         self.assertIn([5], [c["beats"] for c in planned["clips"]])
-        self.assertEqual(vp.questions(answered, planned), [])
+        self.assertEqual(risks(answered, planned), [])
 
 
 class ChosenReferenceTests(unittest.TestCase):
@@ -126,7 +147,7 @@ class QuestionTests(unittest.TestCase):
         card = planned["clips"][4]
         self.assertEqual((card["kind"], card["made_by"], card["steps"][0]["words"]), ("card", "code", ["walk anyway"]))
         self.assertNotIn("walk anyway", planned["clips"][3]["steps"][-1]["prompt"])  # not asked of the video model
-        self.assertEqual(vp.questions(answered, planned), [])
+        self.assertEqual(risks(answered, planned), [])
 
     def test_model_routes_the_clip_to_minimax_and_asks_for_the_words(self):
         answered, _ = vp.apply_answers(self.words_story(), {"words-5": "model"})
@@ -149,13 +170,13 @@ class QuestionTests(unittest.TestCase):
         answered, _ = vp.apply_answers(story, {"colour-codes": "words"})
         self.assertNotRegex(answered["setting"], r"#[0-9A-Fa-f]{6}")
         self.assertIn("teal", answered["setting"])
-        self.assertEqual(vp.questions(answered, plan_story(answered)), [])
+        self.assertEqual(risks(answered, plan_story(answered)), [])
 
     def test_in_scene_words_are_best_effort_with_no_question(self):
         story = grouped(walk_anyway(), [1, 2, 2, 3, 4, 5])
         story["beats"][1]["in_scene_words"] = ["BUS 12"]
         planned = plan_story(story)
-        self.assertEqual(vp.questions(story, planned), [])
+        self.assertEqual(risks(story, planned), [])
         self.assertIn('The words "BUS 12" are part of the picture', planned["clips"][1]["steps"][-1]["prompt"])
         self.assertTrue(any("best effort" in l["want"] for l in planned["checklist"]))
 
@@ -219,7 +240,7 @@ class ToolFlowTests(unittest.TestCase):
             async with Client(mcp) as client:
                 first = (await client.call_tool("plan_video_production", {"story": story, "request": B2_REQUEST})).data
                 second = (await client.call_tool("plan_video_production", {"story": story, "request": B2_REQUEST,
-                                                                              "answers": {"words-5": "card"}})).data
+                                                                              "answers": {"words-5": "card", "continuity": "ok"}})).data
                 return first, second
         first, second = asyncio.run(go())
         self.assertIn("words-5", [q["id"] for q in first["questions"]])
@@ -314,3 +335,85 @@ class ProductAndLabelTests(unittest.TestCase):
                  "beats": [{"seconds": 5, "text": "Thick white steam rises off the lake.", "exact_words": ["Evaporation"], "words_route": "overlay", "clip": 1}]}
         planned = plan_story(story)
         self.assertIn("plain to see from 0 s", planned["clips"][0]["steps"][-1]["prompt"])
+
+
+class ContinuityTests(unittest.TestCase):
+    """Keep what should stay continuous in one clip; split only when needed (user, 2026-11-13, W09 and W03)."""
+
+    def logo_reveal(self, card_text: str = "The logo, exactly as in the file, held in the centre.") -> dict:
+        return {"title": "Logo", "aspect": "16:9", "setting": "A dark navy background.",
+                "subjects": [{"id": "logo", "words": "The attached logo.", "role": "product", "picture": "https://example.com/logo.png"}],
+                "beats": [{"seconds": 4, "text": "Thin light lines draw in and form the logo.", "subjects": ["logo"], "clip": 1,
+                           "model": "minimax-h3", "reference": {"kind": "picture", "subject": "logo"}},
+                          {"seconds": 4, "kind": "card", "text": card_text, "picture": "https://example.com/logo.png",
+                           "exact_words": ["Build better, together."], "clip": 2}]}
+
+    def test_a_held_picture_after_its_own_reveal_is_a_question_and_merge_makes_one_clip(self):
+        story = self.logo_reveal()
+        q = next(q for q in vp.questions(story, plan_story(story)) if q["id"] == "held-2")
+        self.assertEqual(q["recommend"], "merge")
+        answered, problems = vp.apply_answers(story, {"held-2": "merge"})
+        self.assertEqual(problems, [])
+        self.assertEqual(len(answered["beats"]), 1)
+        self.assertEqual((answered["beats"][0]["seconds"], answered["beats"][0]["exact_words"]), (8, ["Build better, together."]))
+        self.assertEqual([c["kind"] for c in plan_story(answered)["clips"]], ["scene"])
+
+    def test_an_end_card_the_user_asked_for_is_kept_by_default(self):
+        story = self.logo_reveal("End card: the logo on navy with the words.")
+        q = next(q for q in vp.questions(story, plan_story(story)) if q["id"] == "held-2")
+        self.assertEqual(q["recommend"], "keep")
+        answered, _ = vp.apply_answers(story, {"held-2": "keep"})
+        self.assertNotIn("held-2", [q["id"] for q in vp.questions(answered, plan_story(answered))])
+
+    def test_a_beat_that_continues_the_shot_in_another_clip_is_a_question_and_join_puts_it_back(self):
+        story = {"title": "Jump", "aspect": "16:9", "setting": "A snowy field.",
+                 "beats": [{"seconds": 5, "text": "A red fox leaps up.", "clip": 1},
+                           {"seconds": 4, "text": "The fox lands head first in the snow.", "clip": 2, "link": "continues"},
+                           {"seconds": 5, "text": "A wide view of the field.", "clip": 3, "link": "new"}]}
+        self.assertIn("together-2", [q["id"] for q in vp.questions(story, plan_story(story))])
+        answered, problems = vp.apply_answers(story, {"together-2": "join"})
+        self.assertEqual(problems, [])
+        self.assertEqual([c["beats"] for c in plan_story(answered)["clips"]], [[1, 2], [3]])
+
+    def test_the_host_checks_every_plan_of_two_or_more_clips_once(self):
+        story = walk_anyway()
+        self.assertIn("continuity", [q["id"] for q in vp.questions(story, plan_story(story))])
+        answered, problems = vp.apply_answers(story, {"continuity": "ok"})
+        self.assertEqual(problems, [])
+        self.assertNotIn("continuity", [q["id"] for q in vp.questions(answered, plan_story(answered))])
+        _, problems = vp.apply_answers(story, {"continuity": "change"})
+        self.assertTrue(problems)
+
+
+class ProductPictureTests(unittest.TestCase):
+    """A product with no photo is a question: a real photo, never an image-model picture (user, 2026-11-14, W04)."""
+
+    def handhelds(self, picture: str | None = None) -> dict:
+        deck = {"id": "deck", "words": "a Steam Deck OLED handheld PC.", "role": "product"}
+        if picture:
+            deck["picture"] = picture
+        return {"title": "Handhelds", "aspect": "9:16", "setting": "A living room.", "subjects": [deck],
+                "beats": [{"seconds": 6, "text": "Hands hold the deck, fully in frame.", "subjects": ["deck"], "clip": 1}]}
+
+    def ids(self, story: dict) -> list[str]:
+        return [q["id"] for q in vp.questions(story, plan_story(story))]
+
+    def test_a_product_with_no_photo_is_asked_about_and_web_is_recommended(self):
+        story = self.handhelds()
+        q = next(q for q in vp.questions(story, plan_story(story)) if q["id"] == "picture-deck")
+        self.assertEqual((q["recommend"], sorted(q["options"])), ("web", ["none", "user", "web"]))
+
+    def test_web_without_a_photo_holds_the_plan_and_none_ends_the_question(self):
+        story = self.handhelds()
+        _, problems = vp.apply_answers(story, {"picture-deck": "web"})
+        self.assertTrue(problems and "Never a picture made by an image model" in problems[0])
+        answered, problems = vp.apply_answers(story, {"picture-deck": "none"})
+        self.assertEqual(problems, [])
+        self.assertNotIn("picture-deck", self.ids(answered))
+
+    def test_a_product_with_a_photo_is_not_asked_about_and_the_clip_uses_it(self):
+        story = self.handhelds("https://example.com/deck.jpg")
+        self.assertNotIn("picture-deck", self.ids(story))
+        clip = plan_story(story)["clips"][0]
+        self.assertEqual((clip["reference"]["kind"], clip["steps"][-1]["model"]), ("picture", "minimax-h3"))
+        self.assertIn("Use @deck as a likeness guide", clip["steps"][-1]["prompt"])

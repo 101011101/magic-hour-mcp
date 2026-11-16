@@ -5,7 +5,9 @@ The hosted server has no ffmpeg at this time (ticket MCP-06). A build on a machi
 
 from __future__ import annotations
 
+import array
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -96,6 +98,12 @@ def last_frame(video: Path, out: Path) -> Path:
     return out
 
 
+def first_frame(video: Path, out: Path) -> Path:
+    """MCP-21: the end frame of a clip made to fit before this one."""
+    _ffmpeg(["-i", str(video), "-frames:v", "1", "-q:v", "2", str(out)])
+    return out
+
+
 CROP_LIMIT = 0.2   # a picture of another shape is cropped to fill the frame when this share or less is lost; else filled with a blur
 
 
@@ -134,12 +142,13 @@ def size_for(aspect: str, like: dict | None = None) -> tuple[int, int]:
 
 
 def join(files: list[Path], out: Path, audio: bool | list[bool] = True, seconds: list[float | None] | None = None,
-         size: tuple[int, int] | None = None) -> Path:
+         size: tuple[int, int] | None = None, overlap: float = 0.0, even: bool = False) -> Path:
     """Hard cuts, in the order given. Every clip is fitted to `size` (default: the first clip's size) and gets a sound track.
     A clip of another shape is cropped to fill the frame, or filled with a blur when a crop loses too much (frame_filter).
     seconds: one planned length per clip; a longer clip is cut to it (minimax-h3 returns at least about 2 s).
     audio=False: every clip is made silent (minimax-h3 adds a music bed even with audio off).
-    A list: one flag per clip (the user's own clip keeps its sound while generated clips are made silent)."""
+    A list: one flag per clip (the user's own clip keeps its sound while generated clips are made silent).
+    overlap, even: see smooth_cuts."""
     keep = list(audio) if isinstance(audio, list) else [audio] * len(files)
     seconds = list(seconds) if seconds else [None] * len(files)
     infos = [probe(f) for f in files]
@@ -167,9 +176,64 @@ def join(files: list[Path], out: Path, audio: bool | list[bool] = True, seconds:
         parts.append(part)
     listing = out.with_suffix(".txt")
     listing.write_text("".join(f"file '{p.resolve()}'\n" for p in parts))
-    _ffmpeg(["-f", "concat", "-safe", "0", "-i", str(listing), "-c", "copy", str(out)])
+    hard = out.with_name(f"{out.stem}-hard.mp4") if overlap else out
+    _ffmpeg(["-f", "concat", "-safe", "0", "-i", str(listing), "-c", "copy", str(hard)])
     for p in [*parts, listing]:
         p.unlink()
+    if overlap:
+        lengths = [min(i["seconds"], s) if s else i["seconds"] for i, s in zip(infos, seconds)]
+        smooth_cuts(hard, files, [k and bool(i["audio"]) for k, i in zip(keep, infos)], lengths, out, overlap, even)
+        hard.unlink()
+    return out
+
+
+FLOOR_GAP_DB = 6.0   # a clip whose background is this much louder than the others is turned down (W05)
+FLOOR_MAX_CUT_DB = 12.0
+
+
+def floor_db(file: Path, seconds: float | None = None) -> float | None:
+    """The quiet level of a clip's sound: the 10th percentile of its 0.25 s levels (the background between words)."""
+    cut = ["-t", f"{seconds:.3f}"] if seconds else []
+    raw = subprocess.run(["ffmpeg", "-v", "error", "-i", str(file), *cut, "-vn", "-ac", "1", "-ar", "8000", "-f", "f32le", "-"],
+                         capture_output=True).stdout
+    samples = array.array("f", raw[: len(raw) - len(raw) % 4])
+    if len(samples) < 4000:
+        return None
+    levels = sorted(10 * math.log10(max(1e-12, sum(x * x for x in samples[i:i + 2000]) / 2000))
+                    for i in range(0, len(samples) - 1999, 2000))
+    return levels[len(levels) // 10]
+
+
+def smooth_cuts(film: Path, files: list[Path], keep: list[bool], lengths: list[float], out: Path,
+                overlap: float = 0.08, even: bool = True) -> Path:
+    """Rebuild the film's sound so no cut jumps (W05: the rain jumped up at the last cut).
+    Each clip's sound runs `overlap` seconds past its cut and fades out while the next fades in (a clip that ran long,
+    like minimax-h3, has real sound there). even=True: a clip whose background is FLOOR_GAP_DB louder than the
+    middle of the others is turned down to it, at most FLOOR_MAX_CUT_DB."""
+    floors = [floor_db(f, s) if k else None for f, k, s in zip(files, keep, lengths)]
+    known = sorted(f for f in floors if f is not None)
+    middle = known[(len(known) - 1) // 2] if known else None
+    gains = [0.0 if (f is None or middle is None or not even or f - middle < FLOOR_GAP_DB)
+             else -min(FLOOR_MAX_CUT_DB, f - middle) for f in floors]
+    inputs, chain, labels, at = ["-i", str(film)], [], [], 0.0
+    for i, (file, k, length) in enumerate(zip(files, keep, lengths)):
+        if k:
+            n = len(inputs) // 2
+            inputs += ["-i", str(file)]
+            run = length + (overlap if i < len(files) - 1 else 0)
+            fades = (f"afade=t=in:d={overlap:.3f}," if i else "") + (f"afade=t=out:st={run - overlap:.3f}:d={overlap:.3f}," if i < len(files) - 1 else "")
+            chain.append(f"[{n}:a]atrim=0:{run:.3f},asetpts=PTS-STARTPTS,apad=whole_dur={run:.3f},"
+                         f"aresample=48000,aformat=channel_layouts=stereo,{fades}volume={gains[i]:.1f}dB,"
+                         f"adelay={int(at * 1000)}:all=1[c{i}]")
+            labels.append(f"[c{i}]")
+        at += length
+    if not labels:
+        shutil.copy(film, out)
+        return out
+    chain.append(f"anullsrc=r=48000:cl=stereo,atrim=0:{at:.3f}[z]")
+    chain.append("[z]" + "".join(labels) + f"amix=inputs={len(labels) + 1}:normalize=0:duration=first[a]")
+    _ffmpeg([*inputs, "-filter_complex", ";".join(chain), "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac",
+             "-ar", "48000", "-ac", "2", str(out)])
     return out
 
 
@@ -669,8 +733,10 @@ def draw_captions(film: Path, timed: list[dict], out: Path) -> Path:
     for i, line in enumerate(timed):
         pngs.append(_caption_png(line["text"], (info["width"], info["height"]), out.with_name(f"{out.stem}-caption{i}.png"),
                                  **word_style(line)))
-        inputs += ["-i", str(pngs[-1])]
-        chain.append(f"[{last}][{i + 1}:v]overlay=enable='between(t,{line['start']:.2f},{line['end']:.2f})'[v{i}]")
+        # -loop 1 and shortest=1: a single-frame picture was dropped when the film's video started a moment after 0 s
+        # (2026-11-13, W10: the join's file starts at 0.021 s; words_drawn 3, none on screen)
+        inputs += ["-loop", "1", "-i", str(pngs[-1])]
+        chain.append(f"[{last}][{i + 1}:v]overlay=shortest=1:enable='between(t,{line['start']:.2f},{line['end']:.2f})'[v{i}]")
         last = f"v{i}"
     _ffmpeg([*inputs, "-filter_complex", ";".join(chain), "-map", f"[{last}]", "-map", "0:a?",
                            "-c:v", "libx264", "-crf", "18", "-c:a", "copy", str(out)])
