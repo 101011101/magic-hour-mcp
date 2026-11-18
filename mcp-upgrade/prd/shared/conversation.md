@@ -2,6 +2,8 @@
 
 Ticket: MCP-01. Overview: [ARCHITECTURE](../ARCHITECTURE.md).
 
+- Scope (user, 2026-11-12/13): `plan_request` serves video composition only. Tool management has its own planner, `plan_tool_call` ([tool management](../tool-management/README.md)).
+
 - Status: built (`mcp_magichour/plan_request.py`), rules updated 2026-11-10. Open questions below still need the user.
 - Ticket: `mcp-upgrade/tickets/MCP-01-conversation.md`.
 - Contract tests: `tests/test_plan_request.py` (61 tests, all pass).

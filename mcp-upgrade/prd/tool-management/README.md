@@ -1,6 +1,8 @@
 # Tool management
 
-The MCP edits media that already exists: one tool call on the user's clip, photo or audio. Overview: [ARCHITECTURE](../ARCHITECTURE.md). Comes after video composition.
+The MCP edits media that already exists: one tool call, or a few in order, on the user's clip, photo or audio. Overview: [ARCHITECTURE](../ARCHITECTURE.md). Comes after video composition.
+
+A separate workflow from video composition (user, 2026-11-13). Its own planner, notes, question sheets, tests and switch.
 
 ## The problem: an information gap
 
@@ -9,24 +11,66 @@ The MCP edits media that already exists: one tool call on the user's clip, photo
 
 ## The fix: two sheets (user, 2026-11-13)
 
-- Logic side: a large note sheet (also called the tip sheet) of tool behaviour. It says how each tool works and which cases to watch for. Source: the tools we tested for their capabilities.
-- Input side: a large question sheet. It lists what to ask the user. It comes from the note sheet and the tools (user, 2026-11-16).
-  - A vague request: ask to make it clear, so that the right tool is picked. The note sheet guides these questions.
+- **Tool notes** (logic side). For each tool: what it does well, how it fails, which cases to watch for, and the deciding question that selects it. Built from the [failure list](failures.md) and the tool tests (MCP-TOOLS-21). A data file, not prose.
+- **Question sheets** (input side). One for each tool family. Made from the notes: no row without a note behind it.
+- Tip sheet = note sheet. The question sheet is what we ask the user; it comes from the note sheet and the tools (user, 2026-11-16).
+  - A vague request: ask to make it clear, so that the right tool is picked.
   - Basic questions for the tools, and questions for all media production: aspect ratio, target audience, sound.
   - Sound with no answer: the refined prompt has sound (default). Test this later (MCP-26).
-- Neither sheet is written yet. Discuss the contents in chat first.
-- Tool side work is William's (onboarding doc).
+- One question sheet for both sides (tool notes, question sheets, the video plan's questions, the universal rows): a later ticket (MCP-28, user, 2026-11-17).
 
-## Tickets
+## How a request flows (`plan_tool_call`)
 
-- MCP-23: caption and card tools that the video composition join can use (style: white letters with a black outline; better cards; no double captions).
+When (user, 2026-11-13): only when the answer would materially change the result: something material is missing or ambiguous and only the user can say, or the request hits a known pitfall (the user's own picture or video, faces, exact words, music under 15 s, subtitles, a talking photo, side by side, a logo on a video). A clear new picture, clip or sound goes straight to the tool. One call: the description carries a short index of every sheet's rows, so the host sends its answers with the family. Rows it leaves out take their default (the user is told); only rows marked `ask` become questions.
+
+1. **Predict the family.** The host names a tool family from the request (for example sound, edit and trim, face and character, image, subtitles and text). A family, not one tool, so a wrong guess stays close.
+2. **Fill the family's question sheet** from the user's words and files. Two kinds of rows:
+   - Deciding rows pick the tool inside the family. Example from video composition: a presenter on screen → lip sync; no presenter → voice cloner.
+   - Required rows must be right, or the result fails (aspect, which face, the time range).
+   - Every other parameter is loose: the server's default, never asked.
+3. **Ask what is left open.** Only rows whose answer would change the result and that the user's words and files do not answer. All in one batch, no limit on its size, asked once: after the user answers, anything still open takes its default (user, 2026-11-13).
+4. **Return** the tool (or the tools in order), its parameters, and the notes on that tool's known faults. The host then calls the API tool directly.
+
+A few tools in order on existing media (trim, then subtitles) is tool management. A multi-clip film made from text and references is video composition.
+
+## Tier
+
+- Free-tier models only (user, 2026-11-13, final). The planner never names a paid model. Free models per tool: `free_models` in [tool notes](../../../mcp_magichour/tool_notes.json).
+
+## Isolation
+
+Rule (user, 2026-11-13): tool management does not touch video composition.
+
+- New files only: `mcp_magichour/tool_plan.py`, the notes file, the question sheets, `tests/test_tool_plan.py`.
+- One registration line in `openapi_server.py`, behind `MAGIC_HOUR_TOOL_PLAN` (default `off`). Off: the server is as before.
+- No changes to: `plan_request.py`, `video_production.py`, `video_production_tool.py`, `gates.py`, `media_tools.py`, `openapi_policies.py`. No imports from the first four. A helper that is needed is copied, not shared.
+- Tool knowledge goes in `plan_tool_call`'s output, never in the API tools' descriptions (`openapi_policies.py`): the host reads those during video composition too.
+- Read only: `upload_media`, `kept_files.py`, the benchmark runs.
+- New tools (`tool_media.py`) reuse the shared media code unchanged: `media_tools` (ffmpeg work) and `media_helpers_tool` (fetch a file, deliver a result). `media_helpers_tool` itself imports from `video_production_tool`; tool management imports nothing from the protected files directly.
+
+## Open (decide with the user)
+
+- Name of the planner: `plan_tool_call` (proposed).
+- Decided (user, 2026-11-13): order of work is the existing tools first, then new tools (MCP-TOOLS-29 to MCP-TOOLS-35), then tool composition (chains of existing tools, MCP-TOOLS-25 to MCP-TOOLS-28). See [tickets](../../tickets/TICKETS.md).
+- `media_helpers_tool.py` holds those tools and is shared with video composition. New tools for tool management go in a new file, so the isolation rule holds.
+- Families (2026-11-13, proposed): the sheets use 7 request families (new picture, change picture, faces, change video, new video, talking, sound). The notes keep tool families (how a tool works); a sheet points to the tools behind it.
+
+## Tickets from video composition (Ray's numbers)
+
+- MCP-23: captions, cards and other words in a film use the better of both sides (user, 2026-11-17).
 - MCP-25: the top tools at about 99%, tested apart from video generation. Usage table in the ticket.
-- MCP-20: notes on the one-call video tools from the production findings, at the merge with `origin/william`.
+- MCP-20: notes on the one-call video tools from the production findings.
 
 ## Docs
 
 | Doc | Covers | Code |
 |---|---|---|
+| [tool notes](../../../mcp_magichour/tool_notes.json) | each tool: family, type (use it for), antitype (do not, use instead), limits, deciding question (24 tools) | `tool_notes.json` |
+| [question sheets](../../../mcp_magichour/question_sheets.json) | 7 request families, each with deciding and required rows, read-from cues, defaults and evidence | `question_sheets.json` |
+| [notes for Ray](notes-for-ray.md) | runner faults, the flux-2-klein line in `edit_image`, the dry-run free list | — |
+| new tools | `add_sound_to_video` (MCP-TOOLS-29), `put_pictures_side_by_side` (MCP-TOOLS-30), `put_picture_on_video` (MCP-TOOLS-31), `make_card_clip` (MCP-TOOLS-32), `adjust_colours` (MCP-TOOLS-35) | `tool_media.py`, `tests/test_tool_media.py` |
+| [tool tests](tool-tests.md) | targeted runs that confirm the notes (wlive1: 14 cases) | — |
+| [failures](failures.md) | each tool-management item, old MCP against new, what failed | — |
 | [api tools](api-tools.md) | one MCP tool per Magic Hour API operation (upstream base) | `openapi_*.py`, `workflow_guidance.py` |
 
-Shared with video composition: [conversation](../shared/conversation.md) (`plan_request`), [media files](../shared/media-files.md).
+Shared with video composition: [media files](../shared/media-files.md). [Conversation](../shared/conversation.md) (`plan_request`) is for video composition only.
