@@ -14,7 +14,8 @@ class LookTests(unittest.TestCase):
 
     def test_a_look_sets_font_style_and_capitals(self):
         style = media_tools.word_style({"text": "x", "look": "bold"})
-        self.assertEqual((style["font"], style["style"], style["upper"]), ("Anton", "outline", True))
+        self.assertEqual((style["font"], style["style"]), ("Anton", "outline"))
+        self.assertNotIn("upper", style)   # the words are drawn as the host wrote them (user, 2026-11-17)
         self.assertEqual(media_tools.word_style({"text": "x", "look": "bold", "font": "Pacifico"})["font"], "Pacifico")
         self.assertEqual(media_tools.word_style({"text": "x"})["style"], "band")   # add_words_to_media keeps its default
 

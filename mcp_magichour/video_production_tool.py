@@ -113,7 +113,8 @@ class Beat(BaseModel):
         "is generated in the film's style, with its exact_words spelled by the picture model (user, 2026-11-17)."))
     words_look: Literal["bold", "clean", "classic", "marker", "block", "playful", "script"] | None = Field(default=None, description=(
         "How this beat's exact_words look when code draws them (a title over a scene, a card with `background`). "
-        "bold: heavy tall capitals, black outline (default). clean: thin tall capitals, modern. classic: an elegant serif "
+        "Words are drawn exactly as you write them: write capitals only if you want capitals. "
+        "bold: a heavy tall font, black outline (default). clean: a thin tall font, modern. classic: an elegant serif "
         "(luxury, food, film). marker: hand written (vlog, fun, kids). block: loud blocks (games, sport, a sale). playful: "
         "round and friendly. script: joined hand writing (a wedding, a café). Pick one that fits the film's mood."))
     words_font: Literal["Anton", "Bebas Neue", "Archivo Black", "Abril Fatface", "Permanent Marker", "Bungee", "Lilita One", "Pacifico"] | None = Field(

@@ -262,7 +262,7 @@ def register_media_helpers(mcp: FastMCP) -> None:
             "or a corner (top_left, top_right, bottom_left, bottom_right). align: left, center, right (a lower third: "
             "place bottom, align left). size: small, normal, large. style: band (white letters on a dark band), shadow "
             "(white letters with a soft shadow, no band) or outline (white letters, black outline, as in memes). look: a "
-            "named look that sets font and style: caption (the caption default), bold (heavy capitals, a title), clean, "
+            "named look that sets font and style: caption (the caption default), bold (a heavy tall font, a title), clean, "
             "classic (serif), marker (hand written), block, playful, script. font: Anton, Bebas Neue, Archivo Black, "
             "Abril Fatface, Permanent Marker, Bungee, Lilita One, Pacifico. With no style or look: band. opacity: 0.05 to 1 (a watermark: a corner, size small, style "
             "shadow, opacity 0.6). Lines at the same place and time are stacked, one under the other. start and end in "

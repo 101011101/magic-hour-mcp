@@ -571,17 +571,18 @@ FONT_FILES = {
     "Abril Fatface": "AbrilFatface-Regular.ttf", "Permanent Marker": "PermanentMarker-Regular.ttf",
     "Bungee": "Bungee-Regular.ttf", "Lilita One": "LilitaOne-Regular.ttf", "Pacifico": "Pacifico-Regular.ttf",
 }
-# Named looks for words in a film or picture. scale: tall narrow fonts are drawn larger, so a title stays larger than a caption. caption: the default for captions (Runbo, 2026-11-16: white letters,
+# Named looks for words in a film or picture. A look never changes the letters: the words are drawn as the host
+# wrote them, capitals included (user, 2026-11-17). scale: tall narrow fonts are drawn larger, so a title stays larger than a caption. caption: the default for captions (Runbo, 2026-11-16: white letters,
 # black outline, as in memes). The others are for titles and on-screen words, so they never look like a caption.
 LOOKS = {
-    "caption": {"font": "Archivo Black", "style": "outline", "upper": False},
-    "bold": {"font": "Anton", "style": "outline", "upper": True, "scale": 1.4},          # a heavy tall title (default for titles)
-    "clean": {"font": "Bebas Neue", "style": "shadow", "upper": True, "scale": 1.4},     # modern, thin and tall
-    "classic": {"font": "Abril Fatface", "style": "shadow", "upper": False},  # an elegant serif: luxury, film, food
-    "marker": {"font": "Permanent Marker", "style": "outline", "upper": False},  # hand written: vlog, fun, kids
-    "block": {"font": "Bungee", "style": "outline", "upper": True},        # loud blocks: games, sport, sale
-    "playful": {"font": "Lilita One", "style": "outline", "upper": False},  # round and friendly
-    "script": {"font": "Pacifico", "style": "shadow", "upper": False},     # joined hand writing: a wedding, a café
+    "caption": {"font": "Archivo Black", "style": "outline"},
+    "bold": {"font": "Anton", "style": "outline", "scale": 1.4},          # a heavy tall title (default for titles)
+    "clean": {"font": "Bebas Neue", "style": "shadow", "scale": 1.4},     # modern, thin and tall
+    "classic": {"font": "Abril Fatface", "style": "shadow"},  # an elegant serif: luxury, film, food
+    "marker": {"font": "Permanent Marker", "style": "outline"},  # hand written: vlog, fun, kids
+    "block": {"font": "Bungee", "style": "outline"},        # loud blocks: games, sport, sale
+    "playful": {"font": "Lilita One", "style": "outline"},  # round and friendly
+    "script": {"font": "Pacifico", "style": "shadow"},     # joined hand writing: a wedding, a café
 }
 TITLE_LOOK = "bold"
 
@@ -657,18 +658,17 @@ def still_video(image: Path, seconds: float, out: Path) -> Path:
 
 
 def _caption_png(text: str, size: tuple[int, int], out: Path, at: float = 0.80, share: float = 0.052, align: str = "center",
-                 style: str = "band", opacity: float = 1.0, font: str | None = None, upper: bool = False) -> Path:
+                 style: str = "band", opacity: float = 1.0, font: str | None = None) -> Path:
     """Words on a clear picture of `size`, white on a dark band. at: where the band's middle is (share of the height).
     share: letter height as a share of the short side. A line break in `text` starts a new line.
     align: left, center or right, with a 5% margin (D23b: a lower third). style: band (a dark band), shadow (no band,
     a soft shadow under the letters; E29c: a watermark) or outline (white letters with a black outline, no band).
-    opacity: 0 to 1 for the whole drawing. font: a FONT_FILES name. upper: capital letters."""
+    opacity: 0 to 1 for the whole drawing. font: a FONT_FILES name. The words are drawn as given."""
     from PIL import Image, ImageDraw
 
     width, height = size
     points = round(min(width, height) * share)
     font = load_font(points, font)
-    text = text.upper() if upper else text
     image = Image.new("RGBA", size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)
     lines = []
@@ -736,14 +736,14 @@ SIZES = {"small": 0.032, "normal": 0.052, "large": 0.075}
 
 def word_style(line: dict) -> dict:
     """_caption_png settings for one line: {text, place, align?, size?, large?, look?, font?, style?, opacity?}.
-    look: a LOOKS name (font, style, capitals); font and style given with it win over the look's."""
+    look: a LOOKS name (font, style); font and style given with it win over the look's."""
     place = line.get("place") or "bottom"
     at, align = CORNERS.get(place, (WORD_PLACES.get(place, 0.80), line.get("align") or "center"))
     size = line.get("size") or ("large" if line.get("large") else "normal")
     look = LOOKS.get(line.get("look") or "", {})
     return {"at": at, "align": align, "share": SIZES.get(size, 0.052) * look.get("scale", 1.0), "style": line.get("style") or look.get("style") or "band",
             "opacity": float(line["opacity"]) if line.get("opacity") is not None else 1.0,
-            "font": line.get("font") or look.get("font"), "upper": bool(look.get("upper"))}
+            "font": line.get("font") or look.get("font")}
 
 
 def stack_lines(lines: list[dict]) -> list[dict]:
