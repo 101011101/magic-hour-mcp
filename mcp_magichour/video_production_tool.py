@@ -154,6 +154,12 @@ class Beat(BaseModel):
     source_end: float | None = Field(default=None, gt=0, description="Use the user's clip up to this second (default: its end).")
 
 
+class NarratorVoice(BaseModel):
+    gender: Literal["Female", "Male"]
+    age: Literal["Young", "Middle-aged", "Older"]
+    style: Literal["Conversational", "Narration", "Social Media", "Advertising", "Professional", "Education", "Entertainment", "Wellness"]
+
+
 class Story(BaseModel):
     title: str
     aspect: Literal["16:9", "9:16", "1:1"]
@@ -163,7 +169,13 @@ class Story(BaseModel):
         "must be true of every clip: no title cards, no on-screen words, no actions, no people, no model names."))
     subjects: list[Subject] = Field(default_factory=list)
     beats: list[Beat]
-    narrator: str | None = Field(default=None, description="For a voice-over: how the narrator sounds, for example 'a calm, warm woman's voice'.")
+    narrator: str | None = Field(default=None, description=(
+        "For a voice-over: how the narrator sounds in a few words (tone, pace, accent), for example 'warm, casual, quick, "
+        "American'."))
+    narrator_voice: NarratorVoice | None = Field(default=None, description=(
+        "For a voice-over: who the narrator is. The plan picks the preset voice that fits it best, with `narrator`."))
+    voice: str | None = Field(default=None, description=(
+        "A preset voice id (cv-0001 ...) only when the user names one. Leave empty: the plan picks from `narrator_voice`."))
     music: str | None = Field(default=None, description=(
         "Music under the whole film: its mood and instruments. A reel, an ad or a social post gets music unless the user "
         "asks for silence. Leave empty for no music."))
@@ -176,8 +188,8 @@ class Story(BaseModel):
     captions: bool = Field(default=False, description="Draw the narrator's sentences on the picture when they are spoken.")
     voice_sample: str | None = Field(default=None, description=(
         "For a voice-over in the user's own voice: a short recording (10-30 s) of a voice the user owns or has rights to, "
-        "as its file_path or a URL. Leave it empty otherwise: the voice cloner then reads the script in a default voice "
-        "(a woman's, or a man's when `narrator` says so)."))
+        "as its file_path or a URL. Leave it empty otherwise: the voice cloner then reads the script in the preset voice "
+        "that fits `narrator_voice`."))
     voice_route: str | None = Field(default=None, description="Set by the answer to the `voice` question. Leave empty.")
 
 

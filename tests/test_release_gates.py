@@ -78,9 +78,9 @@ class VoiceOverSwitch(unittest.TestCase):
             planned, asked = self.plan(STORY)
             self.assertNotIn("voice", [q["id"] for q in asked])
             narration = planned["sound"]["narration"]
-            self.assertEqual((narration["tool"], narration["sample"]), ("voice_cloner", vp.DEFAULT_VOICES["female"][1]))
+            self.assertEqual((narration["tool"], narration["sample"]), ("voice_cloner", vp.pick_voice(STORY)["url"]))
             planned, _ = self.plan({**STORY, "narrator": "a deep, calm man's voice"})
-            self.assertEqual(planned["sound"]["narration"]["sample"], vp.DEFAULT_VOICES["male"][1])
+            self.assertIn(planned["sound"]["narration"]["sample"], {v[6] for v in vp.VOICES if v[2] == "Male"})
             story, problems = vp.apply_answers(STORY, {"voice": "video"})
             self.assertFalse(problems)
             planned, _ = self.plan(story)

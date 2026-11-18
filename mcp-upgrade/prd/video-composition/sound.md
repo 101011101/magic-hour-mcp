@@ -5,7 +5,7 @@ Code: `video_production.py` (`plan_sound`), `video_production_tool.py` (`create_
 
 ## Design (option E, user, 2026-11-05)
 
-- Story fields: `says` on each beat, `narrator`, `music`, `captions`, `voice_sample`.
+- Story fields: `says` on each beat, `narrator`, `narrator_voice`, `voice`, `music`, `captions`, `voice_sample`.
 - `create_production_sound` makes one narration track and one music track for the whole film.
 - The join places each part of the narration on its clip (timing by pauses, about ±0.5 s), mixes the music, draws the captions (needs Pillow).
 
@@ -14,7 +14,7 @@ Code: `video_production.py` (`plan_sound`), `video_production_tool.py` (`create_
 | Case | Tool | Rule |
 |---|---|---|
 | No presenter, sample given | `/v1/ai-voice-cloner` | Recommended (A4, MCP-11). |
-| No sample | `/v1/ai-voice-cloner` with a default preset voice | Ashley; Daniel when `narrator` names a man (user, 2026-11-11, proof of concept). No question. |
+| No sample | `/v1/ai-voice-cloner` with a preset voice | `pick_voice` (user, 2026-11-17, below). No question. |
 | `MAGIC_HOUR_VOICE_OVER=video` | the video model speaks | The old path. |
 
 - Default: `cloner` (`VOICE_OVER_DEFAULT`, user, 2026-11-11). Our version ships to production once upstream approves; until then we work as if approved.
@@ -23,6 +23,18 @@ Code: `video_production.py` (`plan_sound`), `video_production_tool.py` (`create_
 - Never a voice of someone else without their consent.
 - Preset voices (Magic Hour's voice previews) are allowed as the default sample for now (user, 2026-11-11).
 - The sample: a URL or a `file_path` (from `upload_media` or the host's upload).
+
+## Voice pick (MCP-22, user, 2026-11-17)
+
+- The host gives the profile; the code picks the voice. No extra model call. Picked at plan time; used in the sound step after the join.
+- Host: `narrator_voice` (gender, age, style) and `narrator` (a few words: tone, pace, accent). `voice`: a preset id, only when the user names one.
+- Code: `pick_voice` scores the presets of that gender. Style 4, age 2, an accent named in both 2, another accent named -2, each shared description word 1. Ties: the lowest id.
+- No profile: a man's voice if `narrator` says so, else a woman's; middle-aged; Conversational (Ashley for a woman).
+- The plan shows the voice: name, id, tags.
+- List: `mcp_magichour/voices.py`, 319 voices. Tags from Magic Hour's web app voice table (2026-11-16); the API gives none (MCP-27).
+- Left out: Characters, voices that imitate a named character, voices in another language (description or Whisper on the preview), Neutral.
+- Why: before, every film got Ashley or Daniel. Test (`vpick`, 6 requests, 252 credits): the profile match kept the host's brief in 6 of 6; the host's pick from a list of 24 broke it in 3 of 6 (a man for a bedtime story and a breathing exercise, a woman for an owl documentary). The user: all picks sounded fine.
+- Speech inside a clip is not picked here: minimax-h3 makes that voice.
 
 ## Music
 
@@ -75,8 +87,8 @@ Code: `video_production.py` (`plan_sound`), `video_production_tool.py` (`create_
 
 - A later mix does not read the kept layers yet.
 - The `mix_audio` helper tool uses the volumes the host passes. It does not use the priority.
-- MCP-22, next: narration and dialogue sound AI-like; the UGC ad music was corny (reviewer, 2026-11-14).
+- MCP-22: narration voice pick done (above). Open: delivery words for speech inside a clip.
 - MCP-23, tool side: caption style. Now white letters on a dark band; wanted white letters with a black outline.
 - MCP-24: the off-screen interviewer's question is not heard.
 
-1. The default preset voices are a proof of concept (user, 2026-11-11). Decide later which voices ship, and whether the user picks one.
+1. Voice-over by more than one speaker (vpick V6: a dad and a daughter, voices only) has no story field yet: one narration track reads all lines in one voice.

@@ -3,7 +3,8 @@
 - One line for each ticket. Details are in the ticket file, if there is one.
 - "Proposed" = not from the user. Confirm or delete.
 - Nothing is committed. Nothing is deployed.
-- Updated: 2026-11-16.
+- Updated: 2026-11-17.
+- Checkpoints to roll back to (git tags, user, 2026-11-17): `checkpoint-2026-11-16-video-approved` (2f7ab1d: the video decisions after the user's marks), `checkpoint-2026-11-17-voice-pick` (voice pick added). Roll back: `git checkout <tag>`.
 - Next (user, 2026-11-16): MCP-22 voice, then the tool behaviour check (tool side), composition clean-up, conversation, big benchmark, ship.
 
 ## To do
@@ -102,6 +103,11 @@
 - [ ] **MCP-22 · Voice that sounds less AI.** Next ticket (user, 2026-11-16). Source: reviewer feedback, 2026-11-14.
   - Narration and dialogue sound AI-like. Try prompt words for a more real, natural voice.
   - UGC ad: the dialogue did not sound real; the music was "really, really corny". The reviewer liked the old MCP's film better there.
+  - Cause (narration): every film got Ashley or Daniel. The voice cloner copies its sample; it has no tone setting.
+  - [x] 2026-11-17 · Voice pick: the host gives `narrator_voice` (gender, age, style); `pick_voice` takes the best tagged preset from `voices.py` (319). The user: host gives the profile, code picks. [PRD](../prd/video-composition/sound.md).
+    - Test `vpick` (6 requests, 252 credits): profile match 6 of 6 kept the brief; host pick from 24 voices 3 of 6. The user: all sounded fine.
+  - [ ] Speech inside a clip (minimax-h3): delivery words in the spoken line, for example "says casually, in a relaxed, natural voice". Test on W05 and W08.
+  - Music: not a big issue now (user, 2026-11-16).
 - [ ] **MCP-23 · Caption and card style from the tool side.** Tool side (user, 2026-11-16). Source: reviewer feedback, 2026-11-14.
   - Now: the join draws captions and cards by code (`media_tools._caption_png`, default `band`: white letters on a dark band). A placeholder.
   - Wanted: a hook in `join_production_clips` to swap in the tool side's caption and card tools. Agree the format with William: what the join sends, what comes back.
@@ -115,6 +121,7 @@
 - [ ] **MCP-26 · Sound on when the user does not answer.** User, 2026-11-16. Test later.
   - Rule: no answer about sound = the refined prompt has sound.
   - Conflict: `plan_request` rule 6b fills sound `none` on "your call" ([conversation](../prd/shared/conversation.md)). Change it when this ticket is done.
+- [ ] **MCP-27 · Voice tags in the API.** Ask Magic Hour to return gender, age, style and description from `GET /v1/voices`. Now `voices.py` is a copy of the web app's table (2026-11-16); it goes stale when voices are added.
 - [ ] **MCP-05 · When to call the video production tool.** Instructions to the host agent, or code that reads the request and decides. Later (user, 2026-11-05).
 - [ ] **MCP-06 · Last frame, join and storage on the deployed server.**
   - [x] 2026-11-06 · ffmpeg: the server uses the ffmpeg on its PATH, else the one the `imageio-ffmpeg` package ships; ffprobe is no longer needed (`media_tools.probe` reads ffmpeg's own report). Install: `pip install -e ".[production]"`.

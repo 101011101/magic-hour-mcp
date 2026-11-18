@@ -41,7 +41,7 @@ A voice-over is one track for the whole film, not a sound inside each clip: `say
 for a beat. One call reads all the lines in one voice; the join puts each beat's lines on that beat.
     voice_sample  a URL of a short recording of a voice the user owns or has rights to. With the voice-over switch on
                   (MAGIC_HOUR_VOICE_OVER=cloner, the default), the voice cloner reads the script in that voice; without a
-                  recording, in a default preset voice (Ashley, or Daniel when the narrator is a man). With the switch
+                  recording, in the preset voice that best fits `narrator_voice` (pick_voice). With the switch
                   set to video, a video model reads it over a black screen (2 right in 8, 2026-11-08).
     The switch is off in what we ship until upstream approves the voice cloner (MCP-11; tests/test_release_gates.py).
 
@@ -59,6 +59,8 @@ import os
 import re
 from copy import deepcopy
 from typing import Any
+
+from .voices import VOICES
 
 LINKS = ("continues", "event", "moves", "new")
 WORD_ROUTES = ("overlay", "card", "model", "still", "accept")
@@ -95,17 +97,44 @@ def word_match(heard: str, script: str) -> float:
 
 
 # User, 2026-11-11 (proof of concept): with the cloner on and no recording from the user, the cloner reads the script in
-# a default preset voice (Magic Hour's own voice previews), so a voice-over needs no question. A user's own recording wins.
-DEFAULT_VOICES = {
-    "female": ("Ashley", "https://videos.magichour.ai/presets/voices/v2/cv-0001-ashley.mp3"),
-    "male": ("Daniel", "https://videos.magichour.ai/presets/voices/v2/cv-0008-daniel.mp3"),
-}
+# a preset voice (Magic Hour's own voice previews), so a voice-over needs no question. A user's own recording wins.
+# User, 2026-11-17 (MCP-22): the host gives the narrator's profile (`narrator_voice`: gender, age, style) and the code
+# takes the best tagged preset. Before, every film got Ashley or Daniel. Test (vpick, 2026-11-17): the host's own pick
+# from a short list of 24 broke its own brief in 3 of 6 requests; the profile match kept it in 6 of 6.
 MALE_WORDS = re.compile(r"\b(man|man's|male|men|he|his|him|guy|boy|gentleman|father|dad|deep)\b", re.I)
+ACCENTS = ("American", "British", "Australian", "Irish", "Scottish", "Indian", "Nigerian", "African", "Southern", "Canadian")
+_PLAIN = set("a an the and with of for to in on voice voices male female natural is it its that this like".split())
 
 
-def default_voice(narrator: str | None) -> tuple[str, str]:
-    """The preset voice for a narrator description: a man's voice if the words say so, else a woman's."""
-    return DEFAULT_VOICES["male" if MALE_WORDS.search(narrator or "") else "female"]
+def _words(text: str) -> set[str]:
+    return {w for w in re.findall(r"[a-z]+", text.lower()) if w not in _PLAIN}
+
+
+def pick_voice(story: dict) -> dict:
+    """The preset voice for the narrator: `voice` (an id) if set, else the best match for `narrator_voice` and `narrator`.
+
+    Score: style 4, age 2, each accent named in both 2, another accent named -2 (vpick V3: "neutral American" got a West African voice), each other
+    shared description word 1. Style outweighs an accent: at 3 and 3, V1 and V3 lost their style. Ties go to the lowest id. With no profile: a man's voice if `narrator` says so, else a
+    woman's; middle-aged; Conversational.
+    """
+    chosen = story.get("voice")
+    if chosen:
+        hit = next((v for v in VOICES if v[0] == chosen), None)
+        if hit:
+            return {"id": hit[0], "name": hit[1], "url": hit[6], "tags": f"{hit[2]}, {hit[3]}, {hit[4]}"}
+    said = story.get("narrator") or ""
+    profile = story.get("narrator_voice") or {}
+    gender = profile.get("gender") or ("Male" if MALE_WORDS.search(said) else "Female")
+    age, style = profile.get("age") or "Middle-aged", profile.get("style") or "Conversational"
+    accents, words = {a for a in ACCENTS if a.lower() in said.lower()}, _words(said)
+
+    def score(v: tuple) -> tuple:
+        theirs = {a for a in ACCENTS if a.lower() in v[5].lower()}
+        named = 2 * len(accents & theirs) - (2 if accents and theirs - accents else 0)
+        return (4 * (v[4] == style) + 2 * (v[3] == age) + named + len(words & _words(v[5])), -int(v[0][3:]))
+
+    best = max((v for v in VOICES if v[2] == gender), key=score)
+    return {"id": best[0], "name": best[1], "url": best[6], "tags": f"{best[2]}, {best[3]}, {best[4]}"}
 
 
 def voice_over_mode() -> str:
@@ -618,11 +647,11 @@ def plan_sound(story: dict, clips: list[dict]) -> dict | None:
         script = " ".join(line for part in parts for line in part["lines"])
         seconds = min(MODEL_MAX_SECONDS[TEXT_MODEL], max(5, -(-len(script.split()) // NARRATION_WORDS_PER_SECOND) + 3))
         if voice_over_mode() == "cloner" and story.get("voice_route") != "video":
-            name, preset = default_voice(story.get("narrator"))
-            sample = story.get("voice_sample") or preset
+            preset = pick_voice(story)
+            sample = story.get("voice_sample") or preset["url"]
             sound["narration"] = {
                 "parts": parts, "tool": "voice_cloner", "sample": sample, "script": script,
-                "voice": "the user's recording" if story.get("voice_sample") else f"default preset voice {name}",
+                "voice": "the user's recording" if story.get("voice_sample") else f"preset voice {preset['name']} ({preset['id']}: {preset['tags']})",
                 "credits": -(-len(script) // 10) * CLONER_CREDITS_PER_10_LETTERS,
             }
         else:
@@ -873,7 +902,7 @@ def questions(story: dict, planned: dict) -> list[dict]:
                     "options": {"split": "Give beat {0} a clip of its own.".format(n), "keep": "Keep the clip. The line may not be said."},
                     "recommend": "split",
                 })
-    if False:   # 2026-11-11: no question; without a recording the cloner uses a default preset voice (default_voice)
+    if False:   # 2026-11-11: no question; without a recording the cloner uses a preset voice (pick_voice)
         out.append({
             "id": "voice", "beat": None,
             "ask": ("The film has a voice-over. A video model reading it over a black screen said the script right 2 times in 8 "
@@ -1002,7 +1031,7 @@ def apply_answers(story: dict, answers: dict[str, str]) -> tuple[dict, list[str]
             if choice == "video":
                 story["voice_route"] = "video"
             elif choice == "sample":
-                pass   # with no recording, the default preset voice reads it
+                pass   # with no recording, the preset voice from pick_voice reads it
             else:
                 problems.append("voice: choose sample or video")
             continue
