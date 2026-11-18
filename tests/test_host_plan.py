@@ -139,13 +139,16 @@ class QuestionTests(unittest.TestCase):
         self.assertEqual(clip["overlay"], [{"text": "walk anyway", "start": start, "end": start + answered["beats"][4]["seconds"]}])
         self.assertIn("exact: drawn by code", next(l["how"] for l in planned["checklist"] if l["id"] == "words-5"))
 
-    def test_card_puts_the_words_on_a_drawn_card_after_the_beat(self):
+    def test_card_puts_the_words_on_a_generated_card_after_the_beat(self):
+        # user, 2026-11-17 (MCP-23): the card is generated, its words quoted to the picture model; not drawn by code
         answered, _ = vp.apply_answers(self.words_story(), {"words-5": "card"})
         planned = plan_story(answered)
         self.assertTrue(planned["ok"], planned["problems"])
         self.assertEqual(sum(c["seconds"] for c in planned["clips"]), 30)            # 2 s taken from the beat
         card = planned["clips"][4]
-        self.assertEqual((card["kind"], card["made_by"], card["steps"][0]["words"]), ("card", "code", ["walk anyway"]))
+        still = card["steps"][0]
+        self.assertEqual((card["kind"], card["made_by"], still["tool"], still["model"]), ("card", "api", "generate_image", vp.STILL_MODEL))
+        self.assertIn('"walk anyway"', still["prompt"])
         self.assertNotIn("walk anyway", planned["clips"][3]["steps"][-1]["prompt"])  # not asked of the video model
         self.assertEqual(risks(answered, planned), [])
 
@@ -247,7 +250,7 @@ class ToolFlowTests(unittest.TestCase):
         self.assertNotIn("production", first)
         self.assertNotIn("questions", second)
         self.assertTrue(second["production"])
-        self.assertIn("code", [c.get("made_by") for c in second["clips"]])
+        self.assertIn("card", [c.get("kind") for c in second["clips"]])
 
 
 class FixesFromTheDryRunTests(unittest.TestCase):

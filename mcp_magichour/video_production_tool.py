@@ -10,6 +10,7 @@ The server keeps no state. The plan travels as `production`, a packed copy of th
 from __future__ import annotations
 
 import asyncio
+import re
 import base64
 import json
 import os
@@ -107,8 +108,16 @@ class Beat(BaseModel):
         "Words that are part of the picture: a label on a product, a sign, a poster. The video makes them as well as it "
         "can; letters on a moving object may change."))
     background: str | None = Field(default=None, description=(
-        "On a card: its background colour as a code, for example #3B1F6B. The card is then drawn by code, colour and "
-        "words exact, with no generation call."))
+        "On a card: its background colour as a code, for example #3B1F6B. Only when the user gives an exact colour (a brand "
+        "colour). The card is then drawn by code, colour and words exact, with no generation call. Without it, the card "
+        "is generated in the film's style, with its exact_words spelled by the picture model (user, 2026-11-17)."))
+    words_look: Literal["bold", "clean", "classic", "marker", "block", "playful", "script"] | None = Field(default=None, description=(
+        "How this beat's exact_words look when code draws them (a title over a scene, a card with `background`). "
+        "bold: heavy tall capitals, black outline (default). clean: thin tall capitals, modern. classic: an elegant serif "
+        "(luxury, food, film). marker: hand written (vlog, fun, kids). block: loud blocks (games, sport, a sale). playful: "
+        "round and friendly. script: joined hand writing (a wedding, a café). Pick one that fits the film's mood."))
+    words_font: Literal["Anton", "Bebas Neue", "Archivo Black", "Abril Fatface", "Permanent Marker", "Bungee", "Lilita One", "Pacifico"] | None = Field(
+        default=None, description="A font for this beat's drawn words, if the user names one or you want one other than the look's.")
     picture: str | None = Field(default=None, description=(
         "On a card: a picture to hold unchanged for the card's seconds (its file_path from upload_media, or a URL). Code "
         "draws the card's exact_words over it. Use it only for a still logo, a screenshot or a picture that must not change. "
@@ -185,7 +194,16 @@ class Story(BaseModel):
     music_swell: bool = Field(default=False, description=(
         "True only when the user asks for the music to rise when nobody speaks. Otherwise, in a film with a voice-over or a "
         "spoken line, the music stays at one quiet level under the voice for the whole film."))
-    captions: bool = Field(default=False, description="Draw the narrator's sentences on the picture when they are spoken.")
+    captions: bool = Field(default=False, description=(
+        "Words of what is said on the picture: white letters with a black outline. Words already on screen at that time "
+        "are not captioned again."))
+    caption_source: Literal["script", "speech"] | None = Field(default=None, description=(
+        "script (default when there is a voice-over): the exact `says` sentences, drawn by code when they are said, 0 "
+        "credits, always spelled right. speech: Magic Hour's subtitle tool transcribes the finished film; use it only when "
+        "people talk and there is no script (the user's own clip of a talk or an interview). It costs credits and can "
+        "miss a line or misspell a name."))
+    caption_font: Literal["Archivo Black", "Anton", "Bebas Neue", "Lilita One", "Permanent Marker"] | None = Field(default=None, description=(
+        "The caption font, if the user wants one. Default Archivo Black."))
     voice_sample: str | None = Field(default=None, description=(
         "For a voice-over in the user's own voice: a short recording (10-30 s) of a voice the user owns or has rights to, "
         "as its file_path or a URL. Leave it empty otherwise: the voice cloner then reads the script in the preset voice "
@@ -504,9 +522,10 @@ async def _finished(kind: str, project_id: str, out: Path) -> Path:
 
 def _add_sound(sound_plan: dict, film: Path, narration: Path | None, music: Path | None, out: Path,
                clip_starts: dict[int, float] | None = None, spoken: list[tuple[float, float]] | None = None,
-               music_first: bool = False, music_swell: bool = False) -> dict:
+               music_first: bool = False, music_swell: bool = False, overlays: list[dict] | None = None) -> dict:
     """The file steps of the sound, in one place (run in a thread). Returns what was done.
-    clip_starts: where each clip really starts in the joined film (a clip is often a little longer than planned)."""
+    clip_starts: where each clip really starts in the joined film (a clip is often a little longer than planned).
+    overlays: the words already on screen; a caption with the same words at that time is left out (the double caption)."""
     parts, done = [], {"narration": False, "music": bool(music), "captions": False}
     if narration:
         wanted = sound_plan["narration"]["parts"]
@@ -537,8 +556,14 @@ def _add_sound(sound_plan: dict, film: Path, narration: Path | None, music: Path
                 at += length
         for line, after in zip(timed, timed[1:]):   # one caption at a time
             line["end"] = min(line["end"], after["start"])
-        media_tools.draw_captions(mixed, timed, out)
-        mixed.unlink()
+        plain = lambda text: re.sub(r"[^a-z0-9]", "", text.lower())
+        shown = [line for line in timed if not any(plain(line["text"]) == plain(o["text"]) and o["start"] < line["end"]
+                                                   and line["start"] < o["end"] for o in overlays or [])]
+        if len(shown) < len(timed):
+            done["captions_left_out"] = len(timed) - len(shown)
+        timed = [dict(line, look="caption", **({"font": sound_plan["caption_font"]} if sound_plan.get("caption_font") else {})) for line in shown]
+        media_tools.draw_captions(mixed, timed, out) if timed else mixed.replace(out)
+        mixed.unlink(missing_ok=True)
         done["captions"] = True
     else:
         mixed.replace(out)
@@ -550,7 +575,10 @@ def _add_sound(sound_plan: dict, film: Path, narration: Path | None, music: Path
 async def join_clips(story: dict, made: dict[str, str], sound: dict[str, str] | None = None) -> dict:
     _need_ffmpeg()
     planned = _planned(story)
-    sound_plan = planned.get("sound") or {}
+    subtitles = (planned.get("sound") or {}).get("subtitles")
+    sound_plan = {k: v for k, v in (planned.get("sound") or {}).items() if k != "subtitles"}
+    if not ("narration" in sound_plan or "music" in sound_plan):
+        sound_plan = {}
     sound = sound or {}
     missing = [k for k in ("narration", "music") if k in sound_plan and k not in sound]
     if missing:
@@ -570,7 +598,8 @@ async def join_clips(story: dict, made: dict[str, str], sound: dict[str, str] | 
                     png = await asyncio.to_thread(media_tools.fit_picture, source, step.get("background"), CARD_SIZES[story["aspect"]],
                                                   Path(folder) / f"card-{n}.png", step.get("words"))
                 else:
-                    png = await asyncio.to_thread(media_tools.draw_card, step["words"], step["background"], CARD_SIZES[story["aspect"]], Path(folder) / f"card-{n}.png")
+                    png = await asyncio.to_thread(media_tools.draw_card, step["words"], step["background"], CARD_SIZES[story["aspect"]],
+                                                  Path(folder) / f"card-{n}.png", step.get("font"))
                 files.append(await asyncio.to_thread(media_tools.still_video, png, step["seconds"], Path(folder) / f"clip-{n}.mp4"))
             else:
                 files.append(await _clip_file(planned, made, n, Path(folder)))
@@ -591,9 +620,10 @@ async def join_clips(story: dict, made: dict[str, str], sound: dict[str, str] | 
         # user, 2026-11-14 (W05): no sound jump at a cut. The sound overlaps the cut, and a background much louder
         # than the other clips' is turned down.
         await asyncio.to_thread(media_tools.join, files, joined, keep, cut, size, CUT_OVERLAP, True)
-        if overlays:   # exact words over a scene, drawn by code (words_route overlay)
+        if overlays:   # exact words over a scene, drawn by code (words_route overlay) in a title look, not a caption's
             worded = Path(folder) / "worded.mp4" if sound_plan else FILMS_DIR / name
-            await asyncio.to_thread(media_tools.draw_captions, joined, [dict(o, place="top", large=True) for o in overlays], worded)
+            await asyncio.to_thread(media_tools.draw_captions, joined, [dict(o, place=o.get("place") or "top", large=True,
+                                                                            look=o.get("look") or media_tools.TITLE_LOOK) for o in overlays], worded)
             joined = worded
             result["words_drawn"] = len(overlays)
         if sound_plan:
@@ -623,7 +653,7 @@ async def join_clips(story: dict, made: dict[str, str], sound: dict[str, str] | 
                               and by_n[n]["steps"][0].get("speech") is not False]
             spoken += [(starts[n], starts[n] + lengths[n]) for n in kept_as_speech]
             result["sound"] = await asyncio.to_thread(_add_sound, sound_plan, joined, narration, music, FILMS_DIR / name, starts,
-                                                      spoken, bool(story.get("music_first")), bool(story.get("music_swell")))
+                                                      spoken, bool(story.get("music_first")), bool(story.get("music_swell")), overlays)
             if kept_as_speech:
                 result["sound"]["user_clip_as_speech"] = kept_as_speech
             if narration is not None:
@@ -640,7 +670,9 @@ async def join_clips(story: dict, made: dict[str, str], sound: dict[str, str] | 
     checked, unchecked = _check_film(planned, story, measured, loud, lengths, result.get("sound") or {})
     return {"download_url": url, "seconds": round(measured["seconds"], 1), "width": measured["width"], "height": measured["height"],
             "clips": len(files), **result, "checked": checked, "unchecked": unchecked,
-            "not_met": [c["want"] for c in checked if c["result"] != "yes"]}
+            "not_met": [c["want"] for c in checked if c["result"] != "yes"],
+            **({"next": f"Call add_subtitles_to_video on download_url with style {json.dumps(subtitles['style'])} (it transcribes "
+                        "the speech and costs credits), then wait_for_video_project. Check that the first line is there."} if subtitles else {})}
 
 
 def _check_film(planned: dict, story: dict, measured: dict, loud: float | None, lengths: dict[int, float], done: dict) -> tuple[list[dict], list[str]]:

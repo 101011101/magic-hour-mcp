@@ -17,4 +17,5 @@ The MCP makes the video from end to end. Overview: [ARCHITECTURE](../ARCHITECTUR
 5. The host gives the user the film's link and reports every unmet checklist line.
 
 - Replace one clip of a finished film: plain tools, not the production tools. Start image = `get_last_frame` of the clip before; `end_image_file_path` = `get_first_frame` of the clip after (MCP-21, [production](production.md)).
-- Cards and captions are drawn by code at the join: a placeholder until the tool side's tools plug in (MCP-23).
+- Cards are generated, words quoted to the picture model. Code draws a card only for an exact colour or a held picture (MCP-23).
+- Captions: `script` (code, exact words) or `speech` (Magic Hour subtitle tool). Titles over a scene use a named look, never the caption look (MCP-23).

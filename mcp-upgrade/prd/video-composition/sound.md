@@ -5,7 +5,7 @@ Code: `video_production.py` (`plan_sound`), `video_production_tool.py` (`create_
 
 ## Design (option E, user, 2026-11-05)
 
-- Story fields: `says` on each beat, `narrator`, `narrator_voice`, `voice`, `music`, `captions`, `voice_sample`.
+- Story fields: `says` on each beat, `narrator`, `narrator_voice`, `voice`, `music`, `captions`, `caption_source`, `caption_font`, `voice_sample`.
 - `create_production_sound` makes one narration track and one music track for the whole film.
 - The join places each part of the narration on its clip (timing by pauses, about ±0.5 s), mixes the music, draws the captions (needs Pillow).
 
@@ -88,7 +88,7 @@ Code: `video_production.py` (`plan_sound`), `video_production_tool.py` (`create_
 - A later mix does not read the kept layers yet.
 - The `mix_audio` helper tool uses the volumes the host passes. It does not use the priority.
 - MCP-22: narration voice pick done (above). Open: delivery words for speech inside a clip.
-- MCP-23, tool side: caption style. Now white letters on a dark band; wanted white letters with a black outline.
+- MCP-23: caption style done 2026-11-17 (white letters, black outline, Archivo Black). Check on the wide set.
 - MCP-24: the off-screen interviewer's question is not heard.
 
 1. Voice-over by more than one speaker (vpick V6: a dad and a daughter, voices only) has no story field yet: one narration track reads all lines in one voice.

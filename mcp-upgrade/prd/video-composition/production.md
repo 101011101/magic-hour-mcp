@@ -98,6 +98,6 @@ Code: `video_production.py` (plan, split, questions, prompts), `video_production
 
 1. MCP-10: A1 and A3 not rerun on this build. B1 label is best effort.
 2. MCP-21: one fleet run of the replace path (W12 w10). No path in the production tool.
-3. End card words shown twice (W02, W04): the drawn words and the caption of the same line. MCP-23, tool side.
+3. End card words shown twice (W02, W04): the drawn words and the caption of the same line. Fixed 2026-11-17 (MCP-23): the caption is left out.
 4. W02 w9: the 54 s close-up shows another cap shape. Not fixed.
 5. MCP-21 open line: one continuous 15 s generation where it makes sense (reviewer, 2026-11-14).

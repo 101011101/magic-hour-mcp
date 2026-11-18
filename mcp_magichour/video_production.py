@@ -61,6 +61,7 @@ from copy import deepcopy
 from typing import Any
 
 from .voices import VOICES
+from .media_tools import LOOKS
 
 LINKS = ("continues", "event", "moves", "new")
 WORD_ROUTES = ("overlay", "card", "model", "still", "accept")
@@ -548,7 +549,8 @@ def plan(story: dict, strategy: str = "idea", max_seconds: int = TRIGGER_SECONDS
                 "n": clip["n"], "kind": "card", "beats": clip["beats"], "seconds": clip["seconds"], "link": clip["link"],
                 "reference": {"kind": "drawn"}, "ends_on": [], "depends_on": [], "made_by": "code",
                 "steps": [{"tool": "draw_card", "model": "code", "credits": 0, "seconds": clip["seconds"], "background": background,
-                           "words": reference["exact_words"]}],
+                           "words": reference["exact_words"],
+                           **({"font": f} if (f := next((p.get("words_font") for p in clip["parts"] if p.get("words_font")), None)) else {})}],
             })
             continue
         if reference["kind"] == "scene_still":
@@ -590,7 +592,8 @@ def plan(story: dict, strategy: str = "idea", max_seconds: int = TRIGGER_SECONDS
         overlay, inside = [], 0
         for part in clip["parts"]:
             if part.get("words_route") == "overlay" and part.get("exact_words"):
-                overlay.append({"text": "\n".join(part["exact_words"]), "start": inside, "end": inside + part["seconds"]})
+                overlay.append({"text": "\n".join(part["exact_words"]), "start": inside, "end": inside + part["seconds"],
+                                **{k: part[f"words_{k}"] for k in ("look", "font") if part.get(f"words_{k}")}})
             inside += part["seconds"]
         out_overlay = {"overlay": overlay} if overlay else {}
         steps.append({
@@ -642,7 +645,18 @@ def plan_sound(story: dict, clips: list[dict]) -> dict | None:
             at += beat["seconds"]
             inside += beat["seconds"]
     film_seconds = sum(c["seconds"] for c in clips)
-    sound: dict = {"captions": bool(story.get("captions")) and bool(parts)}
+    # captions (user, 2026-11-17, MCP-23): script = the exact `says` words, drawn by code at the voice-over's pauses
+    # (0 credits; the default when there is a script). speech = Magic Hour's subtitle tool transcribes the finished
+    # film (for the user's clip with talking and no script; it costs credits and can miss a line).
+    source = story.get("caption_source") or ("script" if parts else "speech")
+    sound: dict = {"captions": bool(story.get("captions")) and bool(parts) and source == "script"}
+    if story.get("captions") and source == "speech":
+        sound["subtitles"] = {"tool": "add_subtitles_to_video", "after": "join_production_clips", "style": {"custom_config": {
+            "font": story.get("caption_font") or LOOKS["caption"]["font"], "font_style": "bold", "text_color": "#FFFFFF",
+            "highlighted_text_color": "#FFFFFF", "stroke_color": "#000000", "stroke_width": 4, "vertical_position": "bottom",
+            "horizontal_position": "center"}}}
+    if story.get("caption_font") and sound["captions"]:
+        sound["caption_font"] = story["caption_font"]
     if parts:
         script = " ".join(line for part in parts for line in part["lines"])
         seconds = min(MODEL_MAX_SECONDS[TEXT_MODEL], max(5, -(-len(script.split()) // NARRATION_WORDS_PER_SECOND) + 3))
@@ -666,7 +680,7 @@ def plan_sound(story: dict, clips: list[dict]) -> dict | None:
     if story.get("music"):
         seconds = max(MUSIC_MIN_SECONDS, film_seconds + 2)
         sound["music"] = {"seconds": seconds, "prompt": story["music"].strip(), "credits": seconds * MUSIC_CREDITS_PER_SECOND}
-    return sound if "narration" in sound or "music" in sound else None
+    return sound if "narration" in sound or "music" in sound or "subtitles" in sound else None
 
 
 def checklist(story: dict, clips: list[dict], sound: dict | None) -> list[dict]:
@@ -703,6 +717,8 @@ def checklist(story: dict, clips: list[dict], sound: dict | None) -> list[dict]:
         lines.append({"id": "music", "want": "Music under the whole film", "how": "measured"})
     if sound and sound.get("captions"):
         lines.append({"id": "captions", "want": "The voice-over's sentences drawn on the picture when they are said", "how": "measured"})
+    if sound and "subtitles" in sound:
+        lines.append({"id": "subtitles", "want": "Subtitles of what is said, white with a black outline (add_subtitles_to_video on the joined film)", "how": "by eye"})
     if story.get("audio"):
         lines.append({"id": "scene-sound", "want": "The scenes have their own sound (as the beats describe)", "how": "measured: a sound track that is not silent"})
     elif not sound and not any(c["kind"] == "source" and c["parts"][0].get("source_sound", True) is not False for c in clips):
@@ -1050,9 +1066,12 @@ def apply_answers(story: dict, answers: dict[str, str]) -> tuple[dict, list[str]
                 take = min(2, beat["seconds"] - 1) if beat["seconds"] > 1 else 0
                 words = beat.pop("exact_words")
                 beat["seconds"] -= take
+                # user, 2026-11-17 (MCP-23): a card is generated (qwen-image-2.1 spells the quoted words), not drawn by
+                # code. Code draws a card only for an exact colour the user gives (`background`) or a held picture.
                 inserts.append((int(num), {"seconds": take or 1, "kind": "card", "exact_words": words, "words_route": "card",
-                                           "text": "Solid black background, centred white text reading exactly " + " and ".join(f'"{w}"' for w in words) + ".",
-                                           "background": "#000000", "_own": True}))
+                                           "text": "A designed title card in the film's style: bold, clean lettering reading exactly "
+                                                   + " and ".join(f'"{w}"' for w in words) + ", large and centred.",
+                                           "_own": True}))
         elif kind == "held":
             if choice not in ("merge", "keep"):
                 problems.append(f"{key}: choose merge or keep")

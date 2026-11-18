@@ -57,7 +57,9 @@ class Words(BaseModel):
     place: Literal["top", "middle", "bottom", "top_left", "top_right", "bottom_left", "bottom_right"] = "bottom"
     align: Literal["left", "center", "right"] = "center"
     size: Literal["small", "normal", "large"] | None = None
-    style: Literal["band", "shadow"] = "band"
+    style: Literal["band", "shadow", "outline"] | None = None
+    look: Literal["caption", "bold", "clean", "classic", "marker", "block", "playful", "script"] | None = None
+    font: Literal["Anton", "Bebas Neue", "Archivo Black", "Abril Fatface", "Permanent Marker", "Bungee", "Lilita One", "Pacifico"] | None = None
     opacity: float | None = Field(default=None, ge=0.05, le=1)
     start: float | None = None
     end: float | None = None
@@ -256,10 +258,13 @@ def register_media_helpers(mcp: FastMCP) -> None:
             "Draw exact words on a picture or video by code: a title, a slogan, a caption, a price, a name, a watermark. "
             "Always spelled right (a generation model often misspells). For words that must look printed on an object (a "
             "label, a sign), make the object without words first, then add them here, or tell the user the model may "
-            "misspell them. `words`: [{text, place, align, size, style, opacity, start, end}]. place: top, middle, bottom, "
+            "misspell them. `words`: [{text, place, align, size, style, look, font, opacity, start, end}]. place: top, middle, bottom, "
             "or a corner (top_left, top_right, bottom_left, bottom_right). align: left, center, right (a lower third: "
-            "place bottom, align left). size: small, normal, large. style: band (white letters on a dark band) or shadow "
-            "(white letters with a soft shadow, no band). opacity: 0.05 to 1 (a watermark: a corner, size small, style "
+            "place bottom, align left). size: small, normal, large. style: band (white letters on a dark band), shadow "
+            "(white letters with a soft shadow, no band) or outline (white letters, black outline, as in memes). look: a "
+            "named look that sets font and style: caption (the caption default), bold (heavy capitals, a title), clean, "
+            "classic (serif), marker (hand written), block, playful, script. font: Anton, Bebas Neue, Archivo Black, "
+            "Abril Fatface, Permanent Marker, Bungee, Lilita One, Pacifico. With no style or look: band. opacity: 0.05 to 1 (a watermark: a corner, size small, style "
             "shadow, opacity 0.6). Lines at the same place and time are stacked, one under the other. start and end in "
             "seconds, video only; leave them out for the whole video. `large`: size large for every line. Returns "
             "download_url, width, height, and file_path for further tools. Spends no credits."
