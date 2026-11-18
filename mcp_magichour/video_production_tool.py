@@ -525,7 +525,7 @@ def _add_sound(sound_plan: dict, film: Path, narration: Path | None, music: Path
                music_first: bool = False, music_swell: bool = False, overlays: list[dict] | None = None) -> dict:
     """The file steps of the sound, in one place (run in a thread). Returns what was done.
     clip_starts: where each clip really starts in the joined film (a clip is often a little longer than planned).
-    overlays: the words already on screen; a caption with the same words at that time is left out (the double caption)."""
+    overlays: the words already on screen; a caption whose words are all among them at that time is left out (the double caption)."""
     parts, done = [], {"narration": False, "music": bool(music), "captions": False}
     if narration:
         wanted = sound_plan["narration"]["parts"]
@@ -557,7 +557,7 @@ def _add_sound(sound_plan: dict, film: Path, narration: Path | None, music: Path
         for line, after in zip(timed, timed[1:]):   # one caption at a time
             line["end"] = min(line["end"], after["start"])
         plain = lambda text: re.sub(r"[^a-z0-9]", "", text.lower())
-        shown = [line for line in timed if not any(plain(line["text"]) == plain(o["text"]) and o["start"] < line["end"]
+        shown = [line for line in timed if not any(plain(line["text"]) and plain(line["text"]) in plain(o["text"]) and o["start"] < line["end"]
                                                    and line["start"] < o["end"] for o in overlays or [])]
         if len(shown) < len(timed):
             done["captions_left_out"] = len(timed) - len(shown)
@@ -596,7 +596,7 @@ async def join_clips(story: dict, made: dict[str, str], sound: dict[str, str] | 
                 if step["tool"] == "hold_picture":
                     source = await _fetch_picture(step["picture"], Path(folder) / f"picture-{n}")
                     png = await asyncio.to_thread(media_tools.fit_picture, source, step.get("background"), CARD_SIZES[story["aspect"]],
-                                                  Path(folder) / f"card-{n}.png", step.get("words"))
+                                                  Path(folder) / f"card-{n}.png", step.get("words"), step.get("font"))
                 else:
                     png = await asyncio.to_thread(media_tools.draw_card, step["words"], step["background"], CARD_SIZES[story["aspect"]],
                                                   Path(folder) / f"card-{n}.png", step.get("font"))
@@ -639,6 +639,9 @@ async def join_clips(story: dict, made: dict[str, str], sound: dict[str, str] | 
             for n in planned["join"]:
                 starts[n] = at
                 at += lengths[n]
+            # words on a card (drawn, held or generated): its caption is left out too (W02: the end card's line twice)
+            on_cards = [{"text": " ".join(w for b in by_n[n].get("beats", []) for w in story["beats"][b - 1].get("exact_words") or []),
+                         "start": starts[n], "end": starts[n] + lengths[n]} for n in planned["join"] if by_n[n].get("kind") == "card"]
             spoken = []   # where a person on screen speaks: the beats with a spoken line, at their place in the film
             for n in planned["join"]:
                 inside = 0.0
@@ -653,7 +656,8 @@ async def join_clips(story: dict, made: dict[str, str], sound: dict[str, str] | 
                               and by_n[n]["steps"][0].get("speech") is not False]
             spoken += [(starts[n], starts[n] + lengths[n]) for n in kept_as_speech]
             result["sound"] = await asyncio.to_thread(_add_sound, sound_plan, joined, narration, music, FILMS_DIR / name, starts,
-                                                      spoken, bool(story.get("music_first")), bool(story.get("music_swell")), overlays)
+                                                      spoken, bool(story.get("music_first")), bool(story.get("music_swell")),
+                                                      overlays + on_cards)
             if kept_as_speech:
                 result["sound"]["user_clip_as_speech"] = kept_as_speech
             if narration is not None:

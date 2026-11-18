@@ -618,10 +618,11 @@ def draw_card(words: list[str], background: str, size: tuple[int, int], out: Pat
     return out
 
 
-def fit_picture(source: Path, background: str | None, size: tuple[int, int], out: Path, words: list[str] | None = None) -> Path:
+def fit_picture(source: Path, background: str | None, size: tuple[int, int], out: Path, words: list[str] | None = None,
+                font: str | None = None) -> Path:
     """The picture unchanged, never cropped. With `background` (a logo, a screenshot): 80% of the frame, centred on that
     colour. Without it (a photo): as large as fits, over a blurred copy of itself that fills the frame.
-    words: drawn exactly over the lower part of the picture, one line each, on a dark band."""
+    words: drawn exactly over the lower part of the picture, one line each, in the title look (MCP-23; was a dark band)."""
     from PIL import Image, ImageFilter
 
     picture = Image.open(source).convert("RGBA")
@@ -641,7 +642,7 @@ def fit_picture(source: Path, background: str | None, size: tuple[int, int], out
     frame.alpha_composite(fitted, ((size[0] - fitted.width) // 2, (size[1] - fitted.height) // 2))
     if words:
         band = out.with_name(out.stem + "-words.png")
-        _caption_png("\n".join(words), size, band, at=0.82, share=0.075)
+        _caption_png("\n".join(words), size, band, **dict(word_style({"text": "", "look": TITLE_LOOK, "size": "large", "font": font}), at=0.82))
         frame.alpha_composite(Image.open(band).convert("RGBA"))
         band.unlink()
     frame.convert("RGB").save(out)

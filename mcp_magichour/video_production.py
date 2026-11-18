@@ -541,7 +541,8 @@ def plan(story: dict, strategy: str = "idea", max_seconds: int = TRIGGER_SECONDS
                 "n": clip["n"], "kind": "card", "beats": clip["beats"], "seconds": clip["seconds"], "link": clip["link"],
                 "reference": {"kind": "held", "file": held}, "ends_on": [], "depends_on": [], "made_by": "code",
                 "steps": [{"tool": "hold_picture", "model": "code", "credits": 0, "seconds": clip["seconds"], "picture": held,
-                           "background": background, "words": [w for p in clip["parts"] for w in p.get("exact_words", [])]}],
+                           "background": background, "words": [w for p in clip["parts"] for w in p.get("exact_words", [])],
+                           **({"font": f} if (f := next((p.get("words_font") for p in clip["parts"] if p.get("words_font")), None)) else {})}],
             })
             continue
         if clip["kind"] == "card" and background:   # drawn by code: exact colour and words, no generation call

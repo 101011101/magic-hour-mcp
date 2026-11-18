@@ -270,14 +270,15 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ToolError):   # the plan has sound: the join asks for it
             await self.call("join_production_clips", production=p["production"], made=made)
         film = await self.call("join_production_clips", production=p["production"], made=made, sound={"narration": "n", "music": "m"})
-        self.assertEqual(film["sound"], {"narration": True, "music": True, "captions": True, "loudness_lufs": -16.0, "speech_seconds": 8.8})
+        self.assertEqual(film["sound"], {"narration": True, "music": True, "captions": True, "loudness_lufs": -16.0, "speech_seconds": 8.8,
+                                      "captions_left_out": 1})   # "Mockup Fragrance." is on the end card (MCP-23)
         self.assertEqual((self.sound["narration"], self.sound["music"]), ("narration.mp4", "music"))
         self.assertEqual(len(self.sound["parts"]), 4)
         starts = [part["at"] for part in self.sound["parts"]]
         self.assertEqual(starts, sorted(starts))
         self.assertEqual(starts[0], 0.5)                       # 0.5 s after its clip starts
         self.assertAlmostEqual(starts[2] - starts[1], 9, 5)    # the second beat of clip 2 starts 9 s into that clip
-        self.assertEqual([c["text"] for c in self.captions], ["Some scents fade by noon.", "This one stays.", "It starts soft.", "One spray is enough.", "Mockup Fragrance."])
+        self.assertEqual([c["text"] for c in self.captions], ["Some scents fade by noon.", "This one stays.", "It starts soft.", "One spray is enough."])
         self.assertTrue(all(a["end"] <= b["start"] + 1e-6 for a, b in zip(self.captions, self.captions[1:])))
         self.assertFalse(any(self.joined[-1][1]))              # the clips themselves are silent
         self.assertEqual([c["result"] for c in film["checked"]], ["yes"] * len(film["checked"]))
