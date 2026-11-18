@@ -169,7 +169,7 @@ def join(files: list[Path], out: Path, audio: bool | list[bool] = True, seconds:
         cut = ["-t", f"{seconds[i]:.3f}"] if seconds[i] and info["seconds"] > seconds[i] + 0.05 else []
         graph, _ = frame_filter(info["width"], info["height"], width, height)
         subprocess.check_call([
-            "ffmpeg", "-v", "error", "-y", *sound, *cut,
+            ffmpeg_exe() or "ffmpeg", "-v", "error", "-y", *sound, *cut,
             "-vf", f"{graph},fps=24,format=yuv420p",
             "-c:v", "libx264", "-crf", "18", "-c:a", "aac", "-ar", "48000", "-ac", "2", str(part),
         ])
@@ -194,7 +194,7 @@ FLOOR_MAX_CUT_DB = 12.0
 def floor_db(file: Path, seconds: float | None = None) -> float | None:
     """The quiet level of a clip's sound: the 10th percentile of its 0.25 s levels (the background between words)."""
     cut = ["-t", f"{seconds:.3f}"] if seconds else []
-    raw = subprocess.run(["ffmpeg", "-v", "error", "-i", str(file), *cut, "-vn", "-ac", "1", "-ar", "8000", "-f", "f32le", "-"],
+    raw = subprocess.run([ffmpeg_exe() or "ffmpeg", "-v", "error", "-i", str(file), *cut, "-vn", "-ac", "1", "-ar", "8000", "-f", "f32le", "-"],
                          capture_output=True).stdout
     samples = array.array("f", raw[: len(raw) - len(raw) % 4])
     if len(samples) < 4000:

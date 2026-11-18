@@ -20,7 +20,7 @@ Each of these makes a result look worse than it is, or stops a run.
 - The persona bench says flux-2-klein is the weakest free edit model: in same-case comparisons qwen-edit beat it in 15 of 19 cases (3.15 vs 2.58) and qwen-image-2.1 in 3 of 4; it also ignores `aspect_ratio` (4:5 asked: 2.0). For `generate_image`, qwen-image-2.1 beat it in 11 of 14 (3.24 vs 2.43). Script: `scripts/tool_settings.py`.
 - In our runs without the planner, hosts picked flux-2-klein because of this line. The planner works around it by naming `qwen-image-2.1`; the line itself is Ray's or upstream's to change (it also affects video composition).
 
-## 3. `media_tools.join` calls `ffmpeg` by name
+## 3. `media_tools.join` calls `ffmpeg` by name (fixed 2026-11-17)
 
 - `join()` (media_tools.py, line 163) starts `"ffmpeg"` from the PATH; the rest of the file uses `ffmpeg_exe()`, which also finds the ffmpeg that `imageio-ffmpeg` ships. On a server with no ffmpeg on the PATH (pip install only), `join` fails with "No such file or directory: 'ffmpeg'". This is also why `tests/test_media_frame.py` errors on a machine without a system ffmpeg.
 - Tool management's `add_sound_to_video` does not call `join` for that reason.

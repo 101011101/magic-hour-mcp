@@ -226,3 +226,12 @@ class TicketTests(unittest.TestCase):
         self.assertLessEqual(max(Image.open(png).getchannel("A").getdata()), 160)   # see-through
         left = m._caption_png("Maya Chen\nFounder", (854, 480), self.dir / "l.png", **m.word_style({"place": "bottom", "align": "left"}))
         self.assertLess(Image.open(left).getchannel("A").getbbox()[0], 854 * 0.1)
+
+
+class FfmpegByPathTest(unittest.TestCase):
+    def test_no_step_starts_ffmpeg_by_name_alone(self):
+        # William, notes-for-ray §3 (2026-11-14): join() started "ffmpeg" from the PATH and failed on a server without it
+        import inspect
+        from mcp_magichour import media_tools
+        source = inspect.getsource(media_tools)
+        self.assertNotRegex(source, r'\[\s*"ffmpeg"|\(\s*\n?\s*"ffmpeg",')
