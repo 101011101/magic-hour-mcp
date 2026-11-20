@@ -71,7 +71,7 @@ PROMPT_PARAM = {"generate_image": "subject", "create_video_from_text": "subject"
                 "create_video_from_image": "motion", "generate_music": "mood"}
 DEFAULT_ALLOWED = {"look", "position", "transition", "voice", "language", "keep"}
 VIDEO_FROM_PICTURE = {"create_video_from_image", "create_talking_photo"}
-YOUR_CALL_VALUES = {"aspect": "16:9", "seconds": 10, "sound": "none"}
+YOUR_CALL_VALUES = {"aspect": "16:9", "seconds": 10, "sound": "ambient"}  # sound on (user, 2026-11-19)
 MAX_QUESTIONS = 3
 
 

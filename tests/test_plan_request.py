@@ -236,7 +236,7 @@ S04_TURN = [  # V4 item S04, `turn.script`; expect_tool = create_video_from_text
 ]
 S04_TURN_WORDS = ["20% OFF · This weekend only"]
 FIVE_MISSING = "make me a video ad"  # written for the ticket case; no V4 item has 5 missing parameters
-YOUR_CALL_DEFAULTS = {"aspect": "16:9", "seconds": 10, "sound": "none"}  # intent.js, line 59
+YOUR_CALL_DEFAULTS = {"aspect": "16:9", "seconds": 10, "sound": "ambient"}  # intent.js, line 59; sound on (user, 2026-11-19)
 
 
 def data(result):
@@ -574,7 +574,7 @@ class PlanRequestTests(unittest.IsolatedAsyncioTestCase):
         # (what the brief already says, the reworded question, the answer, the parameter that was open, what "your call" gives)
         cases = [("make a silent widescreen video about a kind gesture at a park bench", "How long do you want it, in seconds?", "up to you", "seconds", 10),
                  ("make a 6 second silent video about a kind gesture at a park bench", "Do you want it vertical or wide?", "you pick", "aspect", "16:9"),
-                 ("make a 6 second widescreen video about a kind gesture at a park bench", "Any sound? Music, a voice, or silence?", "whatever", "sound", "none")]
+                 ("make a 6 second widescreen video about a kind gesture at a park bench", "Any sound? Music, a voice, or silence?", "whatever", "sound", "ambient")]
         for brief, question, answer, parameter, expected in cases:
             with self.subTest(parameter=parameter):
                 sheet_in = {"subject": ("a kind gesture at a park bench", "user"), "seconds": (6, "user"), "aspect": ("16:9", "user"), "sound": ("none", "user")}

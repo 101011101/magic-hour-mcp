@@ -636,8 +636,8 @@
             "silent": "audio off.",
             "sound": "audio on."
           },
-          "default": "Silent.",
-          "why": "D23b: sound came back when silence was asked."
+          "default": "Natural sound on.",
+          "why": "D23b: sound came back when silence was asked. User, 2026-11-19: every video has natural sound unless the user asks for silence."
         },
         {
           "id": "exact_words",
