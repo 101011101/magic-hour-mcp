@@ -5,7 +5,7 @@
 - Nothing is committed. Nothing is deployed.
 - Updated: 2026-11-18.
 - Ticket names (user, 2026-11-17): MCP-n are Ray's (video composition and shared). MCP-TOOLS-n are William's (tool management); on his branch before the merge they were MCP-19 to MCP-35, and his commit messages keep the old names.
-- Checkpoints to roll back to (git tags, user, 2026-11-17): `checkpoint-2026-11-16-video-approved` (2f7ab1d: the video decisions after the user's marks), `checkpoint-2026-11-17-voice-pick` (voice pick added). Roll back: `git checkout <tag>`.
+- Checkpoints to roll back to (git tags, user, 2026-11-17): `checkpoint-2026-11-16-video-approved` (2f7ab1d: the video decisions after the user's marks), `checkpoint-2026-11-17-voice-pick` (voice pick added), `checkpoint-2026-11-19-speech-after-line` (1a40a9a: w11 fixes, routing rule, no made-up speech after a spoken line). Roll back: `git checkout <tag>`.
 - Next (user, 2026-11-16): MCP-22 voice, then the tool behaviour check (tool side), composition clean-up, conversation, big benchmark, ship.
 
 ## To do
