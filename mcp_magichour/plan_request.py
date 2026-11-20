@@ -18,6 +18,8 @@ from fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 from pydantic import BaseModel, ConfigDict, Field
 
+from .video_production import ROUTING_RULE
+
 Source = Literal["user", "derived", "default", "missing"]
 
 # The universal question set. One text for each parameter, asked word for word.
@@ -412,8 +414,8 @@ def register_plan_request(mcp: FastMCP) -> None:
         title="Check the request before creating",
         description=(
             "Call this before plan_video_production, for a video made of several clips (longer than 15 seconds, 3 or "
-            "more separate ideas, or a card or exact words with a scene), with tool plan_video_production. Do not call it "
-            "before a single create or edit call. Pass the whole conversation so far, in order: each user message "
+            "more separate ideas, or a card or exact words with a scene), or a video with a purpose, with tool "
+            "plan_video_production. " + ROUTING_RULE + " Do not call it before a single create or edit call. Pass the whole conversation so far, in order: each user message "
             "word for word and each message you sent the user, your questions included. Pass the tool you plan to "
             "call, and one row for each parameter you know: value and source (user = the user said it, derived = it "
             "follows from the user's words, default = your choice, missing = unknown). Row names: subject, edit, keep, "

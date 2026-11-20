@@ -150,6 +150,7 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
             out.write_bytes(b"film")
             return out
 
+        self.fitted = []
         for target, value in [
             ("httpx.AsyncClient", lambda *a, **k: ASYNC_CLIENT(*a, **{**k, "transport": transport})),
             ("mcp_magichour.openapi_server.build_api_client", lambda: ASYNC_CLIENT(base_url="https://api.example.test", transport=transport)),
@@ -158,6 +159,7 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
             ("mcp_magichour.media_tools.have_ffmpeg", lambda: True),
             ("mcp_magichour.media_tools.last_frame", lambda video, out: (out.write_bytes(b"frame"), out)[1]),
             ("mcp_magichour.media_tools.join", fake_join),
+            ("mcp_magichour.media_tools.fit_length", lambda file, seconds, how, out: (self.fitted.append((file.name, seconds, how)), file)[1]),
             ("mcp_magichour.media_tools.probe", lambda file: {"seconds": {"clip-1.mp4": 8.4, "clip-2.mp4": 18.4, "clip-3.mp4": 4.0}.get(file.name, 30.2), "width": self.film_size[0], "height": self.film_size[1], "audio": True}),
             ("mcp_magichour.media_tools.speech_spans", lambda audio, **k: [(0.2, 3.0), (4.0, 6.0), (7.0, 9.0), (10.0, 12.0)]),
             ("mcp_magichour.media_tools.add_sound", self.fake_add_sound),
@@ -178,7 +180,7 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
     async def fake_transcribe(self, audio):
         return self.heard
 
-    def fake_add_sound(self, film, out, narration=None, parts=None, music=None, spoken=None, music_first=False, layers=None, music_swell=False):
+    def fake_add_sound(self, film, out, narration=None, parts=None, music=None, spoken=None, music_first=False, layers=None, music_swell=False, music_at=0.0):
         self.sound = {"narration": narration.name if narration else None, "music": music.name if music else None, "parts": parts,
                       "spoken": spoken, "music_first": music_first}
         out.write_bytes(b"film with sound")
@@ -363,6 +365,9 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
         self.assertRegex(film["download_url"], r"/films/[0-9a-f]{32}\.mp4$")
         self.assertTrue((self.films / film["download_url"].rsplit("/", 1)[1]).exists())
         self.assertEqual(film["clips"], 4)
+        # W02 w11: clip 2 ran long (18.4 s for 13 s) and clip 3 starts from its last frame: its head is cut, its end kept
+        self.assertEqual(self.fitted, [("clip-2.mp4", 13.0, "head")])
+        self.assertEqual(film["kept_last_frame"], [{"clip": 2, "how": "head"}])
         self.assertEqual(self.posts, [])
         with self.assertRaises(ToolError):
             await self.call("join_production_clips", production=p["production"], made={"1": "a", "2": "b"})

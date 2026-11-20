@@ -173,7 +173,9 @@ API_TOOL_METADATA = {
         "Create video from text",
         "Generates a video from a text prompt, with optional supported reference inputs and model "
         "settings. To animate an existing starting image, use create_video_from_image. Starts a "
-        "background job that costs credits; returns a project id for wait_for_video_project.",
+        "background job that costs credits; returns a project id for wait_for_video_project. "
+        "A video with a purpose beyond one action (an audience, a platform, a story, an ad, a product, "
+        "a spoken line, music or words on screen) goes to plan_video_production, also for one shot.",
     ),
     ("POST", "/v1/video-to-video"): (
         "restyle_video",

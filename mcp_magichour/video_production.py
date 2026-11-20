@@ -74,6 +74,13 @@ REFERENCE_MODEL = "minimax-h3"  # the free model that takes a named reference
 # Every scene clip (user, 2026-11-14): in a 60-clip sound test minimax-h3 made the sound in every case
 # (wind, a street under a voice, a second speaker, two lines in one clip); ltx-2.5 failed most of them.
 SCENE_MODEL = "minimax-h3"
+# User, 2026-11-18 (MCP-05): W06, one shot with a spoken line and words on screen, went to create_video_from_text and lost
+# its street sound, the line timing and the checklist. A video with a purpose goes through the production tool.
+ROUTING_RULE = (
+    "Use plan_video_production, not a single create call, when the video has a purpose beyond one action: a target "
+    "audience, a platform (Instagram, TikTok, YouTube), a story, an ad or marketing purpose, a brand or product, a spoken "
+    "line, a voice-over, music, or words on screen. This is true for one shot too. A single action goes to its own tool: "
+    "animate this photo, a 5-second clip of a cat.")
 STILL_MODEL = "qwen-image-2.1"  # exact words on a card
 RESOLUTION = "480p"
 CREDITS_PER_SECOND = 24
@@ -467,12 +474,28 @@ def compose_prompt(story: dict, clip: dict, reference: dict, ends_on: list[str] 
             who, said = (label.group(1), label.group(2).strip()) if label else ("", said.strip())
             # W08 (2026-11-14): "talks to the camera" over 0-8 s with a 3 s line gave 4 s of made-up speech first.
             # The line in a time slot of its own, then a silent end, gave clean speech (W08 prompt test, 4 variants).
-            talk = min(end - start, max(2, math.ceil(len(said.split()) / 3)))   # 5 s for 9 words: the line was said twice (w8)
+            # 2.5 words a second, measured 2026-11-18: W06 18 words in 6.9-7.1 s, W08 9 words in 3.0-3.6 s. At 3 words a second
+            # the line ran past its slot every time, and once the model then made up words (W06 w14c).
+            talk = min(end - start, max(2, math.ceil(len(said.split()) / SPOKEN_WORDS_PER_SECOND)))
             slot = f"{start}-{start + talk} s:" if talk > 0 else "Then"   # no time left: the line follows the one before
-            lines.append(f'{slot} {text} {who or "The speaker"} says, word for word: "{said}"'.replace("  ", " "))
+            # 2026-11-18 (W08 prompt tests, 36 clips): a talking verb in its own sentence ("talks to the camera. The
+            # speaker says, word for word: ...") gave made-up speech after the line in 7 of 10 clips. The line joined to
+            # the action ("smiles at the camera and says, word for word: ...") gave 12 of 12 clean.
+            if text:
+                said_by = f"and {who} says" if who else "and says"
+                lines.append(f'{slot} {text.rstrip(" .;:,")} {said_by}, word for word: "{said}"'.replace("  ", " "))
+            else:
+                lines.append(f'{slot} {who or "The speaker"} says, word for word: "{said}"'.replace("  ", " "))
             start, text = start + talk, ""
-        if spoken and end - start >= 1:
+        # 2026-11-19 (W06/W08 tests, direct to minimax, 3 runs each): a person idle on camera for 7 s or more after the
+        # line talks again (0 of 3). Up to 3 s of "smiles and nods" stayed clean (6 of 6). For a longer stretch, "lowers
+        # the hand, takes a slow breath and glances down" was the one neutral action clean with 7 s and 11 s (6 of 6).
+        if spoken and 1 <= end - start <= SPOKEN_QUIET_SECONDS:
             lines.append(f"{start}-{end} s: {who or 'the speaker'} stops talking, smiles and nods, mouth closed. Nobody speaks.")
+        elif spoken and end - start > SPOKEN_QUIET_SECONDS:
+            lines.append(f"{start}-{end} s: {who or 'the speaker'} lowers the hand, takes a slow breath and glances down, mouth closed, still in frame.")
+        elif spoken:   # no time left in the beat: the line still gets a clear end
+            lines.append(f"After the line, {who or 'the speaker'} stops talking, mouth closed. Nobody speaks.")
         for words in part.get("in_scene_words") or []:
             lines.append(f'The words "{words.strip()}" are part of the picture, spelled exactly.')
         if part.get("exact_words") and part.get("kind", "scene") == "scene":
@@ -629,6 +652,8 @@ def plan(story: dict, strategy: str = "idea", max_seconds: int = TRIGGER_SECONDS
 
 
 NARRATION_WORDS_PER_SECOND = 2.5
+SPOKEN_WORDS_PER_SECOND = 2.5   # a line a person on screen says (minimax-h3), measured 2026-11-18
+SPOKEN_QUIET_SECONDS = 3   # most idle time after a spoken line that stays clean (minimax-h3), measured 2026-11-19
 VOICE_WORDS_PER_SECOND = 2.7   # the cloner's pace, measured: I46a 22 words in 7.3 s, E28c 16 in 6.2 s
 MUSIC_MIN_SECONDS, MUSIC_CREDITS_PER_SECOND = 15, 1
 
@@ -846,6 +871,19 @@ def advise(story: dict, planned: dict, request: str | None = None) -> list[dict]
                         "warning": f"Beat {n}: the voice-over has {words} words for {beat['seconds']} s. The voice reads about "
                                    f"{VOICE_WORDS_PER_SECOND} words a second, so it needs about {need} s. Cut words or make the beat longer. "
                                    "If not, the join moves the words earlier, reads them up to 15% faster, and holds the last frame."})
+        said = len(" ".join(beat.get("spoken") or []).split())
+        need = math.ceil(said / SPOKEN_WORDS_PER_SECOND) + 1   # 1 s after the line for the clear end
+        if said and need > beat["seconds"]:
+            out.append({"clip": None, "note": "spoken-pace", "evidence": "2026-11-18, W06 w14c: 18 words in a 6 s slot; the line ran over and the model made up words after it.",
+                        "warning": f"Beat {n}: the spoken line has {said} words for {beat['seconds']} s. People on screen say about "
+                                   f"{SPOKEN_WORDS_PER_SECOND} words a second, plus 1 s to finish, so it needs about {need} s. Make the "
+                                   "beat longer or cut words. If not, the line may run past the beat and the model may make up words."})
+        idle = beat["seconds"] - sum(max(2, math.ceil(len(s.split()) / SPOKEN_WORDS_PER_SECOND)) for s in beat.get("spoken") or [])
+        if said and idle > SPOKEN_QUIET_SECONDS:
+            out.append({"clip": None, "note": "spoken-idle", "evidence": "2026-11-19, W06 and W08 tests: a person idle on camera for 7 s or more after the line talked again in 3 of 3 clips.",
+                        "warning": f"Beat {n}: the spoken line leaves about {idle} s after it with nothing to do. A person idle on camera "
+                                   f"after a line often starts to talk again. Make the beat shorter (at most {SPOKEN_QUIET_SECONDS} s after the line), or put "
+                                   "the next action in a new beat. If not, the tool fills the time with a slow breath and a glance down."})
         if beat.get("source") and beat.get("says") and beat.get("source_sound", True) is not False and beat.get("source_speech") is not False:
             out.append({"clip": None, "note": "voice-over-on-speech", "evidence": "",
                         "warning": f"Beat {n}: a voice-over on the user's clip, and the clip keeps its own sound. If someone speaks in "

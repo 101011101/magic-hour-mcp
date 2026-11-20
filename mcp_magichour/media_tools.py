@@ -187,6 +187,63 @@ def join(files: list[Path], out: Path, audio: bool | list[bool] = True, seconds:
     return out
 
 
+FIT_MAX_SPEED = 1.15   # a clip whose two ends are both joints is played at most this much faster to fit its slot
+
+
+def fit_length(file: Path, seconds: float, how: str, out: Path) -> Path:
+    """Make a clip that ran long exactly `seconds` long, keeping its last frame (W02 w11, 28 s: the next clip starts
+    from that frame, so cutting the end skipped 0.6 s of motion at the joint).
+    how="head": cut the extra time from the start. how="speed": play it faster (both ends are joints), at most FIT_MAX_SPEED;
+    a longer clip is cut at the head after that."""
+    info = probe(file)
+    extra = info["seconds"] - seconds
+    if extra <= 0.05:
+        shutil.copy(file, out)
+        return out
+    speed = min(FIT_MAX_SPEED, info["seconds"] / seconds) if how == "speed" else 1.0
+    start = max(0.0, info["seconds"] - seconds * speed)
+    video = f"setpts=(PTS-STARTPTS)/{speed:.5f}" if speed > 1 else "setpts=PTS-STARTPTS"
+    sound = (["-af", f"asetpts=PTS-STARTPTS,atempo={speed:.5f}"] if speed > 1 else []) if info["audio"] else ["-an"]
+    _ffmpeg(["-ss", f"{start:.3f}", "-i", str(file), "-vf", video, *sound, "-t", f"{seconds:.3f}",
+             "-c:v", "libx264", "-crf", "18", "-c:a", "aac", "-ar", "48000", str(out)])
+    return out
+
+
+def read_words(image: Path) -> str | None:
+    """The words in a picture, read by tesseract. None when the server has no tesseract (the words are then checked by eye)."""
+    exe = shutil.which("tesseract")
+    if not exe:
+        return None
+    done = subprocess.run([exe, str(image), "-", "--psm", "11"], capture_output=True, text=True)
+    return done.stdout if done.returncode == 0 else None
+
+
+def check_words(image: Path, wanted: list[str]) -> dict | None:
+    """Read a card's words, as drawn and on a 3x grey copy; the better read counts. None: no reader on this server.
+    verdict: "right" (every word found), "misspelled" (most found, one or more not: W10 w11 "slze"), "unread" (the reader
+    could not read the letters, as on thin words over a glow in W10 w12; the card is not made again, the eye checks it)."""
+    reads = [read_words(image)]
+    if reads[0] is None:
+        return None
+    bigger = image.with_name(image.stem + "-read.png")
+    try:
+        _ffmpeg(["-i", str(image), "-vf", "scale=iw*3:ih*3:flags=lanczos,format=gray,negate", str(bigger)])
+        reads.append(read_words(bigger) or "")
+    except Exception:
+        pass
+    best = max(reads, key=lambda r: words_found(wanted, r or "")[0]) or ""
+    found, total = words_found(wanted, best)
+    verdict = "right" if found == total else "misspelled" if found * 2 >= total else "unread"
+    return {"read": " ".join(best.split()), "found": f"{found} of {total}", "verdict": verdict}
+
+
+def words_found(wanted: list[str], read: str) -> tuple[int, int]:
+    """How many of the wanted words are in the read text, letter for letter (W10 w11: "sleep" drawn as "sleen")."""
+    tokens = set(re.findall(r"[a-z0-9]+", read.lower()))
+    want = [t for w in wanted for t in re.findall(r"[a-z0-9]+", w.lower())]
+    return sum(t in tokens for t in want), len(want)
+
+
 FLOOR_GAP_DB = 6.0   # a clip whose background is this much louder than the others is turned down (W05)
 FLOOR_MAX_CUT_DB = 12.0
 
@@ -377,6 +434,7 @@ def align_parts(spans: list[tuple[float, float]], parts: list[str], fine: list[t
 MUSIC_UNDER_SPEECH_DB = 9    # music under speech (18, then 12: the user wanted more music under the voice, 2026-11-13)
 SWELL_DB = 8                 # music_swell: how far the music rises between the lines
 EFFECTS_UNDER_DB = 10        # effects under narration or music
+CUE_MAX_RAISE_DB = 15        # a sound before a late music start is raised at most this much to the music's loudness
 TARGET_LUFS = -16.0          # the whole film, social video
 DUCK_RAMP = 0.3              # seconds to go down or up
 DUCK_BRIDGE = 1.0            # a gap shorter than this between two speech spans stays lowered (no pumping)
@@ -476,11 +534,12 @@ def loudness_between(file: Path, spans: list[tuple[float, float]]) -> float | No
 
 def add_sound(film: Path, out: Path, narration: Path | None = None, parts: list[dict] | None = None, music: Path | None = None,
               spoken: list[tuple[float, float]] | None = None, music_first: bool = False, layers: Path | None = None,
-              music_swell: bool = False) -> dict:
+              music_swell: bool = False, music_at: float = 0.0) -> dict:
     """Mix the film's sound from three layers and normalize it to TARGET_LUFS.
     parts: [{"start", "end"} in the narration, "at" in the film]. spoken: where a person on screen speaks (inside the
     film's own sound). music_first: the music is never lowered (a music video). layers: a folder that keeps each layer
-    as its own file, so a later mix can use them again. Returns what was done and measured."""
+    as its own file, so a later mix can use them again. music_at: the second the music starts (W09: the whoosh first,
+    then the music). Returns what was done and measured."""
     seconds = probe_seconds(film)
     folder = layers or Path(tempfile.mkdtemp())
     folder.mkdir(parents=True, exist_ok=True)
@@ -524,14 +583,27 @@ def add_sound(film: Path, out: Path, narration: Path | None = None, parts: list[
                 level = f"{high:.4f}-{high - bed:.4f}*({_inside(speech)})"
             else:
                 level = f"{bed:.4f}"
-        _ffmpeg(["-i", str(music), "-af", f"{fit},volume='{level}':eval=frame,afade=t=in:d=1,"
+        late = f"adelay={int(music_at * 1000)}:all=1," if music_at > 0 else ""
+        rise = 0.3 if music_at > 0 else 1   # a late start is a cue: it comes in quickly
+        _ffmpeg(["-i", str(music), "-af", f"{late}{fit},volume='{level}':eval=frame,afade=t=in:st={music_at:.2f}:d={rise},"
                  f"afade=t=out:st={max(0, seconds - 2):.2f}:d=2", *end, str(files["music"])])
 
     # 3 effects: the film's own sound, lowered under narration and music; a spoken line in it is never lowered
     files["effects"] = folder / "effects.wav"
     if probe(film)["audio"]:
-        above = "1" if music else _inside(narrated)
+        # W09: before a late music start the film's own sound (the whoosh) is not lowered
+        heard = _inside([(music_at, seconds)]) if music and music_at > 0 else "1"
+        above = heard if music else _inside(narrated)
+        if music and narrated and music_at > 0:
+            above = f"max({heard},{_inside(narrated)})"
         level = _gain(above, EFFECTS_UNDER_DB, _inside(talk)) if (music or narrated) else "1"
+        if music and music_at > 0 and not narrated:
+            # W09 rejoin: a cue before the music (the whoosh) came out 25 dB under it; it is raised to the music's
+            # loudness, at most CUE_MAX_RAISE_DB
+            cue, track = loudness_between(film, [(0, music_at)]), loudness(files["music"])
+            raise_db = 0.0 if cue is None or track is None else max(0.0, min(CUE_MAX_RAISE_DB, track - cue))
+            if raise_db:
+                level = f"({level})*(1+{10 ** (raise_db / 20) - 1:.4f}*(1-({heard})))"
         _ffmpeg(["-i", str(film), "-vn", "-af", f"{fit},volume='{level}':eval=frame", *end, str(files["effects"])])
     else:
         _ffmpeg([*silence, str(files["effects"])])

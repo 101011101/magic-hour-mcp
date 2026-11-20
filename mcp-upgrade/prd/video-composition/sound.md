@@ -56,6 +56,7 @@ Code: `video_production.py` (`plan_sound`), `video_production_tool.py` (`create_
 - A layer is lowered only where a higher layer plays, and only there.
 - Music in a film with speech: one steady level, 9 dB under the speech (measured against the speech), for the whole film (user, 2026-11-13: 18 dB under, with full level between the lines, sounded like only voice, then only music; 12 dB was a little quiet).
 - `music_swell` (story field, only when the user asks): the music rises 8 dB between the lines. Gaps under 1 s stay lowered. Ramps of 0.3 s.
+- `music_from_beat` (story field, only when the user asks for the music to start later): the music starts at that beat. Before it, the film's own sound is not lowered. A quiet cue there (a whoosh) is raised to the music's loudness, at most 15 dB (W09, 2026-11-18).
 - Effects: 10 dB under narration or music. A spoken line is never lowered.
 - `music_first` (story field): the music is never lowered. For a music video.
 - The layers stay separate until the end. The join keeps each layer as its own file beside the film (`<film>.layers/`).

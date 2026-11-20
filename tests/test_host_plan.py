@@ -69,8 +69,9 @@ class SpokenLineTests(unittest.TestCase):
         story["audio"] = False
         planned = plan_story(story)
         clip = planned["clips"][2]
-        self.assertIn('The speaker says, word for word: "You came back."', clip["steps"][-1]["prompt"])
-        self.assertIn("stops talking, smiles and nods, mouth closed. Nobody speaks.", clip["steps"][-1]["prompt"])
+        self.assertIn('and says, word for word: "You came back."', clip["steps"][-1]["prompt"])
+        self.assertNotIn("The speaker says", clip["steps"][-1]["prompt"])
+        self.assertIn("2-6 s: the speaker lowers the hand, takes a slow breath and glances down", clip["steps"][-1]["prompt"])
         self.assertTrue(clip["steps"][-1]["audio"])
         self.assertIn('Said on screen once, word for word: "You came back."', [l["want"] for l in planned["checklist"]])
 
@@ -78,8 +79,15 @@ class SpokenLineTests(unittest.TestCase):
         story = self.line_story([1, 2, 2, 3, 4, 5])
         story["beats"][3]["spoken"] = ["Maya: You came back."]
         prompt = plan_story(story)["clips"][2]["steps"][-1]["prompt"]
-        self.assertIn('Maya says, word for word: "You came back."', prompt)
+        self.assertIn('and Maya says, word for word: "You came back."', prompt)
         self.assertNotIn('"Maya:', prompt)
+
+    def test_the_line_joins_the_beats_action_sentence(self):
+        story = self.line_story([1, 2, 2, 3, 4, 5])
+        story["beats"][3]["text"] = "Medium close-up: he smiles at the camera."
+        prompt = plan_story(story)["clips"][2]["steps"][-1]["prompt"]
+        self.assertIn('he smiles at the camera and says, word for word: "You came back."', prompt)
+        self.assertNotIn("camera. ", prompt.split("word for word")[0][-12:])
 
     def test_lines_past_the_beats_time_follow_the_line_before_with_no_empty_slot(self):
         story = self.line_story([1, 2, 2, 3, 4, 5])
@@ -420,3 +428,49 @@ class ProductPictureTests(unittest.TestCase):
         clip = plan_story(story)["clips"][0]
         self.assertEqual((clip["reference"]["kind"], clip["steps"][-1]["model"]), ("picture", "minimax-h3"))
         self.assertIn("Use @deck as a likeness guide", clip["steps"][-1]["prompt"])
+
+
+class SpokenFitTests(unittest.TestCase):
+    """2026-11-18: a spoken line is paced at 2.5 words a second, warned when it does not fit, and always gets a clear end."""
+
+    def story(self, words: int, seconds: int) -> dict:
+        story = grouped(walk_anyway(), [1, 2, 2, 3, 4, 5])
+        beat = story["beats"][3]
+        story["seconds"] += seconds - beat["seconds"]
+        beat["seconds"] = seconds
+        beat["spoken"] = [" ".join(["word"] * words)]
+        return story
+
+    def test_an_18_word_line_gets_8_seconds(self):
+        clips = plan_story(self.story(18, 10))["clips"]
+        prompt = next(c["steps"][-1]["prompt"] for c in clips if "word for word" in c["steps"][-1].get("prompt", ""))
+        self.assertIn("8-10 s: the speaker stops talking", prompt)
+
+    def test_a_line_that_does_not_fit_is_a_warning_and_still_has_a_clear_end(self):
+        story = self.story(18, 6)
+        planned = plan_story(story)
+        warned = [a for a in vp.advise(story, planned) if a["note"] == "spoken-pace"]
+        self.assertEqual(len(warned), 1)
+        self.assertIn("needs about 9 s", warned[0]["warning"])
+        self.assertIn("After the line, the speaker stops talking, mouth closed.", planned["clips"][2]["steps"][-1]["prompt"])
+
+    def test_more_than_3_seconds_after_the_line_gets_the_breath_and_a_warning(self):
+        story = self.story(18, 15)
+        planned = plan_story(story)
+        prompt = next(c["steps"][-1]["prompt"] for c in planned["clips"] if "word for word" in c["steps"][-1].get("prompt", ""))
+        self.assertIn("8-15 s: the speaker lowers the hand, takes a slow breath and glances down, mouth closed", prompt)
+        self.assertNotIn("smiles and nods", prompt)
+        warned = [a for a in vp.advise(story, planned) if a["note"] == "spoken-idle"]
+        self.assertEqual(len(warned), 1)
+        self.assertIn("about 7 s after it", warned[0]["warning"])
+
+    def test_up_to_3_seconds_after_the_line_keeps_the_short_end_and_no_idle_warning(self):
+        story = self.story(18, 11)
+        planned = plan_story(story)
+        prompt = next(c["steps"][-1]["prompt"] for c in planned["clips"] if "word for word" in c["steps"][-1].get("prompt", ""))
+        self.assertIn("8-11 s: the speaker stops talking, smiles and nods", prompt)
+        self.assertEqual([a for a in vp.advise(story, planned) if a["note"] == "spoken-idle"], [])
+
+    def test_a_line_that_fits_is_not_warned(self):
+        story = self.story(9, 8)
+        self.assertEqual([a for a in vp.advise(story, plan_story(story)) if a["note"] == "spoken-pace"], [])

@@ -27,11 +27,12 @@ from mcp.types import ToolAnnotations
 from pydantic import BaseModel, Field
 
 from . import kept_files, media_tools
-from .video_production import word_match, TRIGGER_IDEAS, TRIGGER_SECONDS, advise, apply_answers, host_cuts, plan, questions
+from .video_production import word_match, ROUTING_RULE, TRIGGER_IDEAS, TRIGGER_SECONDS, advise, apply_answers, host_cuts, plan, questions
 
 FILMS_PATH = "/films"
 FILMS_DIR = Path(os.getenv("MAGIC_HOUR_FILMS_DIR", Path(tempfile.gettempdir()) / "magic-hour-films"))
 STILL_WAIT_SECONDS = 120
+STILL_TRIES = 3   # a still whose words are misspelled is made again, at most this many stills in all
 
 # The split rule the tool applies. Set from the split benchmark (scripts/split_bench.py), not by the host.
 # 2026-11-05, C4 and C5, one run each: cut at a new idea and at 15 s. A cut at every event did worse on C4
@@ -87,7 +88,8 @@ class Beat(BaseModel):
     seconds: int = Field(ge=1, description="Length of this beat.")
     text: str = Field(description=(
         "What is seen in this beat: one action, and the framing if it matters (wide, close). Quote a spoken line once, "
-        "in the beat where it is said. For a card: how the card looks. A change of state that the model must show "
+        "in the beat where it is said. Describe no talking (talks, speaks, answers, says, explains, as she makes her "
+        "point): a line a person says goes in `spoken`, and the tool adds the talking there. For a card: how the card looks. A change of state that the model must show "
         "(a paper folded into a shape, a pour that fills a glass, a stage of a build) is one beat for each stage, "
         "each with its own clip; a real product or object that must look right gets a real photo as its subject's "
         "`picture` (see `picture` on the subject)."))
@@ -142,7 +144,9 @@ class Beat(BaseModel):
         "give it its own clip, or write the two as shots with a hard cut (\"CUT at 6 s\", a new camera angle, the first "
         "action's tool out of frame)."))
     spoken: list[str] = Field(default_factory=list, description=(
-        "A line a person on screen says out loud in this beat, word for word. Not the narrator (that is `says`)."))
+        "A line a person on screen says out loud in this beat, word for word. Not the narrator (that is `says`). The "
+        "beat's `text` then gives only the look and the action (\"smiles at the camera\"), with no talking verb (talks, speaks, "
+        "answers, explains): the tool adds the line. A talking verb there makes the model invent speech after the line."))
     sounds: list[str] = Field(default_factory=list, description=(
         "Sound effects the clip itself makes in this beat, said plainly: \"a short whoosh as the lines meet\", \"a door slams\". "
         "The clip is then made with sound. Never music: music is one track for the whole film (`music`)."))
@@ -195,6 +199,9 @@ class Story(BaseModel):
     music_swell: bool = Field(default=False, description=(
         "True only when the user asks for the music to rise when nobody speaks. Otherwise, in a film with a voice-over or a "
         "spoken line, the music stays at one quiet level under the voice for the whole film."))
+    music_from_beat: int | None = Field(default=None, ge=1, description=(
+        "The beat (1 = first) the music starts on, when the user asks for it to come in later: after a sound effect, as a "
+        "logo lands, on the reveal. Not set: the music runs from the start of the film."))
     captions: bool = Field(default=False, description=(
         "Words of what is said on the picture: white letters with a black outline. Words already on screen at that time "
         "are not captioned again."))
@@ -218,7 +225,7 @@ def register_video_production(mcp: FastMCP) -> None:
         title="Plan a multi-clip video",
         description=(
             f"Use for a video longer than {TRIGGER_SECONDS} seconds, or one with {TRIGGER_IDEAS} or more separate "
-            "ideas (different places or subjects). Write the story as beats (one action each) and group them into "
+            "ideas (different places or subjects). " + ROUTING_RULE + " Write the story as beats (one action each) and group them into "
             "clips yourself with `clip` on every beat: beats with the same number are made in one generation call. "
             "Pass the user's own words as `request`. Returns the clips to make, in order (the prompt, the model, the "
             "seconds and the one reference of each), a `checklist` of what the result must have, and `advice`: "
@@ -460,25 +467,49 @@ async def make_clip(story: dict, n: int, made: dict[str, str]) -> dict:
             body["assets"] = {"image_file_path": await _upload(frame)}
     elif reference["kind"] in ("still", "scene_still"):
         still = clip["steps"][0]
-        created = await _api("POST", "/v1/ai-image-generator", {
-            "name": f"{name} · still", "image_count": 1, "model": still["model"], "aspect_ratio": story["aspect"],
-            "resolution": "640px", "style": {"prompt": still["prompt"]}})
-        credits += int(created.get("credits_charged", 0))
-        for _ in range(STILL_WAIT_SECONDS // 3):
-            project = await _api("GET", f"/v1/image-projects/{created['id']}")
-            if project.get("status") in ("complete", "error", "canceled"):
+        wanted = reference.get("exact_words") or []
+        best, checks = None, []
+        # W10 w11: the card read "3 tips for better sleen". The still's words are read before the video is made; a
+        # misspelled still is made again, up to STILL_TRIES, and the best one is used.
+        for _ in range(STILL_TRIES if wanted else 1):
+            created = await _api("POST", "/v1/ai-image-generator", {
+                "name": f"{name} · still", "image_count": 1, "model": still["model"], "aspect_ratio": story["aspect"],
+                "resolution": "640px", "style": {"prompt": still["prompt"]}})
+            credits += int(created.get("credits_charged", 0))
+            for _ in range(STILL_WAIT_SECONDS // 3):
+                project = await _api("GET", f"/v1/image-projects/{created['id']}")
+                if project.get("status") in ("complete", "error", "canceled"):
+                    break
+                await asyncio.sleep(3)
+            if project.get("status") != "complete" or not project.get("downloads"):
+                raise ToolError(f"The still for clip {n} did not finish (image project {created['id']}: {project.get('status')}).")
+            url = project["downloads"][0]["url"]
+            check = None
+            if wanted and media_tools.have_ffmpeg():
+                try:   # the check is extra: a failed read leaves the words to the eye, it does not fail the clip
+                    with tempfile.TemporaryDirectory() as folder:
+                        still_file = await _download(url, Path(folder) / "still")
+                        check = await asyncio.to_thread(media_tools.check_words, still_file, wanted)
+                except Exception:
+                    check = None
+            if check is None:   # no reader on this server: the words are checked by eye
+                best = (0, url)
                 break
-            await asyncio.sleep(3)
-        if project.get("status") != "complete" or not project.get("downloads"):
-            raise ToolError(f"The still for clip {n} did not finish (image project {created['id']}: {project.get('status')}).")
-        body["assets"] = {"image_file_path": project["downloads"][0]["url"]}
+            checks.append(check)
+            found = int(check["found"].split()[0])
+            if best is None or found > best[0]:
+                best = (found, url)
+            if check["verdict"] != "misspelled":   # right, or unreadable: making it again would not tell us more
+                break
+        body["assets"] = {"image_file_path": best[1]}
     else:
         body["aspect_ratio"] = story["aspect"]
         if reference["kind"] in ("picture", "file"):
             pictures = reference.get("pictures") or [{"subject": reference["subject"], "file": reference["file"]}]
             body["references"] = [{"name": p["subject"], "file_path": p["file"]} for p in pictures]
     created = await _api("POST", "/v1/image-to-video" if "assets" in body else "/v1/text-to-video", body)
-    return {"clip": n, "id": created["id"], "credits_charged": credits + int(created.get("credits_charged", 0)),
+    spelling = {"still_words": checks} if reference["kind"] in ("still", "scene_still") and checks else {}
+    return {"clip": n, "id": created["id"], "credits_charged": credits + int(created.get("credits_charged", 0)), **spelling,
             "seconds": video["seconds"], "model": video["model"], "reference": reference["kind"],
             "next": "wait_for_video_project with this id"}
 
@@ -523,7 +554,7 @@ async def _finished(kind: str, project_id: str, out: Path) -> Path:
 
 def _add_sound(sound_plan: dict, film: Path, narration: Path | None, music: Path | None, out: Path,
                clip_starts: dict[int, float] | None = None, spoken: list[tuple[float, float]] | None = None,
-               music_first: bool = False, music_swell: bool = False, overlays: list[dict] | None = None) -> dict:
+               music_first: bool = False, music_swell: bool = False, overlays: list[dict] | None = None, music_at: float = 0.0) -> dict:
     """The file steps of the sound, in one place (run in a thread). Returns what was done.
     clip_starts: where each clip really starts in the joined film (a clip is often a little longer than planned).
     overlays: the words already on screen; a caption whose words are all among them at that time is left out (the double caption)."""
@@ -545,7 +576,9 @@ def _add_sound(sound_plan: dict, film: Path, narration: Path | None, music: Path
             film = media_tools.hold_end(film, fit["hold"], out.with_name(out.stem + "-held.mp4"))
     mixed = out.with_name(out.stem + "-mixed.mp4")
     layers = out.with_name(out.stem + ".layers")   # each layer kept beside the film, for a later mix
-    mix = media_tools.add_sound(film, mixed, narration if parts else None, parts, music, spoken, music_first, layers, music_swell)
+    mix = media_tools.add_sound(film, mixed, narration if parts else None, parts, music, spoken, music_first, layers, music_swell, music_at)
+    if music and music_at > 0:
+        done["music_starts_at"] = round(music_at, 2)
     done["loudness_lufs"] = mix["lufs"]
     if sound_plan.get("captions") and parts and media_tools.have_captions():
         timed = []
@@ -605,6 +638,16 @@ async def join_clips(story: dict, made: dict[str, str], sound: dict[str, str] | 
             else:
                 files.append(await _clip_file(planned, made, n, Path(folder)))
         probes = [await asyncio.to_thread(media_tools.probe, file) for file in files]
+        # W02 w11 (28 s jump): a generated clip that ran long and whose last frame starts a later clip keeps that last
+        # frame. Its extra time is cut from the start, or, when its start is a joint too, it is played a little faster.
+        starts_from = {c["reference"].get("of_clip") for c in planned["clips"] if c.get("reference", {}).get("kind") == "last_frame"}
+        for i, n in enumerate(planned["join"]):
+            clip = by_n[n]
+            if clip.get("made_by") == "api" and n in starts_from and probes[i]["seconds"] > float(clip["seconds"]) + 0.05:
+                how = "speed" if clip["reference"].get("kind") == "last_frame" else "head"
+                files[i] = await asyncio.to_thread(media_tools.fit_length, files[i], float(clip["seconds"]), how, Path(folder) / f"fit-{n}.mp4")
+                probes[i] = await asyncio.to_thread(media_tools.probe, files[i])
+                result.setdefault("kept_last_frame", []).append({"clip": n, "how": how})
         # A generated clip is cut to its planned length (minimax-h3 returns at least about 2 s); the user's clip is kept
         # whole, or as cut by source_start and source_end above.
         cut = [None if by_n[n].get("made_by") == "user" else float(by_n[n]["seconds"]) for n in planned["join"]]
@@ -653,12 +696,20 @@ async def join_clips(story: dict, made: dict[str, str], sound: dict[str, str] | 
                     inside += beat["seconds"]
             # the user's clip with its sound kept: someone may speak in it. Unless the host says it is only background
             # (source_speech false), its sound is speech: never lowered, the music sits under it.
+            music_at = 0.0
+            if story.get("music_from_beat"):   # W09: the whoosh first, then the music
+                for n in planned["join"]:
+                    inside = 0.0
+                    for b in by_n[n].get("beats", []):
+                        if b == story["music_from_beat"]:
+                            music_at = starts[n] + min(inside, lengths[n])
+                        inside += story["beats"][b - 1]["seconds"]
             kept_as_speech = [n for n, k in zip(planned["join"], keep) if k and by_n[n].get("made_by") == "user"
                               and by_n[n]["steps"][0].get("speech") is not False]
             spoken += [(starts[n], starts[n] + lengths[n]) for n in kept_as_speech]
             result["sound"] = await asyncio.to_thread(_add_sound, sound_plan, joined, narration, music, FILMS_DIR / name, starts,
                                                       spoken, bool(story.get("music_first")), bool(story.get("music_swell")),
-                                                      overlays + on_cards)
+                                                      overlays + on_cards, music_at)
             if kept_as_speech:
                 result["sound"]["user_clip_as_speech"] = kept_as_speech
             if narration is not None:
