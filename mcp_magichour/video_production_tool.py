@@ -238,7 +238,7 @@ def register_video_production(mcp: FastMCP) -> None:
             "it. Read-only; "
             "spends no credits."
         ),
-        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False),
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False),
     )
     def plan_video_production(story: Story, request: str | None = None, answers: dict[str, str] | None = None) -> dict:
         data = story.model_dump(exclude_none=True)
@@ -293,7 +293,7 @@ def register_video_production(mcp: FastMCP) -> None:
             "Pass both to join_production_clips as `sound`. Spends credits: 24 for each second of narration, 1 for "
             "each second of music."
         ),
-        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=True),
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True),
     )
     async def create_production_sound(production: str) -> dict:
         return await make_sound(unpack(production))
@@ -308,7 +308,7 @@ def register_video_production(mcp: FastMCP) -> None:
             "clip number. A clip that starts from an earlier clip needs that clip finished first. Returns the video "
             "project id; then call wait_for_video_project. Spends credits: 24 for each second at 480p."
         ),
-        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=True),
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True),
     )
     async def create_production_clip(production: str, clip: int, made: dict[str, str] | None = None) -> dict:
         return await make_clip(unpack(production), clip, made or {})
@@ -323,7 +323,7 @@ def register_video_production(mcp: FastMCP) -> None:
             "({narration, music}); the join puts each narrator sentence on its beat, mixes the music under it and draws "
             "the captions. Spends no credits."
         ),
-        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=True),
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True),
     )
     async def join_production_clips(production: str, made: dict[str, str], sound: dict[str, str] | None = None) -> dict:
         return await join_clips(unpack(production), made, sound or {})

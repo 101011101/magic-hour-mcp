@@ -163,7 +163,7 @@ def register_gates(mcp: FastMCP, mode: str = MODE) -> None:
             "word (and later replies added after it) and the names of attached files. Returns the simple / hard comparison "
             "and the question sheet. Then call classify_request. Spends no credits."
         ),
-        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False),
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False),
     )
     async def start_request(original: str, attachments: list[str] | None = None) -> dict:
         attachments = attachments or []
@@ -177,7 +177,7 @@ def register_gates(mcp: FastMCP, mode: str = MODE) -> None:
             "Step 2: say whether the request is simple or hard, by the comparison start_request returned. Simple: returns "
             "the approved token for the create tools. Hard: the next step is submit_plan. Spends no credits."
         ),
-        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False),
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False),
     )
     async def classify_request(request: str, verdict: Literal["simple", "hard"], reasons: list[str]) -> dict:
         data = read(request, "request")
@@ -199,7 +199,7 @@ def register_gates(mcp: FastMCP, mode: str = MODE) -> None:
             "true. Problems come back to fix; when there are none, the notes for the tools and models named come back for "
             "review_plan. Spends no credits."
         ),
-        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False),
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False),
     )
     async def submit_plan(request: str, sheet: dict[str, Answer], checklist: list[Line], steps: list[Step]) -> dict:
         data = read(request, "request")
@@ -252,7 +252,7 @@ def register_gates(mcp: FastMCP, mode: str = MODE) -> None:
             "Step 4, hard requests: one review for each note submit_plan returned. Any conflict sends the plan back to "
             "submit_plan with the change made. No conflicts: returns the approved token for the create tools. Spends no credits."
         ),
-        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False),
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False),
     )
     async def review_plan(plan: str, reviews: list[Review]) -> dict:
         data = read(plan, "plan")
@@ -275,7 +275,7 @@ def register_gates(mcp: FastMCP, mode: str = MODE) -> None:
             "Last step, hard requests: every checklist line with met yes / partly / no and what shows it. Returns the lines "
             "not met. Fix a line with another step when you can; else tell the user which lines are not met. Spends no credits."
         ),
-        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False),
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False),
     )
     async def final_check(approved: str, results: list[Result]) -> dict:
         data = read(approved, "approved")

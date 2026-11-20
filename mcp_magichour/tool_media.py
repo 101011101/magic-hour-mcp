@@ -209,7 +209,7 @@ def register_tool_media(mcp: FastMCP) -> None:
             "faster, then the last frame is held, so no word is cut. `music_swell`: the music rises between spoken "
             "lines. Returns download_url and video_file_path."
         ),
-        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=True),
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True),
     )
     async def add_sound_to_video(video: str, music: str | None = None, voice: str | None = None,
                                  original: Original = "under", voice_at: float = 0.0, music_swell: bool = False) -> dict:
@@ -242,7 +242,7 @@ def register_tool_media(mcp: FastMCP) -> None:
             "noticeably warmer; `saturation` 0 (black and white) to 2, 1 = as it is; `brightness` -0.5 to 0.5; "
             "`contrast` 0.5 to 2. A video keeps its sound. Returns download_url and file_path (video_file_path)."
         ),
-        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=True),
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True),
     )
     async def adjust_colours(media: str, warmth: float = 0.0, saturation: float = 1.0, brightness: float = 0.0,
                              contrast: float = 1.0) -> dict:
@@ -266,7 +266,7 @@ def register_tool_media(mcp: FastMCP) -> None:
             "or a colour. Returns "
             "download_url and file_path."
         ),
-        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=True),
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True),
     )
     async def put_pictures_side_by_side(pictures: list[str], layout: Literal["row", "column", "grid"] = "row",
                                         aspect: Literal["16:9", "1:1", "9:16", "4:5"] = "16:9", labels: list[str] | None = None,
@@ -296,7 +296,7 @@ def register_tool_media(mcp: FastMCP) -> None:
             "share of the video's width (0.15 = small corner logo). `opacity` 0.05 to 1. `start`/`end`: seconds, video "
             "only; leave out for the whole clip. For words, use add_words_to_media. Returns download_url and file_path."
         ),
-        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=True),
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True),
     )
     async def put_picture_on_video(media: str, picture: str,
                                    place: Literal["top_left", "top_right", "bottom_left", "bottom_right", "center"] = "top_right",
@@ -325,7 +325,7 @@ def register_tool_media(mcp: FastMCP) -> None:
             "after (an end card) or before (a title card) returns the user's clip and the card as ONE file, the clip's "
             "sound kept; no = the card alone. Returns download_url and video_file_path."
         ),
-        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=True),
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True),
     )
     async def make_card_clip(seconds: float, words: list[str] | None = None, background: str = "black",
                              like_video: str | None = None, aspect: Literal["16:9", "9:16", "1:1"] = "16:9",

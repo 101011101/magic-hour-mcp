@@ -129,7 +129,7 @@ def register_media_helpers(mcp: FastMCP) -> None:
             "any Magic Hour tool. Use this, not get_upload_urls, for a file you may later join, trim or take a frame "
             "from: this server keeps a copy, and Magic Hour never hands an upload back. Up to 100 MB. Spends no credits."
         ),
-        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=True),
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True),
     )
     async def upload_media(file_name: str, url: str | None = None, data_base64: str | None = None) -> dict:
         if bool(url) == bool(data_base64):
@@ -159,7 +159,7 @@ def register_media_helpers(mcp: FastMCP) -> None:
             "a video URL, or a file_path from upload_media. Returns `file_path`, usable as the start image of "
             "create_video_from_image. Spends no credits."
         ),
-        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=True),
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=True),
     )
     async def get_last_frame(video: str) -> dict:
         _need_ffmpeg()
@@ -176,7 +176,7 @@ def register_media_helpers(mcp: FastMCP) -> None:
             "create_video_from_image. To replace one clip between two others: start image = get_last_frame of the clip "
             "before, end image = get_first_frame of the clip after. Spends no credits."
         ),
-        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=True),
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=True),
     )
     async def get_first_frame(video: str) -> dict:
         _need_ffmpeg()
@@ -193,7 +193,7 @@ def register_media_helpers(mcp: FastMCP) -> None:
             "download URL, its length and its loudness. Sound files only (voice clips, .wav/.mp3): they are joined into one "
             "sound file (.m4a), for example a dialogue of two voices made one line at a time. Spends no credits."
         ),
-        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=True),
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=True),
     )
     async def join_videos(videos: list[str], silent: bool = False) -> dict:
         _need_ffmpeg()
@@ -237,7 +237,7 @@ def register_media_helpers(mcp: FastMCP) -> None:
             "each with its own focus, then join_videos. `media`: a URL, a file_path from upload_media, or a finished project id. "
             "Returns download_url, width and height (check them), and file_path for further tools. Spends no credits."
         ),
-        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=True),
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True),
     )
     async def reframe_media(media: str, aspect: Literal["16:9", "9:16", "1:1"], how: Literal["auto", "crop", "fill", "pad"] = "auto",
                             focus: float = 0.5, color: str = "black") -> dict:
@@ -269,7 +269,7 @@ def register_media_helpers(mcp: FastMCP) -> None:
             "seconds, video only; leave them out for the whole video. `large`: size large for every line. Returns "
             "download_url, width, height, and file_path for further tools. Spends no credits."
         ),
-        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=True),
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True),
     )
     async def add_words_to_media(media: str, words: list[Words], large: bool = False) -> dict:
         _need_ffmpeg()
@@ -290,7 +290,7 @@ def register_media_helpers(mcp: FastMCP) -> None:
             "audio project id. `end`: leave it out for the end of the file. Returns download_url, seconds, and "
             "video_file_path (or audio_file_path) for further tools. Spends no credits."
         ),
-        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=True),
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True),
     )
     async def trim_media(media: str, start: float = 0.0, end: float | None = None) -> dict:
         _need_ffmpeg()
@@ -316,7 +316,7 @@ def register_media_helpers(mcp: FastMCP) -> None:
             "the length of the mix (default: to the end of the longest track). `fade_out`: seconds of fade at the end. "
             "`format`: m4a, mp3 or wav. Returns download_url, seconds, loudness_db and audio_file_path. Spends no credits."
         ),
-        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=True),
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True),
     )
     async def mix_audio(tracks: list[Track], seconds: float | None = None, fade_out: float = 0.0,
                         format: Literal["m4a", "mp3", "wav"] = "m4a") -> dict:

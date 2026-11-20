@@ -199,7 +199,7 @@ def register_tool_plan(mcp: FastMCP) -> None:
             "order, free-tier settings (free models only), each tool's known faults, and gaps (what no tool can do). Call with the "
             "family only to see the full sheet. Read-only; spends no credits and creates nothing."
         ),
-        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False),
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False),
     )
     def plan_tool_call(family: Family, request: str, answers: dict[str, str] | None = None,
                        questions_asked: bool = False) -> dict:

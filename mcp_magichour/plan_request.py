@@ -431,7 +431,7 @@ def register_plan_request(mcp: FastMCP) -> None:
             "list of strings, one for each line of text to show, exactly as the user wrote it; send [] when the user "
             "wants no text. Read-only; spends no credits and creates nothing."
         ),
-        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False),
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False),
     )
     def plan_request(
         messages: list[Message],

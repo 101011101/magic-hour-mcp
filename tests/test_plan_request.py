@@ -741,6 +741,7 @@ class CompositionPathOnlyTests(unittest.TestCase):
         import asyncio
         described = asyncio.run(tools())
         self.assertIn("Do not call it before a single create or edit call", described["plan_request"])
-        self.assertEqual(API_TOOL_METADATA[("POST", "/v1/image-to-video")][2],
-                         "Animates a supplied image into a video using motion instructions and available model "
-                         "options. Starts a background job that costs credits; returns a project id for wait_for_video_project.")
+        # Upstream owns this wording (#188, #216); the check is only that no planning route was added to it.
+        image_to_video = API_TOOL_METADATA[("POST", "/v1/image-to-video")][2]
+        for planner in ("plan_request", "plan_video_production", "plan_conversation"):
+            self.assertNotIn(planner, image_to_video)

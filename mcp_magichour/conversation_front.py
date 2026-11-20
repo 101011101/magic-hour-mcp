@@ -374,7 +374,7 @@ def register_conversation_front(mcp: FastMCP) -> None:
             "with questions_asked=true), or the plan: tools, free-tier settings, known faults, needed files, and for a "
             "film the story rules for plan_video_production. Read-only; spends no credits and creates nothing."
         ),
-        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False),
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False),
     )
     async def plan_conversation(family: Family, request: str, answers: dict[str, str] | None = None,
                                 questions_asked: bool = False, attachments: list[Attachment] | None = None) -> dict[str, Any]:
