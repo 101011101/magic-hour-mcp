@@ -50,27 +50,8 @@ IMPLIED = [
 # Tools the default server lists without tool management (tool_media.py) switched on.
 TOOL_MEDIA = {"add_sound_to_video", "adjust_colours", "put_pictures_side_by_side", "put_picture_on_video", "make_card_clip"}
 
-# Tools no family sheet lists yet (no tool notes yet either). Each goes to a family, with the files it needs.
-EXTRA_TOOLS = {
-    "faces": {
-        "change_clothes_in_photo": "New clothes on a person in a photo. Needs the person's photo, and the outfit as a picture or words.",
-        "place_person_in_scene": "Put the person from one photo into another scene (body swap). Needs the person's photo and the scene picture.",
-        "replace_character_in_video": "Replace a person in a video with the person from a photo. Needs the video and the photo.",
-    },
-    "change_video": {
-        "translate_video": "The video's speech in another language, with the same voice. Needs the video and the language.",
-        "create_video_from_image": "Extend a clip: the last frame (get_last_frame) animated, then join_videos.",
-    },
-    "new_video": {
-        "create_video_from_audio": "A video made for a song or a sound file. Needs the audio file.",
-    },
-    "talking": {
-        "create_lip_sync_video": "A person in a video mouths a sound file (a song or a voice). Needs the video and the audio.",
-    },
-    "sound": {
-        "ai_voice_cloner_create_audio": "Words read in the user's own voice. Needs a voice sample (a sound file of the user speaking).",
-    },
-}
+# Tools no family sheet lists yet: they go here with the files they need. Empty since 2026-11-20 (all moved into the sheets).
+EXTRA_TOOLS: dict[str, dict[str, str]] = {}
 
 # The files each family needs: (what, kinds, when). `when` names the case; the host decides if it applies.
 FILES = {
@@ -78,7 +59,8 @@ FILES = {
     "faces": [("the photo with the face, head or person to use", ("image",), "always"),
               ("the photo or video it goes onto (for a headshot: none)", ("image", "video"), "a swap, clothes, a scene, a character replace")],
     "change_video": [("the video to change", ("video",), "always")],
-    "new_video": [("the picture to animate", ("image",), "the user asks to animate their picture")],
+    "new_video": [("the picture to animate", ("image",), "the user asks to animate their picture"),
+                  ("the song or sound file", ("audio",), "a video made for a song or a sound file")],
     "talking": [("the photo or video of the person who speaks", ("image", "video"), "always"),
                 ("the sound file to mouth", ("audio",), "a song, or the user's own recording")],
     "sound": [("a sample of the user's voice", ("audio",), "the user's own voice")],
@@ -148,6 +130,7 @@ NEEDED_WHEN = {
     "the user asks to animate their picture": r"\b(?:this|my) (?:photo|pic|picture|image)|animate (?:this|my)",
     "a song, or the user's own recording": r"\bsong|sing|my (?:recording|audio|track)|lip.?sync",
     "the user's own voice": r"\bmy (?:own )?voice|in my voice|sounds? like me|clone",
+    "a video made for a song or a sound file": r"\b(?:this|my|the) (?:song|track|audio|recording)\b|music video",
 }
 
 
@@ -295,6 +278,11 @@ def front(family: str, request: str, answers: dict[str, str] | None = None, ques
     if family == "new_video" and answers and answers.get("sound") == "silent" and not re.search(SILENCE, request):
         answers = {**answers, "sound": "sound"}
         changed.append("sound 'silent' became 'sound': the user's words do not ask for silence (user, 2026-11-19).")
+    tools = set(tool_plan.notes()["tools"]) | {t for f in tool_plan.sheets()["families"].values() for t in f["tools"]}
+    named = sorted(k for k in (answers or {}) if k in tools)
+    if named:   # hosts sent tool names as rows (c3/c4: 44 of 60 faces chats)
+        answers = {k: v for k, v in answers.items() if k not in tools}
+        changed.append(f"Left out {', '.join(named)}: tool names, not rows. Answer only the rows.")
     out = tool_plan.plan(family, request, answers, questions_asked)
     if changed:
         out["changed"] = changed
@@ -327,6 +315,7 @@ def front(family: str, request: str, answers: dict[str, str] | None = None, ques
                             "answers and questions_asked=true. A longer film: call again with family film.")}
     for d in out.get("decisions", []):   # no telling of defaults (user, 2026-11-19)
         d.pop("tell_the_user", None)
+    out["next"] = out.get("next", "").replace(" Tell the user every value chosen for them (tell_the_user).", "")
     if media:
         out["media"] = media
         out["next"] = out.get("next", "") + MEDIA_NEXT
@@ -338,7 +327,7 @@ def index() -> str:
                      + (f"({'|'.join(r['answers'])})" if r["kind"] == "deciding" else "") for r in FILM_ROWS)
     lines = [tool_plan.sheet_index(), f"film: {film}"]
     for fam, tools in EXTRA_TOOLS.items():
-        lines.append(f"{fam} also: {', '.join(tools)}")
+        lines.append(f"{fam} other tools (call them directly; they are not rows): {', '.join(tools)}")
     return "\n".join(lines)
 
 

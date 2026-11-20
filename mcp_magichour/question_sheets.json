@@ -314,7 +314,10 @@
         "detect_faces",
         "trim_media",
         "edit_image",
-        "generate_headshot"
+        "generate_headshot",
+        "change_clothes_in_photo",
+        "place_person_in_scene",
+        "replace_character_in_video"
       ],
       "settings": {
         "swap_face_in_photo": {
@@ -348,7 +351,8 @@
             "video": "swap_face_in_video; tell the user the face may only look similar and no head swap exists for video."
           },
           "default": "—",
-          "why": "User, 2026-11-13: head swap for faces. Test: C14b 1.5 → 4; C14a head swap clearly the person, face swap a blend. swap_face_in_video limit (C15a 2.7)."
+          "why": "User, 2026-11-13: head swap for faces. Test: C14b 1.5 → 4; C14a head swap clearly the person, face swap a blend. swap_face_in_video limit (C15a 2.7).",
+          "applies": "a face or head swap"
         },
         {
           "id": "which_person",
@@ -395,6 +399,54 @@
           },
           "default": "Square, plain light background.",
           "why": "generate_headshot antitype: 928x1152 and an office background for 'square, plain grey' (A05a 3.0). Test wlive1: A05a 5 with edit_image."
+        },
+        {
+          "id": "outfit",
+          "kind": "deciding",
+          "applies": "new clothes on a person in a photo",
+          "ask": "(Read from the files and words.) Is the new outfit a picture or words, and which part changes?",
+          "read_from": [
+            "An attached outfit picture.",
+            "'A navy blazer', 'jeans instead', 'a red dress'."
+          ],
+          "answers": {
+            "outfit picture": "change_clothes_in_photo with the person's photo and the outfit picture; garment_type upper_body (a shirt, a jacket), lower_body (trousers, a skirt), else entire_outfit.",
+            "outfit in words": "edit_image: change only the clothes to the user's words; keep the face, hair, pose and background."
+          },
+          "default": "An outfit picture when one is attached, else outfit in words.",
+          "why": "Draft 2026-11-20 from the tool's inputs (user: 'just have something for now'); not tested yet."
+        },
+        {
+          "id": "scene",
+          "kind": "deciding",
+          "applies": "a person put into another scene",
+          "ask": "(Read from the files and words.) Is the scene a picture or words?",
+          "read_from": [
+            "An attached scene picture.",
+            "'On a beach', 'in front of the Eiffel Tower'."
+          ],
+          "answers": {
+            "scene picture": "place_person_in_scene with the person's photo and the scene picture, resolution 1k (2k or 4k only for print or when the user asks).",
+            "scene in words": "generate_image the scene with no people in it first, then place_person_in_scene with it, resolution 1k."
+          },
+          "default": "A scene picture when one is attached, else scene in words.",
+          "why": "Draft 2026-11-20 from the tool's inputs (user: 'just have something for now'); not tested yet."
+        },
+        {
+          "id": "character",
+          "kind": "deciding",
+          "applies": "a person in a video replaced by, or copied onto, a character from a picture",
+          "ask": "Should your character take the person's place in the video, or should your picture copy the video's movement?",
+          "read_from": [
+            "'Replace the man with my character', 'put me in this video' (replace).",
+            "'Make my picture dance like this', 'copy the moves' (animate)."
+          ],
+          "answers": {
+            "replace": "replace_character_in_video, style.mode replace; the times from which_part as start_seconds and end_seconds. With several people: style.selection_mode point on the chosen person (wan-animate).",
+            "animate": "replace_character_in_video, style.mode animate: the picture moves like the person in the video."
+          },
+          "default": "Replace.",
+          "why": "Draft 2026-11-20 from the tool's inputs (user: 'just have something for now'); not tested yet."
         }
       ]
     },
@@ -411,7 +463,8 @@
         "edit_video",
         "add_sound_to_video",
         "put_picture_on_video",
-        "make_card_clip"
+        "make_card_clip",
+        "translate_video"
       ],
       "settings": {
         "create_video_from_image": {
@@ -562,6 +615,35 @@
           },
           "default": "Logo: top_right, size 0.15, the whole clip. Card: 2 s, black, white words, after the clip.",
           "why": "MCP-TOOLS-31 put_picture_on_video, MCP-TOOLS-32 make_card_clip (2026-11-14). Before: no tool (E29a 1.3, E29b 2.0). Not benchmarked yet. Run wnew E29b: join_videos failed (media_tools.join calls ffmpeg by name), so the card tool attaches the card itself."
+        },
+        {
+          "id": "speech_language",
+          "kind": "required",
+          "applies": "the speech itself in another language (a dub, not subtitles)",
+          "ask": "Which language should the video speak?",
+          "read_from": [
+            "'In Spanish', 'for our French customers'."
+          ],
+          "answers": {
+            "a language": "translate_video with target_language (the same voice). One call takes 1 to 30 s: for a longer video, translate 30 s parts in order and join_videos."
+          },
+          "default": "Ask; do not guess.",
+          "why": "Draft 2026-11-20 from the tool's inputs (user: 'just have something for now'); not tested yet."
+        },
+        {
+          "id": "longer",
+          "kind": "deciding",
+          "applies": "the whole video made longer (more at the end)",
+          "ask": "How many seconds longer, and what should happen in the new part?",
+          "read_from": [
+            "'5 more seconds', 'have him walk away at the end'."
+          ],
+          "answers": {
+            "exact words": "get_last_frame, then create_video_from_image from that frame with the user's new action (end_seconds = the added seconds), then join_videos with the original first.",
+            "not stated": "Add 5 s where the same action goes on: get_last_frame, create_video_from_image, join_videos with the original first."
+          },
+          "default": "5 s more; the same action goes on.",
+          "why": "Draft 2026-11-20 from the tool's inputs (user: 'just have something for now'); not tested yet."
         }
       ]
     },
@@ -572,7 +654,8 @@
         "create_video_from_image",
         "reframe_media",
         "add_words_to_media",
-        "trim_media"
+        "trim_media",
+        "create_video_from_audio"
       ],
       "settings": {
         "create_video_from_text": {
@@ -652,6 +735,22 @@
           },
           "default": "None.",
           "why": "create_video_from_text antitype: labels missing (I46b)."
+        },
+        {
+          "id": "song",
+          "kind": "deciding",
+          "applies": "a video made for a song or a sound file the user gave",
+          "ask": "(Read from the files and words.) The whole track, or only part of it?",
+          "read_from": [
+            "The attached sound file.",
+            "'The chorus', 'the first 20 seconds'."
+          ],
+          "answers": {
+            "whole track": "create_video_from_audio from 0 to the track's seconds (media facts); style.prompt from the user's words, else the song's mood; the user's picture as image_file_path when given. This replaces the length row.",
+            "a part": "create_video_from_audio with start_seconds and end_seconds from the user's words."
+          },
+          "default": "The whole track.",
+          "why": "Draft 2026-11-20 from the tool's inputs (user: 'just have something for now'); not tested yet."
         }
       ]
     },
@@ -728,6 +827,21 @@
           },
           "default": "The photo's shape.",
           "why": "create_talking_photo antitype: 1024x1536 for 'square' (C17a/b)."
+        },
+        {
+          "id": "own_sound",
+          "kind": "deciding",
+          "applies": "the user gave the sound to mouth (a song or a recording)",
+          "ask": "(Read from the files.) The person mouths the user's sound file, not a written line.",
+          "read_from": [
+            "An attached sound file and 'lip sync', 'make him sing this', 'mouth my recording'."
+          ],
+          "answers": {
+            "video": "create_lip_sync_video with the video and the sound: start_seconds 0, end_seconds the shorter of the two (media facts), generation_mode lite. The line row takes 'your_call' and is not used.",
+            "photo": "create_talking_photo with the photo and the sound file. The line row takes 'your_call' and is not used."
+          },
+          "default": "Video when the person is in a video, else photo.",
+          "why": "Draft 2026-11-20 from the tool's inputs (user: 'just have something for now'); not tested yet."
         }
       ]
     },
@@ -739,7 +853,8 @@
         "mix_audio",
         "join_videos",
         "ai_voice_generator_create_audio",
-        "add_sound_to_video"
+        "add_sound_to_video",
+        "ai_voice_cloner_create_audio"
       ],
       "settings": {
         "generate_music": {
@@ -803,6 +918,22 @@
           },
           "default": "One voice, no music.",
           "why": "F31b, F32a, F32b (MCP-TOOLS-28). The voice generator is hidden upstream (MCP-11)."
+        },
+        {
+          "id": "own_voice",
+          "kind": "deciding",
+          "applies": "the words read in the user's own voice",
+          "ask": "(Not asked: a rule.) The voice sample is the user's own voice or a voice they may use. Another real person's voice without consent: refuse.",
+          "read_from": [
+            "'In my voice', 'sounds like me', an attached recording of the user.",
+            "A celebrity's or another person's name."
+          ],
+          "answers": {
+            "own or permitted": "ai_voice_cloner_create_audio with the voice sample, the words as style.prompt, language auto, speed 1.",
+            "another real person": "Refuse plainly; offer a stock voice (ai_voice_generator_create_audio)."
+          },
+          "default": "Own or permitted.",
+          "why": "Draft 2026-11-20 from the tool's inputs (user: 'just have something for now'); not tested yet."
         }
       ]
     }

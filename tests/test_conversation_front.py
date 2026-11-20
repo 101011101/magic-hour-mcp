@@ -93,3 +93,32 @@ def test_media_facts_never_fail_the_plan(monkeypatch):
     conversation_front._MEDIA_CACHE.clear()
     media = asyncio.run(conversation_front.media_facts([{"name": "a.mp4", "kind": "video", "file_path": "api-assets/x/a.mp4"}]))
     assert media[0]["name"] == "a.mp4" and "error" in media[0]
+
+
+def test_tool_names_sent_as_rows_are_left_out():
+    # c3/c4: hosts answered tool names as rows in 44 of 60 faces chats and the call was refused.
+    out = front("faces", "put me into this beach photo", {"consent": "none", "scene": "scene picture",
+                "change_clothes_in_photo": "n/a", "place_person_in_scene": "n/a"},
+                attachments=[{"name": "me.jpg", "kind": "image"}, {"name": "beach.jpg", "kind": "image"}])
+    assert out["stage"] == "plan" and "place_person_in_scene" in out["changed"][0]
+    assert "place_person_in_scene" in {d["id"]: d["instruction"] for d in out["decisions"]}["scene"]
+
+
+def test_the_plan_does_not_tell_the_user_the_defaults():
+    out = front("new_video", "a 10 second clip: a ufo flies through a starfield", {"from_picture": "words", "length": "10", "shape": "16:9"})
+    assert out["stage"] == "plan" and "Tell the user" not in out["next"]   # user, 2026-11-19
+
+
+def test_every_tool_that_had_no_sheet_now_has_a_row():
+    from mcp_magichour import tool_plan
+    families = tool_plan.sheets()["families"]
+    for tool in ("change_clothes_in_photo", "place_person_in_scene", "replace_character_in_video", "translate_video",
+                 "create_video_from_image", "create_video_from_audio", "create_lip_sync_video", "ai_voice_cloner_create_audio"):
+        homes = [f for f, s in families.items() if tool in s["tools"] and any(tool in a for r in s["rows"] for a in r["answers"].values())]
+        assert homes, tool
+    assert conversation_front.EXTRA_TOOLS == {} and " also:" not in conversation_front.index()
+
+
+def test_a_video_for_a_song_asks_for_the_song():
+    out = front("new_video", "make a music video for my song", {"from_picture": "words", "length": "your_call", "shape": "16:9", "song": "whole track"})
+    assert out["stage"] == "ask_the_user" and any(q["id"] == "file" and "song" in q["ask"] for q in out["questions"])

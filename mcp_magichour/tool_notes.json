@@ -726,6 +726,129 @@
       ],
       "deciding_question": "Which words, which colour, how long, before or after?",
       "bench": "0 runs."
+    },
+    "change_clothes_in_photo": {
+      "family": "faces",
+      "does": "Puts the clothes from an outfit picture on a person in a photo.",
+      "type": [
+        "A person photo and an outfit picture; garment_type picks the top, the bottom or the whole outfit."
+      ],
+      "antitype": [
+        {
+          "job": "An outfit given only in words",
+          "use": "edit_image",
+          "why": "This tool needs an outfit picture."
+        }
+      ],
+      "limits": [
+        "Costs 25 credits.",
+        "Needs both pictures."
+      ],
+      "deciding_question": "Is the outfit a picture or words?",
+      "bench": "Draft 2026-11-20 from the tool's inputs; no bench runs yet."
+    },
+    "place_person_in_scene": {
+      "family": "faces",
+      "does": "Puts the person from one photo into a scene picture.",
+      "type": [
+        "A person photo and a scene picture."
+      ],
+      "antitype": [
+        {
+          "job": "A scene given only in words",
+          "use": "generate_image the scene first, then this tool",
+          "why": "This tool needs a scene picture."
+        }
+      ],
+      "limits": [
+        "resolution is required: 640px, 1k, 2k or 4k; the price grows with it (from 50 credits at 640px)."
+      ],
+      "deciding_question": "Is the scene a picture or words?",
+      "bench": "Draft 2026-11-20 from the tool's inputs; no bench runs yet."
+    },
+    "replace_character_in_video": {
+      "family": "faces",
+      "does": "Replaces a person in a video with a character from a picture, or makes the picture copy the video's movement.",
+      "type": [
+        "style.mode replace: the character takes the person's place.",
+        "style.mode animate: the picture moves like the person in the video."
+      ],
+      "antitype": [
+        {
+          "job": "Only the face changes",
+          "use": "swap_face_in_video",
+          "why": "This tool replaces the whole person."
+        }
+      ],
+      "limits": [
+        "kling-3.0: 3-10 s in replace mode, 3-30 s in animate mode.",
+        "With several people: selection_mode point (wan-animate, minimax-h3)."
+      ],
+      "deciding_question": "Replace the person, or copy the movement onto the picture?",
+      "bench": "Draft 2026-11-20 from the tool's inputs; no bench runs yet."
+    },
+    "translate_video": {
+      "family": "change_video",
+      "does": "Makes the speech in a video another language, in the same voice.",
+      "type": [
+        "A video with speech and a target language."
+      ],
+      "antitype": [
+        {
+          "job": "Translated subtitles",
+          "use": "add_subtitles_to_video",
+          "why": "This tool changes the speech, not the text."
+        }
+      ],
+      "limits": [
+        "One call takes a 1-30 s part (start_seconds, end_seconds); translate longer videos in parts and join_videos.",
+        "720p and 1080p need a paid plan."
+      ],
+      "deciding_question": "Which language?",
+      "bench": "Draft 2026-11-20 from the tool's inputs; no bench runs yet."
+    },
+    "create_video_from_audio": {
+      "family": "new_video",
+      "does": "Makes a video that follows a song or a sound file.",
+      "type": [
+        "A sound file, an optional starting picture and a style prompt."
+      ],
+      "antitype": [
+        {
+          "job": "A person mouths the song",
+          "use": "create_lip_sync_video or create_talking_photo",
+          "why": "This tool does not sync lips."
+        }
+      ],
+      "limits": [
+        "Free plans: 15 s of output."
+      ],
+      "deciding_question": "The whole track or a part?",
+      "bench": "Draft 2026-11-20 from the tool's inputs; no bench runs yet."
+    },
+    "ai_voice_cloner_create_audio": {
+      "family": "sound",
+      "does": "Reads words in the voice of a sound sample.",
+      "type": [
+        "The user's own voice sample and the words to read."
+      ],
+      "antitype": [
+        {
+          "job": "A stock voice",
+          "use": "ai_voice_generator_create_audio",
+          "why": "No voice sample is needed for a stock voice."
+        },
+        {
+          "job": "Another real person's voice without consent",
+          "use": "Refuse",
+          "why": "Use only the user's own voice or a voice they may use."
+        }
+      ],
+      "limits": [
+        "style.prompt up to 5000 characters; speed 0.75-1.30."
+      ],
+      "deciding_question": "Is the voice the user's own?",
+      "bench": "Draft 2026-11-20 from the tool's inputs; no bench runs yet."
     }
   },
   "free_models": {
