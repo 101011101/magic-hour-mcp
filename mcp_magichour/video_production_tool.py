@@ -131,7 +131,7 @@ class Beat(BaseModel):
         "With `background`: the picture at 80% on that colour; without it: as large as fits, over a blur of itself."))
     model: Literal["ltx-2.5", "minimax-h3"] | None = Field(default=None, description=(
         "The video model for this beat's clip, if you want to choose it. Only minimax-h3 takes a picture reference."))
-    words_route: Literal["card", "model", "still", "accept"] | None = Field(default=None, description="Set by an answer to a words question.")
+    words_route: Literal["overlay", "card", "model", "still", "accept"] | None = Field(default=None, description="Set by an answer to a words question.")
     says: list[str] = Field(default_factory=list, description=(
         "A voice-over: the narrator's sentences that are heard during this beat, word for word, one sentence in each "
         "item. Do not put the voice-over in `text`."))
@@ -511,7 +511,9 @@ async def make_clip(story: dict, n: int, made: dict[str, str]) -> dict:
     spelling = {"still_words": checks} if reference["kind"] in ("still", "scene_still") and checks else {}
     return {"clip": n, "id": created["id"], "credits_charged": credits + int(created.get("credits_charged", 0)), **spelling,
             "seconds": video["seconds"], "model": video["model"], "reference": reference["kind"],
-            "next": "wait_for_video_project with this id"}
+            "next": ("wait_for_video_project with this id. When every clip is made, call join_production_clips, also for a plan "
+                     "of one clip: the join applies the plan's sound (it mutes a clip made without sound) and words. A clip's "
+                     "own file is not the finished video; do not give it to the user.")}
 
 
 async def make_sound(story: dict) -> dict:

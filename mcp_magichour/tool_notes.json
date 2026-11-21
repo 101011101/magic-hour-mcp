@@ -789,7 +789,7 @@
     },
     "translate_video": {
       "family": "change_video",
-      "does": "Makes the speech in a video another language, in the same voice.",
+      "does": "Makes the speech in a video another language. The translator picks the voice: it may not sound like the speaker, and there is no setting for it. Do not promise the speaker's own voice; if the user asks for it, say this before the call.",
       "type": [
         "A video with speech and a target language."
       ],

@@ -442,7 +442,7 @@
             "'Make my picture dance like this', 'copy the moves' (animate)."
           ],
           "answers": {
-            "replace": "replace_character_in_video, style.mode replace; the times from which_part as start_seconds and end_seconds. With several people: style.selection_mode point on the chosen person (wan-animate).",
+            "replace": "replace_character_in_video, style.mode replace, model minimax-h3 on the free plan; the times from which_part as start_seconds and end_seconds. With several people: style.selection_mode point on the chosen person.",
             "animate": "replace_character_in_video, style.mode animate: the picture moves like the person in the video."
           },
           "default": "Replace.",
@@ -625,7 +625,7 @@
             "'In Spanish', 'for our French customers'."
           ],
           "answers": {
-            "a language": "translate_video with target_language (the same voice). One call takes 1 to 30 s: for a longer video, translate 30 s parts in order and join_videos."
+            "a language": "translate_video with target_language. The translator picks the voice and it may not sound like the speaker: do not promise their own voice; if the user asks for it, say so before the call. One call takes 1 to 30 s: for a longer video, translate 30 s parts in order and join_videos."
           },
           "default": "Ask; do not guess.",
           "why": "Draft 2026-11-20 from the tool's inputs (user: 'just have something for now'); not tested yet."
@@ -837,7 +837,7 @@
             "An attached sound file and 'lip sync', 'make him sing this', 'mouth my recording'."
           ],
           "answers": {
-            "video": "create_lip_sync_video with the video and the sound: start_seconds 0, end_seconds the shorter of the two (media facts), generation_mode lite. The line row takes 'your_call' and is not used.",
+            "video": "create_lip_sync_video with the video and the sound: start_seconds 0, end_seconds the shorter of the two (media facts), generation_mode standard (1 credit a frame, the same as lite; it needs the mouth to move in the first seconds of the video: if the API refuses for that, call again with lite). The line row takes 'your_call' and is not used.",
             "photo": "create_talking_photo with the photo and the sound file. The line row takes 'your_call' and is not used."
           },
           "default": "Video when the person is in a video, else photo.",

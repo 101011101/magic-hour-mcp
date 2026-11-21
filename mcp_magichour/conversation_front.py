@@ -158,6 +158,9 @@ SILENCE = r"\b(?:silent|silence|no sound|no audio|mute[d]?|without sound|sound o
 OPTION_ROWS = ("kind", "who_speaks", "sound", "music", "captions", "product_picture")
 
 
+ONLY_THESE = tool_plan.ONLY_THESE   # K26 lb1l stupid (2026-11-20): the host offered 5-10 s, the plan made 15 s
+
+
 def _film(request: str, answers: dict[str, str] | None, questions_asked: bool, files: dict) -> dict:
     rows = {r["id"]: r for r in FILM_ROWS}
     view = [{"id": r["id"], "kind": r["kind"], "ask": r["ask"], "options": list(r["answers"]), "default": r["default"],
@@ -178,7 +181,7 @@ def _film(request: str, answers: dict[str, str] | None, questions_asked: bool, f
                 "questions": [{"id": r["id"], "ask": r["ask"], "if_skipped": r["default"]} for r in open_rows] + file_qs,
                 "next": ("Ask the user ALL these questions in ONE message, numbered, in plain words, each with what happens if "
                          "they skip it. This is the only time the user is asked. Then call again with their answers and "
-                         "questions_asked=true.")}
+                         "questions_asked=true." + ONLY_THESE)}
     # Sound is on unless the user's own words ask for silence (user, 2026-11-19). "No talking" or "music only" is not silence.
     silent = bool(re.search(SILENCE, request))
     notes = []
@@ -283,6 +286,10 @@ def front(family: str, request: str, answers: dict[str, str] | None = None, ques
     if named:   # hosts sent tool names as rows (c3/c4: 44 of 60 faces chats)
         answers = {k: v for k, v in answers.items() if k not in tools}
         changed.append(f"Left out {', '.join(named)}: tool names, not rows. Answer only the rows.")
+    sheet_rows = {r["id"]: r for r in tool_plan.sheets()["families"].get(family, {}).get("rows", [])}
+    always_na = sorted(k for k, v in (answers or {}).items() if v == tool_plan.NOT_APPLICABLE and k in sheet_rows and "applies" not in sheet_rows[k])
+    if always_na:
+        changed.append(f"{', '.join(always_na)}: '{tool_plan.NOT_APPLICABLE}' became '{tool_plan.YOUR_CALL}' (the row always applies; its default is used).")
     out = tool_plan.plan(family, request, answers, questions_asked)
     if changed:
         out["changed"] = changed

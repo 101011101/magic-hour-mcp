@@ -84,6 +84,10 @@ def _sheet_view(family: str) -> dict:
     }
 
 
+# K26 lb1l stupid (2026-11-20): the host told the user a length it made up, then the plan made another.
+ONLY_THESE = ' Say only these questions and what happens if each is skipped. Do not tell the user a length, a shape or any other value that is not in these questions: those are decided later.'
+
+
 def plan(family: str, request: str, answers: dict[str, str] | None, questions_asked: bool = False) -> dict:
     """Check the host's answers against the family's sheet; return the sheet, the open questions, or the plan."""
     all_sheets = sheets()["families"]
@@ -105,10 +109,11 @@ def plan(family: str, request: str, answers: dict[str, str] | None, questions_as
     if missing_host:
         raise ToolError(f"Answer these rows yourself from the files or the rules, not by asking the user: {', '.join(missing_host)}.")
 
+    always = [i for i, v in answers.items() if v == NOT_APPLICABLE and "applies" not in rows[i]]
+    if always:   # K16 lb1l (2026-11-20): 7 refusals in 3 chats, each retried as your_call
+        answers = {i: (YOUR_CALL if i in always else v) for i, v in answers.items()}
     for i, value in answers.items():
         r = rows[i]
-        if value == NOT_APPLICABLE and "applies" not in r:
-            raise ToolError(f"Row {i} always applies; give a value, '{YOUR_CALL}' or '{ASK}'.")
         if r["kind"] == "deciding" and value not in (ASK, YOUR_CALL, NOT_APPLICABLE) and _match(r, value) is None \
                 and not _words_option(r):
             raise ToolError(f"Row {i} ({r['kind']}): {value!r} is not an option. Options: {', '.join(options(r))}.")
@@ -123,7 +128,7 @@ def plan(family: str, request: str, answers: dict[str, str] | None, questions_as
                 "questions": [{"id": r["id"], "ask": r["ask"], "if_skipped": r["default"]} for r in open_rows],
                 "next": ("Ask the user ALL these questions in ONE message, numbered, in plain words, each with what "
                          "happens if they skip it. This is the only time the user is asked. Then call again with their "
-                         f"answers ('{YOUR_CALL}' for any they skip or hand over) and questions_asked=true.")}
+                         f"answers ('{YOUR_CALL}' for any they skip or hand over) and questions_asked=true." + ONLY_THESE)}
     if questions_asked:
         answers = {i: (YOUR_CALL if v == ASK else v) for i, v in answers.items()}
 

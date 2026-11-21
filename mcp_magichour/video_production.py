@@ -768,6 +768,34 @@ def rounds(clips: list[dict]) -> list[list[int]]:
     return out
 
 
+ENTERS = re.compile(r"\b(enter|enters|entering|walks? (?:in|up|over|into)|arrives?|comes? (?:in|over|into)|joins?|appears?|steps? in)\b", re.I)
+
+
+def _last_frame_people(story: dict, planned: dict) -> list[str]:
+    """W05 lb1l dumper (2026-11-20): one person per beat (Maya, Leo, Maya), each clip from the last frame before it. The
+    clip for Maya's second line started on Leo, so Leo said her line in her voice, and the last shot added a stranger. A
+    clip that starts from a last frame shows the people in that frame; a person not in it must walk in (said in the beat)."""
+    by_id = {s["id"]: s for s in story.get("subjects", [])}
+    by_n = {c["n"]: c for c in planned["clips"]}
+    def people_in(clip: dict) -> set[str]:
+        return {sid for b in clip["beats"] for sid in story["beats"][b - 1].get("subjects", []) if by_id.get(sid, {}).get("role") == "person"}
+    problems = []
+    for clip in planned["clips"]:
+        reference = clip.get("reference") or {}
+        before = by_n.get(reference.get("of_clip")) if reference.get("kind") == "last_frame" else None
+        if not before or before.get("kind") != "scene":
+            continue
+        missing = sorted(people_in(clip) - people_in(before))
+        if missing and not ENTERS.search(story["beats"][clip["beats"][0] - 1].get("text", "")):
+            names = " and ".join(missing)
+            problems.append(f"clip {clip['n']} starts from the last frame of clip {before['n']}, but {names} {'is' if len(missing) == 1 else 'are'} "
+                            f"not in clip {before['n']}: the video model gives the action or line to whoever is in that frame. "
+                            f"Put {names} in the subjects and words of clip {before['n']}'s beats too (in the shot, also when silent), "
+                            f"or say in the beat that {names} walks in, or start clip {clip['n']} with no last frame (`reference` "
+                            f"{{\"kind\": \"none\"}} on its first beat; the faces may then differ).")
+    return problems
+
+
 def check_plan(story: dict, planned: dict) -> list[str]:
     """Gates on a plan. A problem here stops the run before the first paid call."""
     problems: list[str] = []
@@ -783,6 +811,7 @@ def check_plan(story: dict, planned: dict) -> list[str]:
     for part in (narration or {}).get("parts", []):
         if len(" ".join(part["lines"]).split()) > part["seconds"] * 3.2:
             problems.append(f"beat {part['beat']}: the narrator's lines are too long for {part['seconds']} s")
+    problems += _last_frame_people(story, planned)
     made: set[int] = set()
     for clip in planned["clips"]:
         video = clip["steps"][-1]
@@ -805,6 +834,8 @@ NAMED_HEX = re.compile(r"(\b[A-Za-z]+ )?(#[0-9A-Fa-f]{6})\b")   # "teal #0E7C86"
 
 
 SOCIAL = re.compile(r"\b(reels?|ads?|advert\w*|promo\w*|commercial|tiktok|instagram|insta|social|shorts|story post)\b", re.I)
+LATE_MUSIC = re.compile(r"\bthen\b[^.;]{0,40}\b(?:music|sting|jingle|tune)\b|\b(?:music|sting|jingle|tune)\b[^.;]{0,30}\b(?:after|once|as soon as)\b"
+                        r"|\bmusic (?:comes|kicks|starts) in\b|\bsting\b", re.I)
 SILENT = re.compile(r"\b(silent|no (music|sound|audio)|without (music|sound|audio)|mute[d]?)\b", re.I)
 
 
@@ -859,6 +890,11 @@ def advise(story: dict, planned: dict, request: str | None = None) -> list[dict]
             out.append({"clip": shown[1]["n"], "note": "product-no-picture", "evidence": "2026-11-12, H40c: the product looked different in each clip.",
                         "warning": f"{sid} is a product in {len(shown)} clips with no picture. Each clip draws it anew, so it changes. "
                                    "Make one still of it first (generate_image) and give it as `reference.file` in each clip that shows it."})
+    if request and story.get("music") and not story.get("music_from_beat") and LATE_MUSIC.search(request):
+        out.append({"clip": None, "note": "music-later", "evidence": "2026-11-20, W09 lb1l: 'then a soft music sting' ran as a bed from 0 s.",
+                    "warning": "The user's words may place the music after something (a whoosh, the reveal, a line): '"
+                               + LATE_MUSIC.search(request).group(0) + "'. If so, set `music_from_beat` to the beat it starts on; "
+                               "without it the music runs from the start of the film."})
     if request and not story.get("music") and SOCIAL.search(request) and not SILENT.search(request):
         out.append({"clip": None, "note": "music-default", "evidence": "2026-11-12, D20c: a reel was made silent; the user expected sound.",
                     "warning": "This is a reel, an ad or a social post, and the story has no `music`. Such videos get music unless the "
