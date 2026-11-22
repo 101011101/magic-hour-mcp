@@ -105,7 +105,10 @@ def plan(family: str, request: str, answers: dict[str, str] | None, questions_as
     if unknown:
         raise ToolError(f"Unknown rows for {family}: {', '.join(unknown)}. Rows: {', '.join(rows)}.")
 
-    missing_host = [i for i, r in rows.items() if host_only(r) and "applies" not in r and answers.get(i, ASK) == ASK]
+    # A host-only row with `applies` may be left out (it does not apply), but never put to the user (2026-11-20 audit:
+    # "(Read from the files.) Is the target a photo or a video?" went to the user word for word).
+    missing_host = [i for i, r in rows.items() if host_only(r) and ("applies" not in r and answers.get(i, ASK) == ASK
+                                                                     or "applies" in r and answers.get(i) == ASK)]
     if missing_host:
         raise ToolError(f"Answer these rows yourself from the files or the rules, not by asking the user: {', '.join(missing_host)}.")
 
@@ -119,9 +122,12 @@ def plan(family: str, request: str, answers: dict[str, str] | None, questions_as
             raise ToolError(f"Row {i} ({r['kind']}): {value!r} is not an option. Options: {', '.join(options(r))}.")
 
     # Only rows the host marks 'ask' go to the user (user, 2026-11-13: ask only when the answer would materially
-    # change the result). A row left out takes its default (and the user is told) or, if it has `applies`, does not apply.
+    # change the result). A row left out takes its default or, if it has `applies`, does not apply.
     # One batch, no limit on its size, and only once (user, 2026-11-13): after the user was asked, rows still marked
     # 'ask' take their default instead of a second round.
+    # A row with `no_default` (which person gets the new face) has no safe guess: 'your_call' is asked like 'ask', and
+    # still open after the one batch, the plan stops (2026-11-20 audit: its default "Ask; do not guess" asked again).
+    answers = {i: (ASK if v == YOUR_CALL and rows[i].get("no_default") and not questions_asked else v) for i, v in answers.items()}
     open_rows = [r for i, r in rows.items() if answers.get(i) == ASK]
     if open_rows and not questions_asked:
         return {"ready": False, "stage": "ask_the_user", "family": family,
@@ -130,23 +136,32 @@ def plan(family: str, request: str, answers: dict[str, str] | None, questions_as
                          "happens if they skip it. This is the only time the user is asked. Then call again with their "
                          f"answers ('{YOUR_CALL}' for any they skip or hand over) and questions_asked=true." + ONLY_THESE)}
     if questions_asked:
+        stuck = [i for i, v in answers.items() if v in (ASK, YOUR_CALL) and rows[i].get("no_default")]
+        if stuck:
+            return {"ready": False, "stage": "missing_answer", "family": family, "rows": stuck,
+                    "next": ("Make nothing. Tell the user plainly what is still missing and why it matters: "
+                             + " ".join(rows[i]["no_default"] for i in stuck) + " Do not ask again in this turn.")}
+        handed = {i for i, v in answers.items() if v == YOUR_CALL}   # the user handed it over; skipped rows take the default
         answers = {i: (YOUR_CALL if v == ASK else v) for i, v in answers.items()}
+    else:
+        handed = {i for i, v in answers.items() if v == YOUR_CALL}
 
     decisions, texts = [], []
     for i, r in rows.items():
         value = answers.get(i, NOT_APPLICABLE if "applies" in r else YOUR_CALL)
         if value == NOT_APPLICABLE:
             continue
-        key = _match(r, value) if value != YOUR_CALL else None
+        # 2026-11-20 audit: the user's own 'your call' on words means write words that fit (user, 2026-11-19), not "No words"
+        own_words = value == YOUR_CALL and i in handed and "your_call" in r
+        key = _match(r, value) if value != YOUR_CALL else (_words_option(r) if own_words else None)
         if key is None and value != YOUR_CALL and r["kind"] == "deciding":
             key = _words_option(r)   # the user's own words for an 'exact words' option
         if key is not None:
             instruction = r["answers"][key]
         else:   # 'your call', or a required row's own words: the default, and every option to apply it with
             instruction = " | ".join(f"{k}: {t}" for k, t in r["answers"].items())
-        chosen = r["default"] if value == YOUR_CALL else value
-        decisions.append({"id": i, "kind": r["kind"], "value": chosen, "instruction": instruction,
-                          "tell_the_user": value == YOUR_CALL})
+        chosen = (r["your_call"] if own_words else r["default"]) if value == YOUR_CALL else value
+        decisions.append({"id": i, "kind": r["kind"], "value": chosen, "instruction": instruction})
         texts.append(instruction)
 
     fam = all_sheets[family]
@@ -161,16 +176,15 @@ def plan(family: str, request: str, answers: dict[str, str] | None, questions_as
             "gaps": gaps, "rules": sheets()["rules"],
             "next": ("Call the tools in the order the decisions give, with `settings` (free-tier models only) and the "
                      "user's details word for word. Check each tool's `antitype` and `limits` before calling it. "
-                     + ("For each row in `gaps`, tell the user plainly what cannot be done and offer the nearest option. "
-                        if gaps else "")
-                     + "Tell the user every value chosen for them (tell_the_user).")}
+                     + ("For each row in `gaps`, tell the user plainly what cannot be done and offer the nearest option."
+                        if gaps else "")).strip()}
 
 
 def sheet_index() -> str:
     """One line per family: its row ids, deciding options in brackets, * for rows the host answers itself."""
     lines = []
     for family, sheet in sheets()["families"].items():
-        rows = [r["id"] + ("*" if host_only(r) and r["id"] != "consent" else "")
+        rows = [r["id"] + ("*" if host_only(r) else "")   # consent too: it is required and the host answers it
                 + (f"({'|'.join(options(r))})" if r["kind"] == "deciding" else "") for r in sheet["rows"]]
         lines.append(f"{family}: {', '.join(rows)}")
     return "\n".join(lines)
@@ -194,12 +208,13 @@ def register_tool_plan(mcp: FastMCP) -> None:
             "slides, an ad), music under 15 s or on a video, subtitles, a talking photo, pictures side by side, a logo "
             "on a video. Always call this before add_words_to_media or reframe_media: generation usually does those jobs "
             "better (the words in the generation prompt; a new shape by extending the picture). Otherwise (a clear new "
-            "picture, clip or sound with no words) call the tool directly. Not for a film of several shots: use plan_request. "
+            "picture, clip or sound with no words) call the tool directly. Not for a film of several shots: use "
+            "plan_conversation with family film when it is listed, else plan_request. "
             "Send the family and `answers` in ONE call. Rows (* = answer from the files yourself; options in "
             "brackets):\n" + sheet_index() + "\n"
             "Answer a row with an option, the user's own words, 'your_call' or 'n/a'; mark 'ask' ONLY for a row "
             "whose answer would change the result and that the user's words and files do not answer. Rows you leave "
-            "out take their default and you tell the user. Mark as few rows 'ask' as you can. Returns every open question "
+            "out take their default. Mark as few rows 'ask' as you can. Returns every open question "
             "in one batch (ask the user once, all together), or the plan: which tools in "
             "order, free-tier settings (free models only), each tool's known faults, and gaps (what no tool can do). Call with the "
             "family only to see the full sheet. Read-only; spends no credits and creates nothing."

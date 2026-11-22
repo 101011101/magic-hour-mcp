@@ -44,10 +44,11 @@ IMPLIED = [
     "Captions on a video, when there are captions: white letters with a black outline. Do not ask about the style.",
     "Derive what the words imply (TikTok, Reels, Shorts, a story = 9:16; YouTube, a website = 16:9; Instagram post = 1:1). "
     "Do not ask what the words already answer.",
-    "Ask all open questions in ONE message, once. Anything still open after the answer takes its default; tell the user.",
+    "Ask all open questions in ONE message, once. Anything still open after the answer takes its default.",   # 2026-11-20 audit: no telling of defaults (user, 2026-11-19)
 ]
 
-# Tools the default server lists without tool management (tool_media.py) switched on.
+# tool_media.py's tools: registered with MAGIC_HOUR_TOOL_PLAN or MAGIC_HOUR_CONVERSATION (2026-11-20 audit: the
+# sheets route to them, and the conversation bench ran without them).
 TOOL_MEDIA = {"add_sound_to_video", "adjust_colours", "put_pictures_side_by_side", "put_picture_on_video", "make_card_clip"}
 
 # Tools no family sheet lists yet: they go here with the files they need. Empty since 2026-11-20 (all moved into the sheets).
@@ -86,7 +87,7 @@ FILM_ROWS = [
     {"id": "who_speaks", "kind": "deciding", "ask": "Should anyone talk: a voice-over, a person on camera, people talking to each other, or no one?",
      "answers": {"nobody": "Silent (audio off) only when the user asked for silence; else scene sound.",
                  "scene_sound": "Audio on, no spoken lines.",
-                 "narrator": "A voice-over (the voice cloner reads `narrator`; the user's own voice when they give a sample).",
+                 "narrator": "A voice-over: each beat's narration goes in its `says`; the story's `narrator` field is how the voice sounds. The voice cloner reads it (the user's own voice when they give a sample).",
                  "one_on_screen": "One person says the lines on camera: each line in its own short beat (`spoken`).",
                  "people_talking": "Each speaker's line in its own beat, in order."},
      "default": "Read from the words; else scene_sound.", "ask_when": "the words want speech but do not say who speaks"},
@@ -97,12 +98,16 @@ FILM_ROWS = [
      "default": "Yes for an ad, a reel or a social post; else no."},
     {"id": "captions", "kind": "deciding", "ask": "(Implied.) Captions of the spoken words?",
      "answers": {"yes": "White letters, black outline.", "no": "No captions."},
-     "default": "Yes when someone speaks in a social video (TikTok, Reels, Shorts, an ad); else no. Tell the user."},
+     "default": "Yes when someone speaks in a social video (TikTok, Reels, Shorts, an ad); else no."},
     {"id": "exact_words", "kind": "deciding", "ask": "Any words that must appear on screen (a title, a price, a website), spelled exactly?",
-     "answers": {"none": "No words on screen.", "exact words": "Exactly as the user wrote them, by code or on a card."},
-     "default": "None. Never invent a price, a date or a web address.", "ask_when": "an ad or a promo with no call-to-action words"},
+     "answers": {"none": "No words on screen.", "exact words": "Exactly as the user wrote them, in the beat's `exact_words`. A card only when the user asks for one."},
+     "default": "None. Never invent a price, a date or a web address.", "ask_when": "an ad or a promo with no call-to-action words",
+     # 2026-11-20 audit: the user's 'your call' means write words that fit (user, 2026-11-19), not "none"
+     "your_call": "Write short words that fit the request (a title or a call to action), exactly as they will show. Never invent a price, a date or a web address."},
     {"id": "product_picture", "kind": "deciding", "ask": "Do you have a photo of the product? A film made from words only looks like it.",
-     "answers": {"photo": "Use it as the product's picture in every clip that shows it.", "words": "Make it from words; tell the user it is a look-alike."},
+     "answers": {"photo": ("Use it as the reference picture (a subject's `picture`) in every clip that shows it. A logo "
+                           "reveal makes the logo from it in the video, in one clip, with no held card after it (W09)."),
+                 "words":"Make it from words; tell the user it is a look-alike."},
      "default": "words.", "ask_when": "a real product or brand is shown and no photo is attached"},
 ]
 
@@ -114,14 +119,15 @@ STORY_RULES = [
     "The setting is true of every clip. The same subject words in every beat. A real product uses its photo.",
     "No talking verb in the beat text; the words go in `spoken`.",
     "Natural sound on; no music inside a clip; one music track at the join.",
-    "Exact words on screen go in the story's words fields (drawn by code or on a card), never in the clip prompt.",
+    "Exact words on screen go in the beat's `exact_words`, never in the clip prompt. A card beat only when the user asks "
+    "for a card (user, 2026-11-21).",
     "Keep every concrete detail the user gave word for word (counts, colours, names, exact words).",
     "Avoid what the video model does badly: two places in one clip, small letters, a colour code, a person partly off screen.",
 ]
 
 
 def _available(tool: str) -> bool:
-    return tool_plan.enabled() or tool not in TOOL_MEDIA
+    return tool_plan.enabled() or enabled() or tool not in TOOL_MEDIA
 
 
 # A file whose `when` is not "always" is still required when the request's words name its case.
@@ -134,10 +140,24 @@ NEEDED_WHEN = {
 }
 
 
-def _files(family: str, attachments: list[dict], request: str = "") -> dict:
+# 2026-11-20 audit: these faces answers need only the person's photo ("outfit" and "beach" made the words ask for a second file).
+WORDS_ONLY = {"outfit": "outfit in words", "scene": "scene in words"}
+TARGET_ROWS = ("photo_or_video", "character")
+
+
+def _words_only(answers: dict[str, str] | None, attachments: list[dict]) -> bool:
+    answers = answers or {}
+    if any(str(answers.get(r, "")).strip().lower() == w for r, w in WORDS_ONLY.items()):
+        return True
+    # 'your_call' with one file: the row's default is the words option; not when a swap or a character replace applies
+    return (any(answers.get(r) == YOUR_CALL for r in WORDS_ONLY) and len(attachments) < 2
+            and all(answers.get(r) in (None, NOT_APPLICABLE) for r in TARGET_ROWS))
+
+
+def _files(family: str, attachments: list[dict], request: str = "", answers: dict[str, str] | None = None) -> dict:
     need = [{"what": w, "kinds": list(k), "when": ("always" if when == "always" or re.search(NEEDED_WHEN.get(when, r"(?!)"), request, re.I) else when)}
             for w, k, when in FILES.get(family, [])]
-    if family == "faces" and re.search(r"headshot", request, re.I):
+    if family == "faces" and (re.search(r"headshot", request, re.I) or _words_only(answers, attachments)):
         need = need[:1]
     given = [{"name": a["name"], "kind": a["kind"]} for a in attachments]
     kinds = [a["kind"] for a in attachments]
@@ -154,7 +174,8 @@ def _files(family: str, attachments: list[dict], request: str = "") -> dict:
     return {"needed": need, "given": given, "missing": missing, "checks": checks}
 
 
-SILENCE = r"\b(?:silent|silence|no sound|no audio|mute[d]?|without sound|sound off)\b"
+# 2026-11-20 audit: case-insensitive ("Silent clip of rain" stayed loud)
+SILENCE = re.compile(r"\b(?:silent|silence|no sound|no audio|mute[d]?|without sound|sound off)\b", re.I)
 OPTION_ROWS = ("kind", "who_speaks", "sound", "music", "captions", "product_picture")
 
 
@@ -174,6 +195,9 @@ def _film(request: str, answers: dict[str, str] | None, questions_asked: bool, f
     implied = [i for i, r in rows.items() if r["ask"].startswith("(Implied") and answers.get(i) == ASK]
     if implied:
         raise ToolError(f"Do not ask about {', '.join(implied)}: implied (user, 2026-11-19). Use the default unless the user's words say otherwise.")
+    host_rows = [i for i, r in rows.items() if r["ask"].startswith("(") and i not in implied and answers.get(i) == ASK]
+    if host_rows:   # 2026-11-20 audit: "(Read from the words.)" rows were put to the user word for word
+        raise ToolError(f"Answer {', '.join(host_rows)} yourself from the user's words; do not ask the user.")
     open_rows = [r for i, r in rows.items() if answers.get(i) == ASK]
     file_qs = [{"id": "file", "ask": f"Please attach {m}.", "if_skipped": "I cannot make it without this file."} for m in files["missing"]]
     if (open_rows or file_qs) and not questions_asked:
@@ -194,16 +218,25 @@ def _film(request: str, answers: dict[str, str] | None, questions_asked: bool, f
     bad = [f"{i}={v!r}" for i, v in answers.items() if i in OPTION_ROWS and v not in (ASK, YOUR_CALL, NOT_APPLICABLE) and v not in rows[i]["answers"]]
     if bad:
         raise ToolError(f"Not an option: {', '.join(bad)}. " + "; ".join(f"{i}: {', '.join(rows[i]['answers'])}" for i in OPTION_ROWS))
+    # 2026-11-20 audit: 'n/a' on a row that always applies (no ask_when) takes its default, as in the families;
+    # before, the row was dropped and the plan had no shape or length.
+    always_na = [i for i, r in rows.items() if answers.get(i) == NOT_APPLICABLE and "ask_when" not in r and i != "sound"]
+    if always_na:
+        notes.append(f"{', '.join(always_na)}: '{NOT_APPLICABLE}' became '{YOUR_CALL}' (the row always applies; its default is used).")
+        answers = {**answers, **{i: YOUR_CALL for i in always_na}}
     decisions = []
     for i, r in rows.items():
         value = answers.get(i, YOUR_CALL)
-        if value in (ASK, YOUR_CALL):
+        if value == YOUR_CALL and i in answers and "your_call" in r:   # the user handed it over (not a skipped question)
+            decisions.append({"id": i, "value": r["your_call"]})
+        elif value in (ASK, YOUR_CALL):
             decisions.append({"id": i, "value": r["default"]})
         elif value != NOT_APPLICABLE:
             decisions.append({"id": i, "value": value, "instruction": r["answers"].get(value, "")})
     return {"ready": True, "stage": "plan", "family": "film", "request": request, "decisions": decisions,
             "story_rules": STORY_RULES, "implied": IMPLIED, "files": files, **({"changed": notes} if notes else {}),
-            "next": ("Write the story from the decisions and the story rules, then call plan_video_production with it. "
+            "next": ("Write the story from the decisions and the story rules, then call plan_video_production with it. `narrator`, "
+                     "`narrator_voice`, `music` and `captions` are fields inside `story`, not arguments of their own (w19d, 2026-11-20). "
                      + ("The story's `audio` is true (natural sound in every clip)." if not silent else "The story's `audio` is false (the user asked for silence)."))}
 
 
@@ -264,7 +297,7 @@ MEDIA_NEXT = (" Media facts (`media`) are read from the files: use their exact s
 def front(family: str, request: str, answers: dict[str, str] | None = None, questions_asked: bool = False,
           attachments: list[dict] | None = None, media: list[dict] | None = None) -> dict:
     attachments = attachments or []
-    files = _files(family, attachments, request)
+    files = _files(family, attachments, request, answers)
     if family == "film":
         out = _film(request, answers, questions_asked, files)
         if media:
@@ -278,6 +311,9 @@ def front(family: str, request: str, answers: dict[str, str] | None = None, ques
         if re.search(r"\b(?:long|longer|film|story|ad|several)\b", str(short_or_film), re.I):
             return {"ready": False, "stage": "switch_family", "family": family,
                     "next": "The user wants a longer film: call plan_conversation again with family film and the same request."}
+    if family == "new_video" and answers and answers.get("sound") == ASK:   # 2026-11-20 audit: sound is implied, never asked
+        answers = {**answers, "sound": YOUR_CALL}
+        changed.append("sound 'ask' became 'your_call': sound is implied (on unless the user asks for silence), not asked (user, 2026-11-19).")
     if family == "new_video" and answers and answers.get("sound") == "silent" and not re.search(SILENCE, request):
         answers = {**answers, "sound": "sound"}
         changed.append("sound 'silent' became 'sound': the user's words do not ask for silence (user, 2026-11-19).")
@@ -320,9 +356,6 @@ def front(family: str, request: str, answers: dict[str, str] | None = None, ques
             out = {"ready": False, "stage": "ask_the_user", "family": family, "questions": [SHORT_OR_FILM], "files": files,
                    "next": ("Ask the user this in ONE message, with what happens if they skip it. Then call again with the same "
                             "answers and questions_asked=true. A longer film: call again with family film.")}
-    for d in out.get("decisions", []):   # no telling of defaults (user, 2026-11-19)
-        d.pop("tell_the_user", None)
-    out["next"] = out.get("next", "").replace(" Tell the user every value chosen for them (tell_the_user).", "")
     if media:
         out["media"] = media
         out["next"] = out.get("next", "") + MEDIA_NEXT

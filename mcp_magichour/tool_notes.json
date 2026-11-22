@@ -24,14 +24,14 @@
       ],
       "antitype": [
         {
-          "job": "A new shape (square, vertical)",
+          "job": "A new shape with nothing added (a crop or a pad)",
           "use": "reframe_media",
-          "why": "It keeps the input's shape: a wide photo asked to be square came back 640x384 (B12a-d: 1.0 to 1.3)."
+          "why": "Without aspect_ratio it keeps the input's shape: a wide photo asked to be square came back 640x384 (B12a-d: 1.0 to 1.3). For a new shape with the scene extended, edit_image with aspect_ratio is right (user, 2026-11-14, B12b)."
         },
         {
-          "job": "Exact words, a caption, a meme",
+          "job": "A caption or overlay on top of the user's photo, a meme caption",
           "use": "add_words_to_media",
-          "why": "Letters are misspelt or moved (B11a 2.3, J49b 2.3)."
+          "why": "Letters are misspelt or moved (B11a 2.3, J49b 2.3). Words in a designed picture are generated (user, 2026-11-14); fixing a misspelt word in a generated picture is edit_image."
         },
         {
           "job": "Pictures side by side",
@@ -124,7 +124,7 @@
       "antitype": [
         {
           "job": "Subtitles in another language",
-          "use": "none yet (MCP-TOOLS-33); check translate_video first",
+          "use": "none (MCP-TOOLS-33, a GAP): translate_video changes the speech, not only the subtitles",
           "why": "It writes the spoken language: Spanish asked, English delivered (E24b: 2.0)."
         },
         {
@@ -234,7 +234,7 @@
       "antitype": [
         {
           "job": "A logo with thin letters",
-          "use": "remove the background from the logo without words, then add_words_to_media (MCP-TOOLS-25)",
+          "use": "generate_image with the words in the prompt on a plain background, then this tool, and check the letters (user, 2026-11-14: words are generated); if they fade, cut out the logo without words, then add_words_to_media (MCP-TOOLS-25)",
           "why": "The letters fade or smear (A06c: 2.7)."
         },
         {
@@ -366,7 +366,7 @@
         },
         {
           "job": "Sound on a video",
-          "use": "none yet (MCP-TOOLS-29)",
+          "use": "add_sound_to_video (MCP-TOOLS-29)",
           "why": "It refuses a mix of video and sound files."
         }
       ],
@@ -466,12 +466,12 @@
       "bench": "Right tool: 13 runs, average 2.3.",
       "best_settings": {
         "use": {
-          "model": "ltx-2.5"
+          "model": "minimax-h3"
         },
         "avoid": {
           "model": "default"
         },
-        "evidence": "Same case: ltx-2.5 beat default in 11 of 16 cases (2.24 vs 1.97). minimax-h3: 23 runs, 2.52, no same-case comparison.",
+        "evidence": "User, 2026-11-14 (sound test, 60 clips): minimax-h3 made the scene sound in every case; ltx-2.5 missed wind, the background under a voice, a second speaker and the second line of a two-line clip. User, 2026-11-20: minimax-h3 for single clips too; ltx-2.5 only for a clip over 30 s (minimax-h3 makes at most 30 s). Older bench: ltx-2.5 beat default in 11 of 16 cases (2.24 vs 1.97).",
         "tier": "free (all models named here are free-tier)"
       }
     },
@@ -485,7 +485,7 @@
       "antitype": [
         {
           "job": "A still end card",
-          "use": "make_card_clip, then join_videos (MCP-TOOLS-32)",
+          "use": "make_card_clip with attach after: the clip and the card come back as one file, no join_videos (MCP-TOOLS-32)",
           "why": "It adds motion and the card came out 2 s instead of 9 (E29b)."
         }
       ],
@@ -709,7 +709,7 @@
     },
     "make_card_clip": {
       "family": "video by code",
-      "does": "Makes a still card as a clip (exact words on a flat colour, or a picture whole on that colour), with a silent sound track and the size of a given clip, so join_videos can add it. 0 credits. MCP-TOOLS-32.",
+      "does": "Makes a still card as a clip, with a silent sound track and the size of a given clip, so join_videos can add it. 0 credits. MCP-TOOLS-32. The card itself is generated first (generate_image or edit_image) and given as `picture`, background none (user, 2026-11-21).",
       "type": [
         "An end card or title card attached to the user's clip in one call (attach=after or before) (E29b)."
       ],
@@ -718,6 +718,11 @@
           "job": "A moving title or animation",
           "use": "create_video_from_image or create_video_from_text",
           "why": "The card is still."
+        },
+        {
+          "job": "Drawing the card's words on a flat colour by code",
+          "use": "generate_image (qwen-image-2.1, words quoted), then this tool with the picture",
+          "why": "User, 2026-11-21: every card is generated; a drawn card only when the user asks for one. A small misspelling on a generated card is kept (C1 cc1l: the code words looked worse)."
         }
       ],
       "limits": [
@@ -796,7 +801,7 @@
       "antitype": [
         {
           "job": "Translated subtitles",
-          "use": "add_subtitles_to_video",
+          "use": "none (MCP-TOOLS-33, a GAP): add_subtitles_to_video writes only the spoken language",
           "why": "This tool changes the speech, not the text."
         }
       ],
@@ -866,12 +871,12 @@
       "krea-2"
     ],
     "create_video_from_text": [
-      "ltx-2.5 (the free default)",
-      "minimax-h3 (used on the free-tier bench)"
+      "minimax-h3 (scene sound and speech; up to 30 s)",
+      "ltx-2.5 (a clip over 30 s)"
     ],
     "create_video_from_image": [
-      "ltx-2.5 (the free default)",
-      "minimax-h3 (used on the free-tier bench)"
+      "minimax-h3 (scene sound and speech; up to 30 s)",
+      "ltx-2.5 (a clip over 30 s)"
     ],
     "create_spoken_ad_video": [
       "ltx-2.5 (the free default)"

@@ -4,11 +4,13 @@ Tool management is separate from video composition (mcp-upgrade/prd/tool-managem
 changes no shared file. It reuses, unchanged, the shared media code: media_tools (ffmpeg work) and media_helpers_tool
 (fetch a user's file, deliver a made file). It imports nothing directly from plan_request, video_production,
 video_production_tool or gates.
-Registered with the planner's switch: MAGIC_HOUR_TOOL_PLAN=on. Off (the default), the server is as before.
+Registered with the planner's switch MAGIC_HOUR_TOOL_PLAN=on, or with the conversation front MAGIC_HOUR_CONVERSATION=on
+(2026-11-20 audit: its sheets route to these tools). Both off (the default), the server is as before.
 """
 from __future__ import annotations
 
 import asyncio
+import os
 import tempfile
 from pathlib import Path
 from typing import Literal
@@ -19,7 +21,7 @@ from mcp.types import ToolAnnotations
 
 from . import media_tools
 from .media_helpers_tool import _deliver, _fetch_media
-from .tool_plan import enabled
+from . import tool_plan
 
 Original = Literal["keep", "under", "replace"]
 
@@ -180,7 +182,7 @@ def card_clip(out: Path, seconds: float, words: list[str] | None = None, backgro
     (media_tools.draw_card: exact, centred, the first line larger), or a picture fitted whole on that colour."""
     still = out.with_suffix(".png")
     if picture:
-        media_tools.fit_picture(picture, background, size, still, words)
+        media_tools.fit_picture(picture, None if background == "none" else background, size, still, words)   # none: fills the frame
     else:
         media_tools.draw_card(words or [""], background, size, still)
     return media_tools.still_video(still, max(0.5, seconds), out)
@@ -189,6 +191,11 @@ def card_clip(out: Path, seconds: float, words: list[str] | None = None, backgro
 def _need() -> None:
     if not media_tools.have_ffmpeg():
         raise ToolError("This server has no ffmpeg, so it cannot do this.")
+
+
+def enabled() -> bool:
+    conversation = os.getenv("MAGIC_HOUR_CONVERSATION", "off").strip().lower() in ("on", "1", "true")
+    return tool_plan.enabled() or conversation
 
 
 def register_tool_media(mcp: FastMCP) -> None:
@@ -317,13 +324,19 @@ def register_tool_media(mcp: FastMCP) -> None:
         name="make_card_clip",
         title="Make a still card clip",
         description=(
-            "Make a still card as a short video clip, by code, 0 credits: exact words centred on a flat colour (an end "
-            "card, a title card), or a picture shown whole on that colour. It has a silent sound track, so join_videos "
+            "Make a still card as a short video clip, by code, 0 credits. A card is generated first (user, 2026-11-21): "
+            "generate_image with qwen-image-2.1, the exact words quoted, the colour named, the user's clip's shape "
+            "(edit_image with the user's logo when it goes on the card); check the spelling, make a misspelled card again "
+            "(at most 3 in all) and keep the best one: a small misspelling beats words drawn by code (user, 2026-11-21). "
+            "Then pass that picture here as `picture` with background none: it fills the frame. Words drawn on a flat "
+            "colour (`words`, no picture) only when the user asks for a plain drawn card. "
+            "It has a silent sound track, so join_videos "
             "can add it before or after the user's clip. `seconds`: how long. `words`: one line each, the first larger, "
-            "spelled exactly. `background`: a colour such as black or #1B2A4A. `like_video`: the user's clip, to match "
+            "spelled exactly. `background`: a colour such as black or #1B2A4A, or none (the picture fills the frame). `like_video`: the user's clip, to match "
             "its size (else `aspect`). `picture`: optional, a file_path, URL or finished image project id. `attach`: "
             "after (an end card) or before (a title card) returns the user's clip and the card as ONE file, the clip's "
-            "sound kept; no = the card alone. Returns download_url and video_file_path."
+            "sound kept; no = the card alone. Returns download_url and video_file_path. In a film from "
+            "plan_video_production, a card is a beat of the plan: do not make it here (W09)."
         ),
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True),
     )

@@ -98,6 +98,8 @@ class SpokenLineTests(unittest.TestCase):
 
     def test_a_spoken_line_with_another_beat_is_a_question_and_split_gives_it_its_own_clip(self):
         story = self.line_story([1, 2, 2, 3, 3, 4])
+        for beat in story["beats"][3:5]:   # 2026-11-20: the question is only for an ltx-2.5 clip
+            beat["model"] = "ltx-2.5"
         asked = vp.questions(story, plan_story(story))
         line = next(q for q in asked if q["id"] == "line-4")
         self.assertIn("0 of 3", line["ask"])
@@ -158,7 +160,8 @@ class QuestionTests(unittest.TestCase):
         self.assertEqual((card["kind"], card["made_by"], still["tool"], still["model"]), ("card", "api", "generate_image", vp.STILL_MODEL))
         self.assertIn('"walk anyway"', still["prompt"])
         self.assertNotIn("walk anyway", planned["clips"][3]["steps"][-1]["prompt"])  # not asked of the video model
-        self.assertEqual(risks(answered, planned), [])
+        # 2026-11-20: the line (beat 4) and the walk away (beat 5) share a person, so the plan asks to join them
+        self.assertEqual([q["id"] for q in risks(answered, planned)], ["together-5"])
 
     def test_model_routes_the_clip_to_minimax_and_asks_for_the_words(self):
         answered, _ = vp.apply_answers(self.words_story(), {"words-5": "model"})
@@ -181,13 +184,13 @@ class QuestionTests(unittest.TestCase):
         answered, _ = vp.apply_answers(story, {"colour-codes": "words"})
         self.assertNotRegex(answered["setting"], r"#[0-9A-Fa-f]{6}")
         self.assertIn("teal", answered["setting"])
-        self.assertEqual(risks(answered, plan_story(answered)), [])
+        self.assertEqual([q["id"] for q in risks(answered, plan_story(answered))], ["together-5"])   # 2026-11-20
 
     def test_in_scene_words_are_best_effort_with_no_question(self):
         story = grouped(walk_anyway(), [1, 2, 2, 3, 4, 5])
         story["beats"][1]["in_scene_words"] = ["BUS 12"]
         planned = plan_story(story)
-        self.assertEqual(risks(story, planned), [])
+        self.assertEqual([q["id"] for q in risks(story, planned)], ["together-5"])   # 2026-11-20: same person, one clip
         self.assertIn('The words "BUS 12" are part of the picture', planned["clips"][1]["steps"][-1]["prompt"])
         self.assertTrue(any("best effort" in l["want"] for l in planned["checklist"]))
 
@@ -228,11 +231,15 @@ class DrawnCardTests(unittest.TestCase):
             video = media_tools.still_video(png, 4, Path(folder) / "card.mp4")
             self.assertAlmostEqual(media_tools.probe(video)["seconds"], 4, delta=0.2)
 
-    def test_the_plan_needs_no_call_for_a_drawn_card(self):
+    def test_a_card_with_a_colour_is_generated_on_that_colour(self):
+        # user, 2026-11-21: every card is generated; a colour code no longer makes a code card
         story = grouped(walk_anyway(), [1, 2, 2, 3, 4, 5])
         story["beats"][0]["background"] = "#000000"
         clip = plan_story(story)["clips"][0]
-        self.assertEqual((clip["made_by"], clip["steps"][0]["credits"]), ("code", 0))
+        still = clip["steps"][0]
+        self.assertEqual((clip["made_by"], still["tool"], still["model"]), ("api", "generate_image", "qwen-image-2.1"))
+        self.assertIn("The background is flat black.", still["prompt"])
+        self.assertNotIn("#000000", still["prompt"])   # a code in a prompt is drawn as text (A4)
 
 
 class ToolFlowTests(unittest.TestCase):
@@ -280,13 +287,18 @@ class FixesFromTheDryRunTests(unittest.TestCase):
         problems = plan_story(story)["problems"]
         self.assertTrue(any("cannot take a picture reference" in p for p in problems), problems)
 
-    def test_a_card_can_hold_the_users_picture_unchanged(self):
+    def test_a_card_with_the_users_picture_is_generated_from_it(self):
+        # user, 2026-11-21: a card with the user's logo is made by the image editor from it, not held by code
         story = grouped(walk_anyway(), [1, 2, 2, 3, 4, 5])
         story["beats"][5] = {"seconds": 2, "kind": "card", "clip": 5, "text": "The logo, unchanged.", "picture": "https://example.com/logo.png", "background": "#FFFFFF"}
         planned = plan_story(story)
         self.assertTrue(planned["ok"], planned["problems"])
         card = planned["clips"][-1]
-        self.assertEqual((card["made_by"], card["steps"][0]["tool"], card["steps"][0]["credits"]), ("code", "hold_picture", 0))
+        still = card["steps"][0]
+        self.assertEqual((card["made_by"], still["tool"], still["picture"], still["credits"]), ("api", "edit_image", "https://example.com/logo.png", 10))
+        self.assertIn("flat white", still["prompt"])
+        self.assertEqual(card["steps"][-1]["tool"], "create_video_from_image")
+        self.assertFalse(any(c.get("made_by") == "code" for c in planned["clips"]))
 
     def test_fit_picture_keeps_the_picture_unchanged_inside_the_frame(self):
         import tempfile
@@ -312,12 +324,14 @@ class HeldPictureUrlTests(unittest.TestCase):
         story["beats"][5]["picture"] = "logo.png"
         self.assertTrue(any("must be the picture's URL or its file_path" in p for p in vp.validate_story(story)))
 
-    def test_a_held_photo_has_no_white_default_and_keeps_its_words(self):
+    def test_a_photo_card_keeps_its_words_and_has_no_colour_by_default(self):
         story = grouped(walk_anyway(), [1, 2, 2, 3, 4, 5])
         story["beats"][5] = {"seconds": 2, "kind": "card", "clip": 5, "text": "A photo.", "picture": "https://x.test/p.jpg",
                              "exact_words": ["Come on in"]}
         step = plan_story(story)["clips"][-1]["steps"][0]
-        self.assertEqual((step["tool"], step["background"], step["words"]), ("hold_picture", None, ["Come on in"]))
+        self.assertEqual(step["tool"], "edit_image")
+        self.assertIn('The only added text is exactly "Come on in".', step["prompt"])
+        self.assertNotIn("The background is", step["prompt"])
 
 
 class ProductAndLabelTests(unittest.TestCase):
@@ -330,9 +344,13 @@ class ProductAndLabelTests(unittest.TestCase):
                 "beats": [{"seconds": 5, "text": "The bottle turns on a plinth.", "subjects": ["bottle"], "clip": 1},
                           {"seconds": 5, "text": "A close view of the bottle's label.", "subjects": ["bottle"], "clip": 2, "link": "new"}]}
 
-    def test_a_product_with_no_picture_in_two_clips_gets_a_still_first(self):
+    def test_a_product_with_no_picture_in_two_clips_is_a_picture_question(self):
+        # 2026-11-20 audit: no "make a still with generate_image" advice (user, 2026-11-14, W04: never a picture made
+        # by an image model); the picture question asks for a real photo
         story = self.ad()
-        self.assertIn("product-no-picture", [a["note"] for a in vp.advise(story, plan_story(story))])
+        planned = plan_story(story)
+        self.assertNotIn("product-no-picture", [a["note"] for a in vp.advise(story, planned)])
+        self.assertIn("picture-bottle", [q["id"] for q in vp.questions(story, planned)])
 
     def test_the_users_product_photo_as_reference_warns_about_its_background(self):
         story = self.ad("api-assets/x/bottle.jpg")
@@ -368,6 +386,37 @@ class ContinuityTests(unittest.TestCase):
         self.assertEqual(len(answered["beats"]), 1)
         self.assertEqual((answered["beats"][0]["seconds"], answered["beats"][0]["exact_words"]), (8, ["Build better, together."]))
         self.assertEqual([c["kind"] for c in plan_story(answered)["clips"]], ["scene"])
+
+    def tool_plan(self, story: dict, answers: dict | None = None) -> dict:
+        import asyncio
+        from fastmcp import Client, FastMCP
+        from mcp_magichour.video_production_tool import register_video_production
+
+        mcp = FastMCP("t")
+        register_video_production(mcp)
+
+        async def go():
+            async with Client(mcp) as client:
+                args = {"story": story, **({"answers": answers} if answers else {})}
+                return (await client.call_tool("plan_video_production", args)).data
+        return asyncio.run(go())
+
+    def test_the_tool_merges_a_held_still_after_its_reveal_with_no_question(self):
+        # W09 (user, 2026-11-21): one generated clip with the logo as reference, never a held card after the reveal
+        p = self.tool_plan(self.logo_reveal(), {"continuity": "ok", "words-1": "overlay", "colour-codes": "words"})
+        self.assertEqual([(c["kind"], c["made_by"]) for c in p["clips"]], [("scene", "api")])
+        self.assertEqual(p["clips"][0]["reference"]["kind"], "picture")
+        self.assertNotIn("held-2", [q["id"] for q in p.get("questions", [])])
+        self.assertIn("held_merge", [a["note"] for a in p["advice"]])
+        self.assertIn("production", p)
+
+    def test_a_host_keep_does_not_hold_the_still_after_its_reveal(self):
+        p = self.tool_plan(self.logo_reveal(), {"held-2": "keep", "continuity": "ok", "words-1": "overlay", "colour-codes": "words"})
+        self.assertEqual([c["kind"] for c in p["clips"]], ["scene"])
+
+    def test_the_tool_still_asks_about_an_end_card_the_user_asked_for(self):
+        p = self.tool_plan(self.logo_reveal("End card: the logo on navy with the words."))
+        self.assertIn("held-2", [q["id"] for q in p["questions"]])
 
     def test_an_end_card_the_user_asked_for_is_kept_by_default(self):
         story = self.logo_reveal("End card: the logo on navy with the words.")

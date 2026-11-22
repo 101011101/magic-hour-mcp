@@ -154,6 +154,15 @@ class NewPictureToolTests(unittest.TestCase):
         from PIL import Image
         self.assertLess(sum(Image.open(media_tools.last_frame(out, self.dir / "end.png")).convert("RGB").getpixel((5, 5))), 30)
 
+    def test_a_generated_card_fills_the_frame_with_background_none(self):
+        """User, 2026-11-21: the card is generated first and given as a picture; with background none it fills the frame."""
+        from PIL import Image
+        made = self.dir / "made-card.png"
+        Image.new("RGB", (640, 480), (11, 29, 58)).save(made)   # a generated card, the clip's shape
+        out = card_clip(self.dir / "card.mp4", 2, None, "none", (320, 240), made)
+        corner = Image.open(media_tools.last_frame(out, self.dir / "end.png")).convert("RGB").getpixel((3, 3))
+        self.assertTrue(all(abs(a - b) < 12 for a, b in zip(corner, (11, 29, 58))), corner)   # no black border
+
     def test_end_card_matches_the_clip_and_can_be_joined(self):
         """E29b: a 2 s black card with exact words, the clip's size, with a sound track."""
         out = card_clip(self.dir / "card.mp4", 2, ["Ready for takeoff?", "@flightschool"], "black", (320, 240))

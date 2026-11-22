@@ -349,6 +349,17 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.posts[1][1]["assets"], {"image_file_path": "https://images.example.test/still/output.png"})
         self.assertEqual(made["credits_charged"], 154)
 
+    async def test_a_card_with_the_users_logo_is_made_by_the_image_editor_from_it(self):
+        # user, 2026-11-21: every card is generated; the logo goes to the image editor as its input picture
+        s = story("c4")
+        s["beats"][0].update(picture="api-assets/x/logo.png", background="#0B1D3A")
+        p = await self.call("plan_video_production", story=s)
+        await self.call("create_production_clip", production=p["production"], clip=1)
+        self.assertEqual([path for path, _ in self.posts], ["/v1/ai-image-editor", "/v1/image-to-video"])
+        edit = self.posts[0][1]
+        self.assertEqual((edit["model"], edit["assets"]), ("qwen-image-2.1", {"image_file_paths": ["api-assets/x/logo.png"]}))
+        self.assertIn("flat navy", edit["style"]["prompt"])
+
     async def test_each_pictured_subject_is_a_named_reference(self):
         p = await self.planned("c5")
         await self.call("create_production_clip", production=p["production"], clip=2)
@@ -361,7 +372,8 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
         p = await self.planned("c4")
         made = {"1": "a", "2": "b", "3": "c", "4": "d"}
         film = await self.call("join_production_clips", production=p["production"], made=made)
-        self.assertEqual(self.joined, [(["clip-1.mp4", "clip-2.mp4", "clip-3.mp4", "clip-4.mp4"], [True] * 4)])
+        # 2026-11-20 audit: each clip keeps the sound its video step was made with; the two cards are made silent
+        self.assertEqual(self.joined, [(["clip-1.mp4", "clip-2.mp4", "clip-3.mp4", "clip-4.mp4"], [False, True, True, False])])
         self.assertRegex(film["download_url"], r"/films/[0-9a-f]{32}\.mp4$")
         self.assertTrue((self.films / film["download_url"].rsplit("/", 1)[1]).exists())
         self.assertEqual(film["clips"], 4)

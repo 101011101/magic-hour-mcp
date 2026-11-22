@@ -80,7 +80,7 @@ class PlanTests(unittest.TestCase):
                              questions_asked=True)
         self.assertTrue(out["ready"])
         shape = next(d for d in out["decisions"] if d["id"] == "shape")
-        self.assertTrue(shape["tell_the_user"])
+        self.assertNotIn("tell_the_user", shape)   # no telling of defaults (user, 2026-11-19)
         self.assertEqual(shape["value"], "1:1.")
 
     def test_square_from_the_users_words_gives_reframe_not_edit_image(self):
@@ -93,12 +93,13 @@ class PlanTests(unittest.TestCase):
         self.assertIn("antitype", out["tools"]["reframe_media"])
         self.assertIn("reframe_media", out["decisions"][0]["instruction"])
 
-    def test_your_call_uses_the_default_and_says_so(self):
+    def test_your_call_uses_the_default(self):
         out = tool_plan.plan("sound", "a music bed", {"on_its_own": "on its own", "length": "your_call",
                                                      "mood": "your_call", "voices": "n/a"})
         length = next(d for d in out["decisions"] if d["id"] == "length")
-        self.assertTrue(length["tell_the_user"])
+        self.assertNotIn("tell_the_user", length)
         self.assertEqual(length["value"], "15 s.")
+        self.assertNotIn("Tell the user every value", out["next"])
 
     def test_a_gap_is_reported(self):
         out = tool_plan.plan("change_video", "Spanish subtitles on my English clip", {
@@ -153,11 +154,11 @@ class OnlyWhenNeededTests(unittest.TestCase):
         self.assertTrue(out["ready"])
         self.assertIn("reframe_media", out["tools"])
 
-    def test_rows_left_out_take_their_default_and_the_user_is_told(self):
+    def test_rows_left_out_take_their_default(self):
         out = tool_plan.plan("sound", "a music bed", {"on_its_own": "on its own"})
         self.assertTrue(out["ready"])
         length = next(d for d in out["decisions"] if d["id"] == "length")
-        self.assertTrue(length["tell_the_user"])
+        self.assertEqual(length["value"], "15 s.")
 
     def test_only_rows_marked_ask_become_questions(self):
         out = tool_plan.plan("new_picture", "a poster", {"shape": "ask"})

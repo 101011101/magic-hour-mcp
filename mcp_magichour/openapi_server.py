@@ -261,7 +261,7 @@ def register_custom_tools(mcp: FastMCP) -> None:
     else:
         register_plan_request(mcp)
     register_tool_plan(mcp)   # tool management, off unless MAGIC_HOUR_TOOL_PLAN=on
-    register_tool_media(mcp)   # tool management's new tools, same switch
+    register_tool_media(mcp)   # tool management's new tools: MAGIC_HOUR_TOOL_PLAN or MAGIC_HOUR_CONVERSATION (2026-11-20)
     register_video_production(mcp)
     register_media_helpers(mcp)
     if GATES_MODE in ("warn", "refuse"):

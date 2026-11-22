@@ -27,7 +27,7 @@ from mcp.types import ToolAnnotations
 from pydantic import BaseModel, Field
 
 from . import kept_files, media_tools
-from .video_production import word_match, ROUTING_RULE, TRIGGER_IDEAS, TRIGGER_SECONDS, advise, apply_answers, host_cuts, plan, questions
+from .video_production import word_match, ROUTING_RULE, TRIGGER_IDEAS, TRIGGER_SECONDS, advise, apply_answers, held_merges, host_cuts, plan, questions
 
 FILMS_PATH = "/films"
 FILMS_DIR = Path(os.getenv("MAGIC_HOUR_FILMS_DIR", Path(tempfile.gettempdir()) / "magic-hour-films"))
@@ -40,7 +40,6 @@ STILL_TRIES = 3   # a still whose words are misspelled is made again, at most th
 # User, 2026-11-05: first keep a pictured person's shots in one call; then cut at key ideas.
 SPLIT_STRATEGY = "person"
 SPLIT_MAX_SECONDS = 15
-CARD_SIZES = {"16:9": (854, 480), "9:16": (480, 854), "1:1": (640, 640)}
 SPEECH_MIN_SECONDS = 1.0   # less sound than this in a narration track: no voice was made
 WORDS_MIN_MATCH = 0.8      # the share of the script's words a transcript must have, in order (A4: nonsense was 0.04)
 TRANSCRIBE_URL = "https://api.openai.com/v1/audio/transcriptions"
@@ -87,8 +86,8 @@ class Reference(BaseModel):
 class Beat(BaseModel):
     seconds: int = Field(ge=1, description="Length of this beat.")
     text: str = Field(description=(
-        "What is seen in this beat: one action, and the framing if it matters (wide, close). Quote a spoken line once, "
-        "in the beat where it is said. Describe no talking (talks, speaks, answers, says, explains, as she makes her "
+        "What is seen in this beat: one action, and the framing if it matters (wide, close). Do not quote a spoken "
+        "line here. Describe no talking (talks, speaks, answers, says, explains, as she makes her "
         "point): a line a person says goes in `spoken`, and the tool adds the talking there. For a card: how the card looks. A change of state that the model must show "
         "(a paper folded into a shape, a pour that fills a glass, a stage of a build) is one beat for each stage, "
         "each with its own clip; a real product or object that must look right gets a real photo as its subject's "
@@ -110,11 +109,12 @@ class Beat(BaseModel):
         "Words that are part of the picture: a label on a product, a sign, a poster. The video makes them as well as it "
         "can; letters on a moving object may change."))
     background: str | None = Field(default=None, description=(
-        "On a card: its background colour as a code, for example #3B1F6B. Only when the user gives an exact colour (a brand "
-        "colour). The card is then drawn by code, colour and words exact, with no generation call. Without it, the card "
-        "is generated in the film's style, with its exact_words spelled by the picture model (user, 2026-11-17)."))
+        "On a card: its background colour as a code, for example #3B1F6B, when the user gives one for the card. The card "
+        "is generated on that colour, with its exact_words spelled by the picture model; every card is generated "
+        "(user, 2026-11-17 and 2026-11-21). A colour for the whole film (a logo reveal on dark navy #0B1D3A) goes in "
+        "`setting`: it does not make a card (W09)."))
     words_look: Literal["bold", "clean", "classic", "marker", "block", "playful", "script"] | None = Field(default=None, description=(
-        "How this beat's exact_words look when code draws them (a title over a scene, a card with `background`). "
+        "How this beat's exact_words look when code draws them (a title over a scene). "
         "Words are drawn exactly as you write them: write capitals only if you want capitals. "
         "bold: a heavy tall font, black outline (default). clean: a thin tall font, modern. classic: an elegant serif "
         "(luxury, food, film). marker: hand written (vlog, fun, kids). block: loud blocks (games, sport, a sale). playful: "
@@ -122,13 +122,15 @@ class Beat(BaseModel):
     words_font: Literal["Anton", "Bebas Neue", "Archivo Black", "Abril Fatface", "Permanent Marker", "Bungee", "Lilita One", "Pacifico"] | None = Field(
         default=None, description="A font for this beat's drawn words, if the user names one or you want one other than the look's.")
     picture: str | None = Field(default=None, description=(
-        "On a card: a picture to hold unchanged for the card's seconds (its file_path from upload_media, or a URL). Code "
-        "draws the card's exact_words over it. Use it only for a still logo, a screenshot or a picture that must not change. "
+        "On a card the user asked for: a picture to show on it (its file_path from upload_media, or a URL). The card is "
+        "generated from it by the image editor, with its exact_words; the picture may change a little (user, 2026-11-21). "
+        "Make a card only when the user asks for a card. "
         "A logo reveal, or a logo that forms or moves, is a scene beat with the logo as its subject's `picture`: the video "
-        "makes the motion, and the logo may change a little. Do not follow it with this card. "
+        "makes the motion, and the logo may change a little. Do not follow it with this card, also when the user says the "
+        "logo stays exactly as in the file: the reference keeps it close, and the plan merges such a card into the reveal "
+        "(W09; user, 2026-11-21). "
         "A reel or slideshow of the user's photos looks static this way: make each photo a scene beat instead, with the "
-        "photo as its reference (a subject's `picture`), so it moves, and put its words in exact_words (route overlay). "
-        "With `background`: the picture at 80% on that colour; without it: as large as fits, over a blur of itself."))
+        "photo as its reference (a subject's `picture`), so it moves, and put its words in exact_words (route overlay)."))
     model: Literal["ltx-2.5", "minimax-h3"] | None = Field(default=None, description=(
         "The video model for this beat's clip, if you want to choose it. Only minimax-h3 takes a picture reference."))
     words_route: Literal["overlay", "card", "model", "still", "accept"] | None = Field(default=None, description="Set by an answer to a words question.")
@@ -138,8 +140,9 @@ class Beat(BaseModel):
     clip: int | None = Field(default=None, ge=1, description=(
         "The clip this beat is in: 1, 2, 3 ... in story order. You choose the clips: beats with the same number are made "
         "in one generation call. A card is a clip of its own. Set it on every beat (or on none, and the planner groups "
-        "them). Keep what should stay continuous in one clip: one motion that goes on (a logo forming, a jump and its "
-        "landing) or the same thing on screen. Split only when needed: the clip would be too long, or the next action "
+        "them). Use as few clips as the story allows. Keep what should stay continuous in one clip: one motion that goes "
+        "on (a logo forming, a jump and its landing), the same thing on screen, or the same people in the same place "
+        "(their lines and actions, up to 15 s; 30 s with a person's picture). Split only when needed: the clip would be too long, or the next action "
         "does not depend on this one (a new step). Two separate actions in one clip: the second one is often never made; "
         "give it its own clip, or write the two as shots with a hard cut (\"CUT at 6 s\", a new camera angle, the first "
         "action's tool out of frame)."))
@@ -243,6 +246,9 @@ def register_video_production(mcp: FastMCP) -> None:
     def plan_video_production(story: Story, request: str | None = None, answers: dict[str, str] | None = None) -> dict:
         data = story.model_dump(exclude_none=True)
         answer_problems: list[str] = []
+        # A held still of the picture the scene before forms is merged by code, first, whatever the host answers (W09).
+        merged = held_merges(data)
+        answers = {**merged, **{k: v for k, v in (answers or {}).items() if k not in merged}} or None
         if answers:
             if host_cuts(data) is None:   # the answers keep the clips as they are: number them first
                 first = plan_story(data)
@@ -253,6 +259,15 @@ def register_video_production(mcp: FastMCP) -> None:
         planned = plan_story(data)
         open_questions = questions(data, planned) if planned.get("clips") else []
         planned["advice"] = advise(data, planned, request) if planned.get("clips") else []
+        for key in merged:
+            n = int(key.split("-")[1])
+            planned["advice"].append({
+                "clip": None, "note": "held_merge",
+                "warning": (f"Beat {n} held the picture still right after beat {n - 1} forms it, so the plan merged it into beat "
+                            f"{n - 1}: one generated clip with the picture as its reference, the words drawn over it. A held still "
+                            "after a reveal reads as a pasted picture. Only an end card the user asked for stays a card "
+                            "(generated): write 'end card' in that beat's text."),
+                "evidence": "W09: one clip, logo as reference, approved 2026-11-13; held card after it rejected (user, 2026-11-21)."})
         if answer_problems:
             planned["problems"] = planned.get("problems", []) + answer_problems
             planned["ok"] = False
@@ -286,12 +301,12 @@ def register_video_production(mcp: FastMCP) -> None:
         name="create_production_sound",
         title="Make the voice-over and music of a planned video",
         description=(
-            "Makes the sound of a plan from plan_video_production that has a `sound` part: one narration (a video model, or the "
-            "voice cloner when the story has `voice_sample`) that reads "
-            "all the narrator's sentences in one voice, and one music track. Returns `narration` (a video project id: "
-            "wait with wait_for_video_project) and `music` (an audio project id: wait with wait_for_audio_project). "
-            "Pass both to join_production_clips as `sound`. Spends credits: 24 for each second of narration, 1 for "
-            "each second of music."
+            "Makes the sound of a plan from plan_video_production that has a `sound` part: one narration that reads all the "
+            "narrator's sentences in one voice, and one music track. The voice cloner reads the narration: in the user's "
+            "voice with `voice_sample`, else in the preset voice that fits `narrator_voice`. Returns `narration` and "
+            "`music` (audio project ids: wait with wait_for_audio_project; the result's `next` says which waiter). "
+            "Pass both to join_production_clips as `sound`. Spends credits: about 1 for every 10 letters of narration, "
+            "1 for each second of music."
         ),
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True),
     )
@@ -424,15 +439,6 @@ async def _clip_file(planned: dict, made: dict[str, str], n: int, folder: Path) 
     return file
 
 
-async def _fetch_picture(source: str, out: Path) -> Path:
-    """A picture by URL, or by a file_path this server kept a copy of."""
-    if kept_files.is_file_path(source):
-        return _read_kept(source, out)
-    if not source.startswith(("http://", "https://")):
-        raise ToolError(f"To hold a picture unchanged the server needs to read it: pass its URL or a file_path from upload_media, not {source}.")
-    return await _download(source, out)
-
-
 async def _upload(file: Path, kind: str = "image") -> str:
     """Upload to Magic Hour and keep a copy, so this server can read the file again."""
     data = file.read_bytes()
@@ -448,9 +454,6 @@ async def make_clip(story: dict, n: int, made: dict[str, str]) -> dict:
     clip = next((c for c in planned["clips"] if c["n"] == n), None)
     if clip is None:
         raise ToolError(f"The plan has clips 1 to {len(planned['clips'])}; there is no clip {n}.")
-    if clip.get("made_by") == "code":
-        return {"clip": n, "id": "drawn", "credits_charged": 0, "made_by": "code",
-                "next": "Nothing to make or wait for: the join draws this card. Put \"drawn\" in `made` for this clip."}
     if clip.get("made_by") == "user":
         return {"clip": n, "id": clip["steps"][0]["source"], "credits_charged": 0, "made_by": "user",
                 "next": "Nothing to make or wait for: the user's own clip is used as it is. The join takes it from the plan."}
@@ -472,9 +475,11 @@ async def make_clip(story: dict, n: int, made: dict[str, str]) -> dict:
         # W10 w11: the card read "3 tips for better sleen". The still's words are read before the video is made; a
         # misspelled still is made again, up to STILL_TRIES, and the best one is used.
         for _ in range(STILL_TRIES if wanted else 1):
-            created = await _api("POST", "/v1/ai-image-generator", {
-                "name": f"{name} · still", "image_count": 1, "model": still["model"], "aspect_ratio": story["aspect"],
-                "resolution": "640px", "style": {"prompt": still["prompt"]}})
+            request = {"name": f"{name} · still", "image_count": 1, "model": still["model"], "aspect_ratio": story["aspect"],
+                       "resolution": "640px", "style": {"prompt": still["prompt"]}}
+            if still["tool"] == "edit_image":   # a card made from the user's picture (user, 2026-11-21)
+                request["assets"] = {"image_file_paths": [still["picture"]]}
+            created = await _api("POST", "/v1/ai-image-editor" if still["tool"] == "edit_image" else "/v1/ai-image-generator", request)
             credits += int(created.get("credits_charged", 0))
             for _ in range(STILL_WAIT_SECONDS // 3):
                 project = await _api("GET", f"/v1/image-projects/{created['id']}")
@@ -626,19 +631,8 @@ async def join_clips(story: dict, made: dict[str, str], sound: dict[str, str] | 
         by_n = {c["n"]: c for c in planned["clips"]}
         made = _with_sources(planned, made)
         files = []
-        for n in planned["join"]:
-            if by_n[n].get("made_by") == "code":   # a card made by code: exact colour, words or picture
-                step = by_n[n]["steps"][0]
-                if step["tool"] == "hold_picture":
-                    source = await _fetch_picture(step["picture"], Path(folder) / f"picture-{n}")
-                    png = await asyncio.to_thread(media_tools.fit_picture, source, step.get("background"), CARD_SIZES[story["aspect"]],
-                                                  Path(folder) / f"card-{n}.png", step.get("words"), step.get("font"))
-                else:
-                    png = await asyncio.to_thread(media_tools.draw_card, step["words"], step["background"], CARD_SIZES[story["aspect"]],
-                                                  Path(folder) / f"card-{n}.png", step.get("font"))
-                files.append(await asyncio.to_thread(media_tools.still_video, png, step["seconds"], Path(folder) / f"clip-{n}.mp4"))
-            else:
-                files.append(await _clip_file(planned, made, n, Path(folder)))
+        for n in planned["join"]:   # every card is a generated clip (user, 2026-11-21): no card is drawn at the join
+            files.append(await _clip_file(planned, made, n, Path(folder)))
         probes = [await asyncio.to_thread(media_tools.probe, file) for file in files]
         # W02 w11 (28 s jump): a generated clip that ran long and whose last frame starts a later clip keeps that last
         # frame. Its extra time is cut from the start, or, when its start is a joint too, it is played a little faster.
@@ -661,8 +655,11 @@ async def join_clips(story: dict, made: dict[str, str], sound: dict[str, str] | 
                     for line in by_n[n].get("overlay", [])]
         joined = Path(folder) / "joined.mp4" if (sound_plan or overlays) else FILMS_DIR / name
         # a clip keeps its own sound when it was made with sound (the story's audio, or a spoken line in it)
+        # 2026-11-20 audit: the video step's `audio`, not the first step's: a clip that starts from a still has
+        # generate_image first, so its spoken line was muted when the story's audio was off.
         keep = [by_n[n]["steps"][0]["sound"] if by_n[n].get("made_by") == "user"
-                else bool(by_n[n]["steps"][0].get("audio", story.get("audio"))) for n in planned["join"]]
+                else bool(next((x["audio"] for x in reversed(by_n[n]["steps"]) if "audio" in x), story.get("audio")))
+                for n in planned["join"]]
         # user, 2026-11-14 (W05): no sound jump at a cut. The sound overlaps the cut, and a background much louder
         # than the other clips' is turned down.
         await asyncio.to_thread(media_tools.join, files, joined, keep, cut, size, CUT_OVERLAP, True)

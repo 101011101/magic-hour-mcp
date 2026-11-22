@@ -122,3 +122,82 @@ def test_every_tool_that_had_no_sheet_now_has_a_row():
 def test_a_video_for_a_song_asks_for_the_song():
     out = front("new_video", "make a music video for my song", {"from_picture": "words", "length": "your_call", "shape": "16:9", "song": "whole track"})
     assert out["stage"] == "ask_the_user" and any(q["id"] == "file" and "song" in q["ask"] for q in out["questions"])
+
+
+# ---- 2026-11-20 codebase audit
+def test_silence_is_read_whatever_the_case():
+    for request in ("Silent clip of rain on a window", "SILENT clip of rain on a window"):
+        out = front("new_video", request, {"from_picture": "words", "length": "5 s", "shape": "16:9", "sound": "silent"})
+        assert next(d for d in out["decisions"] if d["id"] == "sound")["value"] == "silent"
+        assert "changed" not in out
+    film = front("film", "A Silent film of a city at night", {"kind": "story_mood", "sound": "silent"})
+    assert "audio` is false" in film["next"]
+
+
+def test_your_call_on_exact_words_means_write_words_that_fit():
+    handed = front("new_picture", "a poster for my bakery", {"look": "warm", "shape": "1:1", "exact_words": "your_call",
+                                                             "set": "one", "transparent": "no", "meme_kind": "n/a"})
+    words = next(d for d in handed["decisions"] if d["id"] == "exact_words")
+    assert "written by you" in words["value"] and "Never invent a price" in words["value"]
+    assert "exact words in the prompt" in words["instruction"]
+    left_out = front("new_picture", "a product shot of a mug", {"look": "matte", "shape": "1:1", "set": "one",
+                                                                "transparent": "no", "meme_kind": "n/a"})
+    assert next(d for d in left_out["decisions"] if d["id"] == "exact_words")["value"] == "No words."
+    skipped = front("new_picture", "a poster", {"look": "warm", "shape": "1:1", "exact_words": "ask", "set": "one",
+                                                "transparent": "no", "meme_kind": "n/a"}, questions_asked=True)
+    assert next(d for d in skipped["decisions"] if d["id"] == "exact_words")["value"] == "No words."   # skipped = the default
+    film = front("film", "an ad for my bakery", {"kind": "ad", "exact_words": "your_call"})
+    assert "written by you" not in str(film["decisions"]) and "Write short words that fit" in str(film["decisions"])
+
+
+def test_outfit_or_scene_in_words_needs_one_photo():
+    one = [{"name": "me.jpg", "kind": "image"}]
+    for request, row, value in (("change my outfit in this photo to a navy blazer", "outfit", "outfit in words"),
+                                ("put me on a beach", "scene", "scene in words")):
+        out = front("faces", request, {"consent": "none", row: value}, attachments=one)
+        assert out["stage"] == "plan" and not out["files"]["missing"], out.get("next")
+    swap = front("faces", "put my face onto this poster", {"consent": "none", "photo_or_video": "photo"}, attachments=one)
+    assert swap["stage"] == "ask_the_user" and swap["files"]["missing"]   # a swap still needs the target
+
+
+def test_film_n_a_on_a_row_that_always_applies_takes_its_default():
+    out = front("film", "a reel about my cafe", {"kind": "ad", "shape": "n/a", "length": "n/a", "product_picture": "n/a"})
+    ids = {d["id"]: d["value"] for d in out["decisions"]}
+    assert ids["shape"].startswith("9:16") and ids["length"].startswith("15 s")
+    assert "product_picture" not in ids   # a row with ask_when may not apply
+    assert any("'n/a' became 'your_call'" in c for c in out["changed"])
+
+
+def test_media_tools_are_listed_with_the_conversation_front(monkeypatch):
+    from fastmcp import Client
+    from mcp_magichour.openapi_server import create_mcp
+
+    monkeypatch.setenv("MAGIC_HOUR_CONVERSATION", "on")
+    monkeypatch.delenv("MAGIC_HOUR_TOOL_PLAN", raising=False)
+
+    async def names():
+        async with Client(create_mcp()) as client:
+            return {t.name for t in await client.list_tools()}
+    listed = asyncio.run(names())
+    assert conversation_front.TOOL_MEDIA <= listed and "plan_tool_call" not in listed
+    out = front("change_video", "add warm music to this clip, keep my voice", {"keep_or_remake": "keep", "sound_on_video": "keep"},
+                attachments=[{"name": "clip.mp4", "kind": "video"}])
+    assert "add_sound_to_video" in out["tools"] and out["unavailable"] == []
+
+
+def test_which_person_is_never_guessed_and_never_asked_twice():
+    one = [{"name": "me.jpg", "kind": "image"}, {"name": "group.jpg", "kind": "image"}]
+    asked = front("faces", "put my face onto the group photo", {"consent": "none", "photo_or_video": "photo", "which_person": "your_call"}, attachments=one)
+    assert asked["stage"] == "ask_the_user" and [q["id"] for q in asked["questions"]] == ["which_person"]
+    stop = front("faces", "put my face onto the group photo", {"consent": "none", "photo_or_video": "photo", "which_person": "ask"},
+                 questions_asked=True, attachments=one)
+    assert stop["stage"] == "missing_answer" and not stop["ready"] and "Make nothing" in stop["next"]
+
+
+def test_a_row_the_host_answers_is_never_put_to_the_user():
+    with pytest.raises(ToolError):   # "(Read from the files.) Is the target a photo or a video?"
+        front("faces", "swap my face", {"consent": "none", "photo_or_video": "ask"}, attachments=[{"name": "a.jpg", "kind": "image"}])
+    with pytest.raises(ToolError):   # film kind is "(Read from the words.)"
+        front("film", "a film", {"kind": "ask"})
+    out = front("new_video", "a 5 s clip of rain", {"from_picture": "words", "length": "5 s", "shape": "16:9", "sound": "ask"})
+    assert out["stage"] == "plan" and next(d for d in out["decisions"] if d["id"] == "sound")["value"] == "Natural sound on."

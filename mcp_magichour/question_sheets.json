@@ -6,12 +6,12 @@
     "Tool priority (user, 2026-11-14): generation tools first (generate_image, edit_image, the video and audio generators), because they cover more cases. Deterministic code tools (reframe_media, add_words_to_media, trim_media, adjust_colours, put_pictures_side_by_side, put_picture_on_video, make_card_clip, mix_audio, add_sound_to_video, join_videos) last: only when generation cannot do the job, or the user asks for their media to stay exactly as it is.",
     "Words: text that is part of a designed picture (a headline, a poster, a flyer, a logo, a thumbnail, a carousel slide, a card) goes in the generation prompt, quoted exactly, with where it goes. add_words_to_media is only for captions or overlays on top of existing media (a caption on the user's photo, a watermark, subtitles-style lines on a video). After generating words, check the spelling in the result; if it is wrong, fix it with edit_image.",
     "Ask as few questions as possible: only those whose answer would change the result and that the user's words and files do not answer. Ask them all together in one message, once, in plain words, each with what happens if the user skips it. Never ask a second round: anything still open after the user answers takes its default.",
-    "'Your call', 'you pick', or no answer: use the row's default and tell the user what was chosen.",
+    "'Your call', 'you pick', or no answer: use the row's default. A row with `your_call` (words the result shows) uses that instead when the user hands it over.",
     "Keep every concrete detail the user gave (counts, colours, materials, names, exact words) in the tool's prompt word for word. A01a: 'matte black on marble' became a silver bottle on white when the details were dropped.",
     "Free-tier models only (tool_notes.json, free_models). Never name a paid model.",
     "Keep the user's media unless the user asked for it to be redrawn or re-made.",
     "When no tool does the job (a GAP row), say so plainly and offer the nearest real option. Do not send the user's media through a tool that redraws it instead.",
-    "A request for a film of several shots or scenes goes to video composition (plan_request), not to these sheets.",
+    "A request for a film of several shots or scenes is the film family of plan_conversation (then plan_video_production), not these sheets.",
     "Passing a result to the next tool: Magic Hour's own tools (generate_image, edit_image, create_video_from_image, swap_*, add_subtitles_to_video and the other API tools) take a file_path or a download URL, not a project id; pass the finished project's download URL or the file_path a code tool returned. The code tools (reframe_media, trim_media, add_words_to_media, mix_audio, join_videos, get_last_frame, add_sound_to_video, adjust_colours, put_pictures_side_by_side, put_picture_on_video, make_card_clip) also take a finished project id."
   ],
   "families": {
@@ -63,7 +63,8 @@
             "exact words": "generate_image with the exact words in the prompt, quoted, and where they go (qwen-image-2.1). Check the spelling in the result; if wrong, edit_image to fix the words."
           },
           "default": "No words.",
-          "why": "User, 2026-11-14: words in a designed picture are generated, not drawn on top. Spelling risk: flux-2-klein misspelt headlines in the bench (A02b 'CEAN UP YOUR BACH'); qwen-image-2.1 is the model to use; check and fix with edit_image."
+          "why": "User, 2026-11-14: words in a designed picture are generated, not drawn on top. Spelling risk: flux-2-klein misspelt headlines in the bench (A02b 'CEAN UP YOUR BACH'); qwen-image-2.1 is the model to use; check and fix with edit_image.",
+          "your_call": "Words that fit the request, written by you (a short headline or call to action), quoted in the prompt. Never invent a price, a date or a web address."
         },
         {
           "id": "shape",
@@ -367,8 +368,9 @@
             "one person": "swap_head_in_photo; if it changes the wrong person, detect_faces then swap_face_in_photo individual-faces.",
             "each a different face": "detect_faces, then swap_face_in_photo or swap_face_in_video individual-faces."
           },
-          "default": "Ask; do not guess.",
-          "why": "C14b: asked which person, then head swap: 4."
+          "default": "Ask; do not guess. Still open after the user was asked: make nothing and say why.",
+          "why": "C14b: asked which person, then head swap: 4.",
+          "no_default": "Which person in the picture gets the new face: with several people, a guess can change the wrong person."
         },
         {
           "id": "which_part",
@@ -468,7 +470,7 @@
       ],
       "settings": {
         "create_video_from_image": {
-          "model": "ltx-2.5",
+          "model": "minimax-h3",
           "resolution": "480p"
         }
       },
@@ -610,11 +612,11 @@
           ],
           "answers": {
             "logo": "remove_image_background first if the logo has a background, then put_picture_on_video (place, size 0.15, opacity).",
-            "card": "make_card_clip with the words, background, seconds, like_video = the user's clip and attach=after (an end card) or before (a title card): one file, the clip's sound kept.",
+            "card": "A generated card (user, 2026-11-21): generate_image with qwen-image-2.1, the exact words quoted, the colour named, the user's clip's shape (edit_image with the logo when the card shows it); check the spelling, make a misspelled card again (at most 3 in all) and keep the best one: a small misspelling beats words drawn by code. Then make_card_clip with that picture, background none, seconds, like_video = the user's clip and attach=after (an end card) or before (a title card): one file, the clip's sound kept. A drawn card (make_card_clip with words on a colour) only when the user asks for a plain drawn card.",
             "words only": "add_words_to_media."
           },
-          "default": "Logo: top_right, size 0.15, the whole clip. Card: 2 s, black, white words, after the clip.",
-          "why": "MCP-TOOLS-31 put_picture_on_video, MCP-TOOLS-32 make_card_clip (2026-11-14). Before: no tool (E29a 1.3, E29b 2.0). Not benchmarked yet. Run wnew E29b: join_videos failed (media_tools.join calls ffmpeg by name), so the card tool attaches the card itself."
+          "default": "Logo: top_right, size 0.15, the whole clip. Card: 2 s, generated, black with white words, after the clip.",
+          "why": "MCP-TOOLS-31 put_picture_on_video, MCP-TOOLS-32 make_card_clip (2026-11-14). Before: no tool (E29a 1.3, E29b 2.0). Not benchmarked yet. Run wnew E29b: join_videos failed (media_tools.join calls ffmpeg by name), so the card tool attaches the card itself. User, 2026-11-21: every card is generated; a drawn card only when the user asks for one; a small misspelling on a generated card is kept."
         },
         {
           "id": "speech_language",
@@ -627,7 +629,7 @@
           "answers": {
             "a language": "translate_video with target_language. The translator picks the voice and it may not sound like the speaker: do not promise their own voice; if the user asks for it, say so before the call. One call takes 1 to 30 s: for a longer video, translate 30 s parts in order and join_videos."
           },
-          "default": "Ask; do not guess.",
+          "default": "The language the user writes in (the request's own language).",
           "why": "Draft 2026-11-20 from the tool's inputs (user: 'just have something for now'); not tested yet."
         },
         {
@@ -659,11 +661,11 @@
       ],
       "settings": {
         "create_video_from_text": {
-          "model": "ltx-2.5",
+          "model": "minimax-h3",
           "resolution": "480p"
         },
         "create_video_from_image": {
-          "model": "ltx-2.5",
+          "model": "minimax-h3",
           "resolution": "480p"
         }
       },
@@ -690,7 +692,7 @@
             "'8-second', 'a short clip' (ask), '10 s'."
           ],
           "answers": {
-            "1 to 60 s": "end_seconds."
+            "1 to 60 s": "end_seconds. Over 30 s: model ltx-2.5 (minimax-h3 makes at most 30 s; user, 2026-11-14 and 2026-11-20)."
           },
           "default": "5 s.",
           "why": "plan_request asked 'a short clip' as 8 s when the user wanted 6 s (2026-11-05 benchmark)."
@@ -734,7 +736,8 @@
             "exact words": "Make the clip without words, then add_words_to_media (MCP-TOOLS-25)."
           },
           "default": "None.",
-          "why": "create_video_from_text antitype: labels missing (I46b)."
+          "why": "create_video_from_text antitype: labels missing (I46b).",
+          "your_call": "Words that fit the request, written by you (a short title), made the way the 'exact words' answer says. Never invent a price, a date or a web address."
         },
         {
           "id": "song",
@@ -758,6 +761,7 @@
       "is": "A person in a photo or video speaks given words.",
       "tools": [
         "create_talking_photo",
+        "ai_voice_generator_create_audio",
         "create_lip_sync_video",
         "create_spoken_ad_video",
         "trim_media",
@@ -781,7 +785,7 @@
             "No person → a voice-over (GAP on the user's video)."
           ],
           "answers": {
-            "photo": "create_talking_photo.",
+            "photo": "Make the line's audio first: ai_voice_generator_create_audio (a stock voice) or the user's own recording; then create_talking_photo with the photo and that audio file (it takes audio, not words).",
             "video with a presenter": "create_lip_sync_video; tell the user the footage may be re-made.",
             "no presenter": "Voice-over on the video: make the voice, then add_sound_to_video (change_video sound_on_video)."
           },
@@ -912,12 +916,12 @@
             "'Two hosts', 'two voices', 'A says, B says'; 'with music behind'."
           ],
           "answers": {
-            "one voice": "The voice generator.",
-            "several voices": "The voice generator per line, then join_videos (sound files).",
+            "one voice": "ai_voice_generator_create_audio.",
+            "several voices": "ai_voice_generator_create_audio per line, then join_videos (sound files).",
             "over music": "Then mix_audio: music first, voice from a few seconds in, music at about 0.25."
           },
           "default": "One voice, no music.",
-          "why": "F31b, F32a, F32b (MCP-TOOLS-28). The voice generator is hidden upstream (MCP-11)."
+          "why": "F31b, F32a, F32b (MCP-TOOLS-28). The voice generator is listed again (upstream, 2026-11-09)."
         },
         {
           "id": "own_voice",

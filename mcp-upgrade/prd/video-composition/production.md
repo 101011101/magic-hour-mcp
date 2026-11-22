@@ -13,7 +13,7 @@ Code: `video_production.py` (plan, split, questions, prompts), `video_production
 | Tool | Does | Credits |
 |---|---|---|
 | `plan_video_production` | Story in, ordered calls out: clips, rounds, `questions`, `advice`, `checklist`, `production` (the packed story the host passes back). | 0 |
-| `create_production_clip` | Makes one clip of the plan. A card clip (`made_by: code`) makes nothing: the join draws it. | per clip |
+| `create_production_clip` | Makes one clip of the plan. A card clip makes its still first (qwen-image-2.1; the image editor with the user's picture), then a clip from it. | per clip |
 | `join_production_clips` | Joins the clips in story order. Places sound, draws cards and captions, measures the checklist. | 0 |
 
 - The server keeps no plan state. `production` travels with the host. A changed `production` value is refused.
@@ -22,6 +22,7 @@ Code: `video_production.py` (plan, split, questions, prompts), `video_production
 ## Clip split (user, 2026-11-05; strategy `person`)
 
 - Ideas come first. The same person is one idea: their beats stay in one clip, also when the place changes, while the clip fits.
+- As few clips as possible. Split only when needed (user, 2026-11-20). The `ltx-2.5` rules (`line-<n>`, two places merge) apply only to an `ltx-2.5` clip.
 - Limit: 15 s. A person with a picture: 30 s (`minimax-h3`).
 - A cut idea is chained: the clip ends on the person; the next clip starts from that last frame.
 - A person who comes back starts from the last clip that showed them.
@@ -39,7 +40,7 @@ Code: `video_production.py` (plan, split, questions, prompts), `video_production
 
 ## Models (user, 2026-11-14)
 
-- `minimax-h3` makes every scene clip up to 30 s: from text, from a last frame, with pictures. Longer: `ltx-2.5`. A still with exact words: `ltx-2.5`.
+- `minimax-h3` makes every scene clip up to 30 s: from text, from a last frame, with pictures. Longer: `ltx-2.5`. A silent still with exact words: `ltx-2.5`. A still with exact words and speech or sound: `minimax-h3` (2026-11-20).
 - Why: a 60-clip sound test (9,246 credits). `minimax-h3` made the sound in every case. `ltx-2.5` missed wind, the background under a voice, a second speaker (from a last frame, 4 of 4), and the second line of a two-line clip (8 of 8). The sound line first in the prompt did not fix it. Page: sound-test-matrix.vercel.app.
 - Same price: 24 credits a second. The join cuts each clip to its planned length (`minimax-h3` runs about 0.3 s long).
 - Not `ltx-2.5` for a silent chained clip (tested w6, reverted by the user 2026-11-15). Cuts were smoother, but W02 lost the bottle's look (`ltx-2.5` takes no picture) and W07 was worse.
@@ -58,16 +59,16 @@ Code: `video_production.py` (plan, split, questions, prompts), `video_production
 | Question | When | Options | Recommended |
 |---|---|---|---|
 | `words-<n>` | Words over a scene | card, model, still, accept | card |
-| `line-<n>` | A spoken line shares a clip with another beat | split, keep | split |
+| `line-<n>` | A spoken line shares an `ltx-2.5` clip with another beat (user, 2026-11-20: not on `minimax-h3`) | split, keep | split |
 | `colour-codes` | Colour codes in the story | words, keep | words |
-| `held-<n>` | A held picture card right after a scene made from the same picture (W09) | merge, keep | merge; keep when the beat is an end card |
-| `together-<n>` | A beat with `link: continues` in another clip than the beat before, and both fit in 15 s | join, keep | join |
+| `held-<n>` | A picture card right after a scene made from the same picture (W09) | merge, keep | merge; keep when the beat is an end card. After its own reveal, the plan merges it with no question (2026-11-21) |
+| `together-<n>` | A beat in another clip than the beat before, with `link: continues`, or `link: event` and a shared person (2026-11-20), and both fit (15 s; 30 s with a pictured person) | join, keep | join |
 | `picture-<id>` | A product subject with no `picture` | web, user, none | web |
 | `continuity` | Every plan with 2 or more scene clips, once: the host checks its own plan for a split continuous motion or asset, and for two actions in one clip with no cut | ok, change | ok |
 
 - Words (user's pick, 2026-11-07): a card after the scene when the words can stand alone; `minimax-h3` over the scene when they must sit on the picture; never `ltx-2.5`.
 - Words drawn over the scene by code (user, 2026-11-16): the `overlay` words route of `join_production_clips`, at the top, large. A title can sit over the first scene instead of a card. Why: W10b, title over the opening scene, first cut 0.01 → 0.98 picture match (w9). W04 (report of 2026-11-14) used it for its title.
-- Cards and held pictures are drawn by code at the join.
+- Cards are generated, also with an exact colour or the user's picture (user, 2026-11-21). A card only when the user asks for one. A drawn card is made by hand with `make_card_clip`, only when the user asks for it. A misspelled card is made again, at most 3 in all; the best one is kept, also with a small misspelling (user, 2026-11-21). The card clip holds still: no camera move (user, 2026-11-21).
 - `in_scene_words` (a label, a sign): no question, best effort by the model.
 - Why `line-<n>`: the line was said 0 of 3 times inside a 12 s clip with another beat, 3 of 3 alone in a 4 s close-up (`ltx-2.5`, 2026-11-07).
 - Spoken line prompt (user, 2026-11-16, W08, W05): the line gets a time slot sized by its words (3 words a second, 2 s or more), then a silent end: "stops talking, smiles and nods, mouth closed. Nobody speaks." A script label in the quote ("Maya: Then we walk.") becomes the speaker: `Maya says, word for word: "Then we walk."`.
