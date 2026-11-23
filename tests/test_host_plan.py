@@ -523,3 +523,59 @@ class SpokenFitTests(unittest.TestCase):
     def test_a_line_that_fits_is_not_warned(self):
         story = self.story(9, 8)
         self.assertEqual([a for a in vp.advise(story, plan_story(story)) if a["note"] == "spoken-pace"], [])
+
+
+class ShotAndActionAdviceTests(unittest.TestCase):
+    """One shot and at most three actions in a clip (prompt guides; W05 and W07 w22l, 2026-11-21)."""
+
+    def story(self, beats: list[dict]) -> dict:
+        return {"title": "t", "aspect": "16:9", "setting": "A rainy bus stop at dusk.",
+                "subjects": [{"id": "maya", "words": "Maya, a young woman in a yellow raincoat.", "role": "person"},
+                             {"id": "leo", "words": "Leo, a young man in a grey hoodie.", "role": "person"}],
+                "beats": [{"subjects": ["maya", "leo"], "place": "stop", **b} for b in beats]}
+
+    def notes(self, story: dict) -> list[dict]:
+        return [a for a in vp.advise(story, plan_story(story)) if a["note"] in ("shot-change", "actions-per-clip")]
+
+    def test_a_close_shot_then_a_wide_shot_in_one_clip_is_a_shot_change(self):
+        story = self.story([
+            {"clip": 1, "seconds": 3, "text": "Close two-shot: Maya smiles and lifts a closed black umbrella.", "spoken": ["Maya: Then we walk."]},
+            {"clip": 1, "seconds": 3, "text": "Maya opens the black umbrella and Leo steps in close beside her."},
+            {"clip": 1, "seconds": 4, "text": "Wide shot from behind: Maya and Leo walk away together under the umbrella."}])
+        warned = self.notes(story)
+        self.assertEqual([a["note"] for a in warned], ["shot-change"])
+        self.assertIn("close two shot at 0 s, then from behind wide at 6 s", warned[0]["warning"])
+
+    def test_the_same_shot_named_again_is_not_a_shot_change(self):   # dry run w23d W05
+        story = self.story([
+            {"clip": 1, "seconds": 4, "text": "Medium two-shot under the shelter: Maya turns to Leo."},
+            {"clip": 1, "seconds": 5, "text": "Same two-shot: Leo shrugs and looks back at Maya."}])
+        self.assertEqual(self.notes(story), [])
+
+    def test_each_shot_in_its_own_clip_is_not_warned(self):
+        story = self.story([
+            {"clip": 1, "seconds": 6, "text": "Close two-shot: Maya opens the black umbrella and Leo steps in beside her."},
+            {"clip": 2, "seconds": 4, "text": "Wide shot from behind: Maya and Leo walk away together under the umbrella."}])
+        self.assertEqual(self.notes(story), [])
+
+    def test_seven_actions_in_one_beat_are_too_many(self):
+        story = self.story([{"clip": 1, "seconds": 12, "text": (
+            "Wide shot: the biplane rolls along the rail as Wilbur runs beside the wing tip; it lifts off and flies low, "
+            "then settles down and lands in the sand; Wilbur walks up to it and Orville climbs off the wing.")}])
+        warned = self.notes(story)
+        self.assertEqual([a["note"] for a in warned], ["actions-per-clip"])
+        self.assertIn("about 4 actions in 12 s", warned[0]["warning"])
+
+    def test_three_actions_hold(self):   # w19l W07: lift off, fly, land in 12 s; Wilbur stayed on the sand
+        story = self.story([{"clip": 1, "seconds": 12, "text": (
+            "Wide side view: the biplane lifts off the rail and flies low over the sand, Wilbur running alongside, then it "
+            "lands softly in the sand.")}])
+        self.assertEqual(self.notes(story), [])
+
+    def test_one_person_talking_in_one_shot_is_not_warned(self):   # W06 w22l: four beats, two lines, approved
+        story = self.story([
+            {"clip": 1, "seconds": 3, "text": "Medium close-up of Maya facing the camera; she thinks and smiles."},
+            {"clip": 1, "seconds": 3, "text": "Maya looks into the camera, confident.", "spoken": ["I walk everywhere."]},
+            {"clip": 1, "seconds": 7, "text": "Maya keeps facing the camera, a small nod.", "spoken": ["It is the best part of my day."]},
+            {"clip": 1, "seconds": 2, "text": "Maya smiles at the camera and lowers the microphone."}])
+        self.assertEqual(self.notes(story), [])

@@ -289,6 +289,27 @@ Later, after composition. Each new tool goes in a new file of tool management, n
     - User, 2026-11-21: try the card held still. Card clip prompt: "a locked-off static shot … the same size from the first frame to the last" (was "a very slow, barely visible push in").
       - Test (cards only, 3 clips, 294 credits, server 8777): ltx-2.5 still pushes in, about half as much (about 1.15–1.3× against 1.3–1.5×). D23c: the URL now stays whole. C2: the corner leaves mostly stay. W02: the bottle grows about 1.3×; its label words read "unread" again (0 of 5).
       - Open (user to decide): hold the generated card still by code (no video model for the card, 0 credits for that step), or keep the smaller push in.
+  - [ ] 2026-11-21 · Routing, default planner, tool lessons (user approved the proposals). Checkpoint before: `checkpoint-2026-11-21-generated-cards`.
+    - Routing: one rule. A video with a purpose goes to `plan_video_production`, also one shot; a single action goes to its tool (`plan_conversation` picks `new_video` or `film`). The old "longer than 15 s or 3+ ideas" trigger left the `plan_video_production` description, and `needs_production` left the plan result.
+    - Default planner: `plan_conversation` is on with no switch; `MAGIC_HOUR_CONVERSATION=off` brings back `plan_request`. `plan_tool_call` is not a second step: `plan_conversation` runs its sheet check inside.
+    - Found: the `plan_conversation` description was 4,110 bytes. Claude Code keeps 2,048 (upstream `test_metadata_fits_claude_code_utf8_budget`; it passed only because the switch was off). Claude Code hosts (the fleet) saw the rows of 3 of 8 families and none of the answer rules. Fix: the row index and the answer rules left the description (1,925 bytes); the first call (family and request, no answers) returns the rows with the rules (`ANSWER_RULES`).
+    - Tool lessons may stay in the API tool descriptions (`openapi_policies.py`); the 2026-11-13 README rule is replaced.
+    - Picture edit model: William's note (`origin/william`, tool_notes.json `edit_image`): qwen-image-2.1, avoid flux-2-klein (15 of 19 cases); the plan output names the model. No change: the change_picture sheet already names qwen-image-2.1.
+    - Street sound, report only: `V2/bench/mcp/fleet/bgsound.py` (agent repo). Per raw clip with a spoken line: voice = 90th percentile, background = 10th percentile of 0.1 s RMS windows; flag: background more than 35 dB under the voice, or under −60 dB. On w19l: W06 flagged (background −62 dB, 48.9 dB under, names a street sound); W08 flagged (names no place sound); W05 not flagged (30.3 dB under).
+    - Tests: 464 pass, the 3 known web-build fails, 1 skip.
+    - Live check (server 8777, no switch set; happy, new side): wide set w22l 15/15 delivered, 7,715 credits; tool set kt1l + kt2l 14/14 delivered, 3,298 credits. Page (user marks only): https://claude.ai/artifact/VzPQJtGuyFmq3jxpFPCeJJ. Awaiting the user's marks before commit and push.
+    - Routes: the wide set matches w19 on 15 of 15 (story → production, single action → its tool). K22 (before/after from 2 photos) calls `plan_video_production` but then makes the clip with `create_video_from_image` (4 of 4 dry and live): the plan has no clip that starts from the user's photo. Not fixed.
+    - Bench fault (mine): kt1l ran beside w22l; 6 chats refused as "no credits" (per-tag floor against the shared balance). Reran alone as kt2l.
+    - AI grade (not shown on the page): known faults only. W02 card "AeoBottle" (check "unread", no retry), W07 colour, W09 words above the logo, W04 device cut at the edge, K13 face on the wrong man, K27 still sepia, K28 10 s for 15 s. W01 and K23 ask "short clip or film?" before a single action.
+    - Street sound (bgsound, w22l): W06 flagged again (−63.6 dB, 49.8 dB under the voice, names a street sound); W08 flagged (names no place sound); W05 not flagged.
+  - [ ] 2026-11-22 · Conversation front with no answer rewrites; rules of thumb in the video tool (user OK on the live check, 2026-11-23: "mostly fine").
+    - Front: no answer rewrites, no story rules; it gives the refined prompt (decisions) only. An ad's exact_words default is a call to action (K21).
+    - Video tool: RULES_OF_THUMB in the description; the `card-not-asked` check (W10: unasked title cards); a picture `source` is held still by code (W08); the street under a spoken line is lifted (W06, version A, +30 dB).
+    - Dry check (0 credits): cfnw, cfnk, cfns, cfas, cfnr2–4. W10: no unasked card in 4 of 4. W08: `source` in 2 of 2. K21: the call to action stays.
+    - Dumb users (intention probe): points the user said and the plan kept: wide 17/20 before, 17/21 now; K 6/10 before, 14/15 now.
+    - Live check cfnl (W04–W08): 5 of 5 delivered, 3,011 credits. Page: https://claude.ai/artifact/VZPbfsw8kMR9EEEtRV3s3Z.
+    - Open (user, after this commit): W08, the presenter's `spoken` line has no caption (captions read only the narrator's `says`). W04, the voice-over end sounds like a question (test the script syntax).
+    - Tests: 474 pass, the 3 known web-build fails, 1 skip.
   - [ ] Live batches 2 and 3 (about 120 chats, about 20k credits each), after the user's OK.
   - [ ] Later: multi-turn edits (J49–J51, W12), after this run passes.
 - [ ] **MCP-05 · When to call the video production tool.** Instructions to the host agent, or code that reads the request and decides. Later (user, 2026-11-05).

@@ -4,7 +4,7 @@ Tool management is separate from video composition (mcp-upgrade/prd/tool-managem
 changes no shared file. It reuses, unchanged, the shared media code: media_tools (ffmpeg work) and media_helpers_tool
 (fetch a user's file, deliver a made file). It imports nothing directly from plan_request, video_production,
 video_production_tool or gates.
-Registered with the planner's switch MAGIC_HOUR_TOOL_PLAN=on, or with the conversation front MAGIC_HOUR_CONVERSATION=on
+Registered with the planner's switch MAGIC_HOUR_TOOL_PLAN=on, or with the conversation front (on unless MAGIC_HOUR_CONVERSATION=off)
 (2026-11-20 audit: its sheets route to these tools). Both off (the default), the server is as before.
 """
 from __future__ import annotations
@@ -194,7 +194,7 @@ def _need() -> None:
 
 
 def enabled() -> bool:
-    conversation = os.getenv("MAGIC_HOUR_CONVERSATION", "off").strip().lower() in ("on", "1", "true")
+    conversation = os.getenv("MAGIC_HOUR_CONVERSATION", "on").strip().lower() not in ("off", "0", "false")   # on by default (2026-11-21)
     return tool_plan.enabled() or conversation
 
 

@@ -523,13 +523,66 @@ def loudness(file: Path) -> float | None:
     return None if value is None or value <= -69 else value
 
 
-def loudness_between(file: Path, spans: list[tuple[float, float]]) -> float | None:
-    """The loudness of a file inside the spans only (a spoken line inside the film's own sound)."""
+def loudness_between(file: Path, spans: list[tuple[float, float]], gain_db: float = 0.0) -> float | None:
+    """The loudness of a file inside the spans only (a spoken line inside the film's own sound). gain_db: measured this
+    much louder, then taken off again (a quiet background is under the meter's -70 LUFS gate)."""
     pick = "+".join(f"between(t,{a:.3f},{b:.3f})" for a, b in spans)
-    report = _ffmpeg(["-i", str(file), "-vn", "-af", f"aselect='{pick}',ebur128", "-f", "null", "-"], capture=True)
+    raised = f"volume={gain_db:.1f}dB," if gain_db else ""
+    report = _ffmpeg(["-i", str(file), "-vn", "-af", f"aselect='{pick}',{raised}ebur128", "-f", "null", "-"], capture=True)
     found = re.findall(r"I:\s+(-?\d+\.?\d*) LUFS", report)
     value = float(found[-1]) if found else None
-    return None if value is None or value <= -69 else value
+    return None if value is None or value <= -69 else round(value - gain_db, 1)
+
+
+# W06 (user, 2026-11-22, version A over B): the street under a spoken line was 53 dB under the voice and heard only at
+# full volume. The steady background of a clip's own sound is lifted, the voice is not touched. The background is what
+# afftdn takes out as noise; the lowpass removes the speech traces left in its top.
+BED_FILTER = "afftdn=nr=30:nf=-75:tn=1:om=n,lowpass=f=7000"
+BED_UNDER_VOICE_DB = 23      # the background is lifted to this far under the spoken line (version A on W06: +30 dB, 23 LU)
+BED_MAX_RAISE_DB = 30        # at most this much (version A)
+BED_MIN_RAISE_DB = 3         # a smaller lift is not done
+BED_MEASURE_GAIN_DB = 40     # a quiet background is measured this much louder (loudness_between)
+BED_PAUSE_MARGIN = 0.2       # a pause starts this far after a heard sound and ends this far before the next
+
+
+def lift_bed(film: Path, spoken: list[tuple[float, float]], clips: list[tuple[float, float]], out: Path) -> dict | None:
+    """The film with the steady background of its own sound lifted inside `clips` (the clips with a spoken line), to
+    BED_UNDER_VOICE_DB under the speech in `spoken`. The background is measured in the pauses, where nothing is heard
+    (speech_spans). None when there is no pause (the background is heard already), no background, or it is loud enough."""
+    if not spoken or not clips or not probe(film)["audio"]:
+        return None
+    voice = loudness_between(film, spoken)
+    heard, pauses = speech_spans(film), []
+    for start, end in clips:
+        at = start
+        for a, b in heard:
+            if b <= start or a >= end:
+                continue
+            if a - BED_PAUSE_MARGIN - at >= 0.3:
+                pauses.append((at, a - BED_PAUSE_MARGIN))
+            at = max(at, b + BED_PAUSE_MARGIN)
+        if end - at >= 0.3:
+            pauses.append((at, end))
+    if voice is None or sum(b - a for a, b in pauses) < 0.5:
+        return None
+    target = voice - BED_UNDER_VOICE_DB
+    street = loudness_between(film, pauses, BED_MEASURE_GAIN_DB)
+    if street is not None and street > target - BED_MIN_RAISE_DB:
+        return None
+    bed_file = out.with_name(out.stem + "-bed.wav")
+    _ffmpeg(["-i", str(film), "-vn", "-af", BED_FILTER, str(bed_file)])
+    bed = loudness_between(bed_file, pauses, BED_MEASURE_GAIN_DB)
+    if bed is None:
+        return None
+    raise_db = min(BED_MAX_RAISE_DB, target - bed)
+    if raise_db < BED_MIN_RAISE_DB:
+        return None
+    level = f"{10 ** (raise_db / 20):.4f}*({_inside(clips)})"
+    _ffmpeg(["-i", str(film), "-i", str(bed_file), "-filter_complex",
+             f"[1:a]volume='{level}':eval=frame[bed];[0:a][bed]amix=inputs=2:normalize=0:duration=first[a]",
+             "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", str(out)])
+    return {"raised_db": round(raise_db, 1), "voice_lufs": voice, "background_lufs_before": street,
+            "background_lufs": loudness_between(out, pauses, BED_MEASURE_GAIN_DB)}
 
 
 def add_sound(film: Path, out: Path, narration: Path | None = None, parts: list[dict] | None = None, music: Path | None = None,
@@ -719,6 +772,20 @@ def fit_picture(source: Path, background: str | None, size: tuple[int, int], out
         frame.alpha_composite(Image.open(band).convert("RGBA"))
         band.unlink()
     frame.convert("RGB").save(out)
+    return out
+
+
+def picture_copy(file: Path) -> Path | None:
+    """A copy of `file` with its picture type's suffix when it is a still picture (png, jpg, webp), else None. A kept or
+    downloaded clip is saved as .mp4 whatever it holds, and ffmpeg loops a still only by its image suffix."""
+    with open(file, "rb") as f:
+        head = f.read(12)
+    suffix = (".png" if head.startswith(b"\x89PNG") else ".jpg" if head.startswith(b"\xff\xd8\xff")
+              else ".webp" if head[:4] == b"RIFF" and head[8:12] == b"WEBP" else None)
+    if not suffix:
+        return None
+    out = file.with_name(file.stem + "-picture" + suffix)
+    shutil.copyfile(file, out)
     return out
 
 

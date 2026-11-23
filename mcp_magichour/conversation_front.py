@@ -11,7 +11,8 @@ apply the implied defaults, ask what is still open in ONE batch, then hand back 
 - Media facts: each attached file with a file_path is read by code (length, size, sound), so a trim or a "whole clip"
   uses exact seconds (user, 2026-11-19, fix 2).
 
-Switch: MAGIC_HOUR_CONVERSATION=on registers plan_conversation and leaves plan_request out. Read-only, no credits.
+Switch: on by default (user, 2026-11-21): plan_conversation is registered and plan_request is left out.
+MAGIC_HOUR_CONVERSATION=off brings back plan_request. Read-only, no credits.
 """
 from __future__ import annotations
 
@@ -35,12 +36,14 @@ Family = Literal["new_picture", "change_picture", "faces", "change_video", "new_
 
 
 def enabled() -> bool:
-    return os.getenv("MAGIC_HOUR_CONVERSATION", "off").strip().lower() in ("on", "1", "true")
+    # On by default (user, 2026-11-21): with no switch set the server shipped the old plan_request.
+    return os.getenv("MAGIC_HOUR_CONVERSATION", "on").strip().lower() not in ("off", "0", "false")
 
 
 # Rules every family follows (user, 2026-11-19).
 IMPLIED = [
-    "Every video has the natural sound of its scene (audio on) unless the user asks for silence. Do not ask about it.",
+    "Every video has sound unless the user asks for silence: the plan picks where it comes from (a voice-over, spoken lines, "
+    "the scene's own sound, music). This is sound in the video, not sound in every clip (user, 2026-11-22). Do not ask about it.",
     "Captions on a video, when there are captions: white letters with a black outline. Do not ask about the style.",
     "Derive what the words imply (TikTok, Reels, Shorts, a story = 9:16; YouTube, a website = 16:9; Instagram post = 1:1). "
     "Do not ask what the words already answer.",
@@ -85,14 +88,15 @@ FILM_ROWS = [
     {"id": "length", "kind": "required", "ask": "About how long, in seconds?",
      "answers": {"seconds": "Fill it with the story; no stretching, no pauses."}, "default": "15 s (a reel); 30 s for an explainer."},
     {"id": "who_speaks", "kind": "deciding", "ask": "Should anyone talk: a voice-over, a person on camera, people talking to each other, or no one?",
-     "answers": {"nobody": "Silent (audio off) only when the user asked for silence; else scene sound.",
-                 "scene_sound": "Audio on, no spoken lines.",
+     "answers": {"nobody": "No spoken lines. The sound comes from what the plan picks: music, sound effects, the scene's own sound.",
+                 "scene_sound": "The scene's own sound (as the words ask for it), no spoken lines.",
                  "narrator": "A voice-over: each beat's narration goes in its `says`; the story's `narrator` field is how the voice sounds. The voice cloner reads it (the user's own voice when they give a sample).",
                  "one_on_screen": "One person says the lines on camera: each line in its own short beat (`spoken`).",
                  "people_talking": "Each speaker's line in its own beat, in order."},
-     "default": "Read from the words; else scene_sound.", "ask_when": "the words want speech but do not say who speaks"},
-    {"id": "sound", "kind": "required", "ask": "(Implied.) Natural sound of the scene.",
-     "answers": {"on": "Audio on in every clip.", "silent": "Only when the user asked for silence."}, "default": "on."},
+     "default": "Read from the words; else nobody.", "ask_when": "the words want speech but do not say who speaks"},
+    {"id": "sound", "kind": "required", "ask": "(Implied.) The video has sound.",
+     "answers": {"on": "The video has sound; who_speaks and music say where it comes from. Not every clip needs its own sound.",
+                 "silent": "Only when the user asked for silence."}, "default": "on."},
     {"id": "music", "kind": "deciding", "ask": "(Implied.) Music under the film?",
      "answers": {"yes": "One music track at the join, none inside the clips.", "no": "No music."},
      "default": "Yes for an ad, a reel or a social post; else no."},
@@ -101,7 +105,9 @@ FILM_ROWS = [
      "default": "Yes when someone speaks in a social video (TikTok, Reels, Shorts, an ad); else no."},
     {"id": "exact_words", "kind": "deciding", "ask": "Any words that must appear on screen (a title, a price, a website), spelled exactly?",
      "answers": {"none": "No words on screen.", "exact words": "Exactly as the user wrote them, in the beat's `exact_words`. A card only when the user asks for one."},
-     "default": "None. Never invent a price, a date or a web address.", "ask_when": "an ad or a promo with no call-to-action words",
+     # 2026-11-22 (K21: a skipped question gave "none", so the ad had no call to action)
+     "default": "An ad or a promo: short call-to-action words that fit the request. Else none. Never invent a price, a date or a web address.",
+     "ask_when": "an ad or a promo with no call-to-action words",
      # 2026-11-20 audit: the user's 'your call' means write words that fit (user, 2026-11-19), not "none"
      "your_call": "Write short words that fit the request (a title or a call to action), exactly as they will show. Never invent a price, a date or a web address."},
     {"id": "product_picture", "kind": "deciding", "ask": "Do you have a photo of the product? A film made from words only looks like it.",
@@ -111,19 +117,8 @@ FILM_ROWS = [
      "default": "words.", "ask_when": "a real product or brand is shown and no photo is attached"},
 ]
 
-STORY_RULES = [
-    "No story from the user: write one. Hook in the first 3 s (the main point or the most striking image), then the body, then the close; an ad ends on the call to action.",
-    "Fill the length with the story. No dead air: every second has an action or a line. A spoken line is 2.5 words a second on screen (2.7 for a voice-over); at most 3 s idle after a line.",
-    "One action per beat. A spoken line gets its own short beat. A change of state is one beat per stage.",
-    "No time skip on a beat that continues from the clip before (`continues`, `event`): a new time of day is a new shot (`new`).",
-    "The setting is true of every clip. The same subject words in every beat. A real product uses its photo.",
-    "No talking verb in the beat text; the words go in `spoken`.",
-    "Natural sound on; no music inside a clip; one music track at the join.",
-    "Exact words on screen go in the beat's `exact_words`, never in the clip prompt. A card beat only when the user asks "
-    "for a card (user, 2026-11-21).",
-    "Keep every concrete detail the user gave word for word (counts, colours, names, exact words).",
-    "Avoid what the video model does badly: two places in one clip, small letters, a colour code, a person partly off screen.",
-]
+# 2026-11-22: the story rules moved to the video tool (RULES_OF_THUMB in video_production_tool.py) or were dropped:
+# 6 repeated the video tool's field texts, "no time skip" changed no clip, "avoid colour codes" contradicted the tool.
 
 
 def _available(tool: str) -> bool:
@@ -209,12 +204,7 @@ def _film(request: str, answers: dict[str, str] | None, questions_asked: bool, f
     # Sound is on unless the user's own words ask for silence (user, 2026-11-19). "No talking" or "music only" is not silence.
     silent = bool(re.search(SILENCE, request))
     notes = []
-    if answers.get("sound") not in (None, "on", "silent", YOUR_CALL, ASK) or (answers.get("sound") == "silent" and not silent):
-        notes.append(f"sound {answers['sound']!r} became 'on': the user's words do not ask for silence.")
-        answers = {**answers, "sound": "on"}
-    if answers.get("who_speaks") == "nobody" and not silent:
-        notes.append("who_speaks 'nobody' became 'scene_sound': no spoken lines, but the scene's natural sound stays on.")
-        answers = {**answers, "who_speaks": "scene_sound"}
+    # 2026-11-22 ablation (cf, 78 dry chats): no answer rewrites; the front guides the refined prompt only (user)
     bad = [f"{i}={v!r}" for i, v in answers.items() if i in OPTION_ROWS and v not in (ASK, YOUR_CALL, NOT_APPLICABLE) and v not in rows[i]["answers"]]
     if bad:
         raise ToolError(f"Not an option: {', '.join(bad)}. " + "; ".join(f"{i}: {', '.join(rows[i]['answers'])}" for i in OPTION_ROWS))
@@ -234,10 +224,12 @@ def _film(request: str, answers: dict[str, str] | None, questions_asked: bool, f
         elif value != NOT_APPLICABLE:
             decisions.append({"id": i, "value": value, "instruction": r["answers"].get(value, "")})
     return {"ready": True, "stage": "plan", "family": "film", "request": request, "decisions": decisions,
-            "story_rules": STORY_RULES, "implied": IMPLIED, "files": files, **({"changed": notes} if notes else {}),
-            "next": ("Write the story from the decisions and the story rules, then call plan_video_production with it. `narrator`, "
+            "implied": IMPLIED, "files": files, **({"changed": notes} if notes else {}),
+            "next": ("Write the story from the decisions, then call plan_video_production with it. `narrator`, "
                      "`narrator_voice`, `music` and `captions` are fields inside `story`, not arguments of their own (w19d, 2026-11-20). "
-                     + ("The story's `audio` is true (natural sound in every clip)." if not silent else "The story's `audio` is false (the user asked for silence)."))}
+                     # user, 2026-11-22: "sound" is sound in the video, not the story's `audio` (the scenes' own sound in every clip)
+                     + ("The video has sound, not sound in every clip: the who_speaks and music decisions say where it comes from."
+                        if not silent else "The story's `audio` is false (the user asked for silence)."))}
 
 
 # A video request that states no length and no single action may want a longer film (user, 2026-11-19, fix 6): check once.
@@ -300,6 +292,8 @@ def front(family: str, request: str, answers: dict[str, str] | None = None, ques
     files = _files(family, attachments, request, answers)
     if family == "film":
         out = _film(request, answers, questions_asked, files)
+        if out.get("stage") == "fill_the_sheet":
+            out["next"] = out.get("next", "") + ANSWER_RULES
         if media:
             out["media"] = media
             out["next"] = out.get("next", "") + MEDIA_NEXT
@@ -356,10 +350,24 @@ def front(family: str, request: str, answers: dict[str, str] | None = None, ques
             out = {"ready": False, "stage": "ask_the_user", "family": family, "questions": [SHORT_OR_FILM], "files": files,
                    "next": ("Ask the user this in ONE message, with what happens if they skip it. Then call again with the same "
                             "answers and questions_asked=true. A longer film: call again with family film.")}
+    if out.get("stage") == "fill_the_sheet":
+        out["next"] = out.get("next", "") + ANSWER_RULES
     if media:
         out["media"] = media
         out["next"] = out.get("next", "") + MEDIA_NEXT
     return out
+
+
+# How to answer the rows (user, 2026-11-19). Sent with the rows (stage fill_the_sheet), not in the tool description:
+# Claude Code keeps only the first 2,048 bytes of a description (2026-11-21).
+ANSWER_RULES = (
+    " Answer a row with an option, the user's own words, 'your_call' (you pick the conventional value for this kind of "
+    "request) or 'n/a'. Mark 'ask' ONLY when the answer would change the result and the user's words and files do not "
+    "answer it. A vague request that names only the subject, with no look, setting, colour, shape or words (for example "
+    "'make a product pic of a water bottle'): mark the open rows that would change it 'ask', because the user may have "
+    "details in mind. Words the result shows or says (a caption, a spoken line, a slogan) that the user did not give: "
+    "mark 'ask'; when the user answers 'your call', write words that fit the request. Never ask about sound or caption "
+    "style (implied).")
 
 
 def index() -> str:
@@ -389,17 +397,12 @@ def register_conversation_front(mcp: FastMCP) -> None:
             "Call this FIRST for every request to make or change a picture, a video or a sound, before any create or edit "
             "call. Guess what the user wants and pick ONE family. Families: " + families + "; film: several clips, a story, "
             "an ad, a reel, an explainer, an interview, a video with a purpose. " + ROUTING_RULE + " "
-            "Send the family, the user's request word for word, the attachments (name, kind and file_path), and `answers` for every "
-            "row in ONE call. Rows (* = answer it yourself from the words, the files or the implied rules; options in "
-            "brackets):\n" + index() + "\n"
-            "Answer a row with an option, the user's own words, 'your_call' (you pick the conventional value for this kind of "
-            "request) or 'n/a'. Mark 'ask' ONLY when the answer "
-            "would change the result and the user's words and files do not answer it. A vague request that names only the "
-            "subject, with no look, setting, colour, shape or words (for example 'make a product pic of a water bottle'): "
-            "mark the open rows that would change it 'ask', because the user may have details in mind. Words the result shows or says "
-            "(a caption, a spoken line, a slogan) that the user did not give: mark 'ask'; when the user answers 'your call', write "
-            "words that fit the request (user, 2026-11-19). Never ask about sound or caption "
-            "style (implied). Returns every open question in one batch (ask the user once, all together, then call again "
+            # 2026-11-21: the row index (about 2,000 bytes) left the description: Claude Code keeps only the first
+            # 2,048 bytes of a tool description (upstream test_metadata_fits_claude_code_utf8_budget). The first call
+            # returns the rows instead.
+            "First call: the family, the user's request word for word and the attachments (name, kind and file_path), "
+            "with no answers; the result lists the family's rows, their options and how to answer them. Then send `answers` "
+            "for every row in ONE call. Returns every open question in one batch (ask the user once, all together, then call again "
             "with questions_asked=true), or the plan: tools, free-tier settings, known faults, needed files, and for a "
             "film the story rules for plan_video_production. Read-only; spends no credits and creates nothing."
         ),

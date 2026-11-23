@@ -64,7 +64,6 @@ class VideoProductionToolTests(unittest.IsolatedAsyncioTestCase):
         p = await self.plan("c4")
         self.assertTrue(p["ok"])
         self.assertEqual((p["strategy"], p["max_seconds"]), (SPLIT_STRATEGY, SPLIT_MAX_SECONDS))
-        self.assertTrue(p["needs_production"])
         self.assertEqual(p["seconds"], 30)
         self.assertEqual(p["join"], [c["n"] for c in p["clips"]])
         self.assertEqual(p["clips"][0]["kind"], "card")
@@ -81,8 +80,14 @@ class VideoProductionToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first["steps"][-1]["tool"], "create_video_from_text")
         self.assertIn("@bottle", first["steps"][-1]["prompt"])
 
-    async def test_a_short_single_scene_says_it_does_not_need_production(self):
-        self.assertFalse((await self.plan("c2"))["needs_production"])
+    async def test_the_plan_does_not_judge_by_length_or_idea_count(self):
+        # user, 2026-11-21: one routing rule (a purpose goes to production, also for one shot); the old 15 s / 3-ideas
+        # flag told hosts a one-shot ad did not need production
+        p = await self.plan("c2")
+        self.assertNotIn("needs_production", p)
+        tool = next(t for t in await self.caller.list_tools() if t.name == "plan_video_production")
+        self.assertNotIn("longer than 15 seconds", tool.description)
+        self.assertIn("This is true for one shot too", tool.description)
 
     async def test_a_bad_story_comes_back_with_named_problems_and_no_clips(self):
         bad = story("c4")
@@ -163,6 +168,7 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
             ("mcp_magichour.media_tools.probe", lambda file: {"seconds": {"clip-1.mp4": 8.4, "clip-2.mp4": 18.4, "clip-3.mp4": 4.0}.get(file.name, 30.2), "width": self.film_size[0], "height": self.film_size[1], "audio": True}),
             ("mcp_magichour.media_tools.speech_spans", lambda audio, **k: [(0.2, 3.0), (4.0, 6.0), (7.0, 9.0), (10.0, 12.0)]),
             ("mcp_magichour.media_tools.add_sound", self.fake_add_sound),
+            ("mcp_magichour.media_tools.lift_bed", self.fake_lift_bed),
             ("mcp_magichour.media_tools.draw_captions", self.fake_captions),
             ("mcp_magichour.media_tools.have_captions", lambda: True),
             ("mcp_magichour.media_tools.loudness_db", lambda file: -18.0),
@@ -185,6 +191,14 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
                       "spoken": spoken, "music_first": music_first}
         out.write_bytes(b"film with sound")
         return {"lufs_before": -30.0, "lufs": -16.0, "speech": [], "layers": ["speech", "effects"]}
+
+    lifted_bed = None   # what the fake street lift returns; None = the street is loud enough
+
+    def fake_lift_bed(self, film, spoken, clips, out):
+        self.lift = {"spoken": spoken, "clips": clips}
+        if self.lifted_bed:
+            out.write_bytes(b"film with the street lifted")
+        return self.lifted_bed
 
     def fake_captions(self, film, timed, out):
         self.captions = timed
@@ -368,6 +382,23 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body["references"], [{"name": "presenter", "file_path": "bench-presenter.png"},
                                               {"name": "bottle", "file_path": "bench-mockup-fragrance.png"}])   # each pictured subject (W04)
 
+    async def test_the_street_under_a_spoken_line_is_lifted_with_no_music_or_narration(self):
+        # W06 w22l (user, 2026-11-22, version A): the street under her line was heard only at full volume
+        s = story("c4")
+        s["beats"][1]["spoken"] = ["Pay yourself first."]
+        p = await self.call("plan_video_production", story=s)
+        made = {"1": "a", "2": "b", "3": "c", "4": "d"}
+        film = await self.call("join_production_clips", production=p["production"], made=made)
+        self.assertEqual(len(self.lift["spoken"]), 1)
+        self.assertEqual(len(self.lift["clips"]), 1)
+        self.assertTrue(self.lift["clips"][0][0] <= self.lift["spoken"][0][0] < self.lift["spoken"][0][1] <= self.lift["clips"][0][1])
+        self.assertNotIn("background_lifted", film)
+        self.assertEqual((self.films / film["download_url"].rsplit("/", 1)[1]).read_bytes(), b"film")   # the street was loud enough
+        self.lifted_bed = {"raised_db": 30, "voice_lufs": -15.5, "background_lifted": -38.5}
+        film = await self.call("join_production_clips", production=p["production"], made=made)
+        self.assertEqual(film["background_lifted"]["raised_db"], 30)
+        self.assertEqual((self.films / film["download_url"].rsplit("/", 1)[1]).read_bytes(), b"film with the street lifted")
+
     async def test_the_join_takes_every_finished_clip_in_story_order(self):
         p = await self.planned("c4")
         made = {"1": "a", "2": "b", "3": "c", "4": "d"}
@@ -518,6 +549,28 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
         bad = self.users_clip_story(up["file_path"])
         bad["beats"][0].update(source_start=4, source_end=2)
         self.assertFalse((await self.call("plan_video_production", story=bad))["ok"])
+
+    async def test_the_users_picture_is_held_unchanged_for_its_seconds(self):
+        # W08 (user, 2026-11-22): a screenshot shown "full and unchanged" is a `source` beat, held still by code (0 credits).
+        import base64
+        held = []
+
+        def fake_still(image, seconds, out):
+            held.append((image.suffix, image.read_bytes()[:4], seconds))
+            out.write_bytes(b"held")
+            return out
+
+        png = b"\x89PNG\r\n\x1a\n" + b"screen"
+        up = await self.call("upload_media", file_name="app.png", data_base64=base64.b64encode(png).decode())
+        story = self.users_clip_story(up["file_path"])
+        story["beats"][0].update(seconds=8)
+        story["beats"][0].pop("says"); story.pop("captions")
+        p = await self.call("plan_video_production", story=story)
+        self.assertEqual((p["clips"][0]["kind"], p["clips"][0]["steps"][0]["credits"]), ("source", 0))
+        with patch("mcp_magichour.media_tools.still_video", side_effect=fake_still):
+            await self.call("join_production_clips", production=p["production"], made={})
+        self.assertEqual(held, [(".png", b"\x89PNG", 8.0)])
+        self.assertEqual(self.joined[-1][0], ["clip-1-held.mp4"])
 
     async def test_a_source_beat_must_stand_alone_and_be_used_as_it_is(self):
         bad = self.users_clip_story("api-assets/x/mine.mp4")

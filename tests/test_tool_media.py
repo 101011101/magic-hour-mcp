@@ -173,17 +173,20 @@ class NewPictureToolTests(unittest.TestCase):
 
 
 class SwitchTests(unittest.TestCase):
-    def names(self, value):
+    def names(self, value, conversation="on"):
         async def run():
-            with patch.dict(os.environ, {"MAGIC_HOUR_TOOL_PLAN": value}):
-                async with Client(create_mcp()) as client:
-                    return {t.name for t in await client.list_tools()}
+            with patch.dict(os.environ, {"MAGIC_HOUR_TOOL_PLAN": value, "MAGIC_HOUR_CONVERSATION": conversation}):
+                server = create_mcp()
+            async with Client(server) as client:
+                return {t.name for t in await client.list_tools()}
         return asyncio.run(run())
 
-    def test_off_by_default_on_with_the_switch(self):
+    def test_on_with_the_conversation_front_or_the_tool_plan_switch(self):
+        # 2026-11-21: the conversation front is on by default, so the 5 tools are too
         new = {"add_sound_to_video", "adjust_colours", "put_pictures_side_by_side", "put_picture_on_video", "make_card_clip"}
-        self.assertFalse(new & self.names("off"))
-        self.assertTrue(new <= self.names("on"))
+        self.assertFalse(new & self.names("off", conversation="off"))
+        self.assertTrue(new <= self.names("on", conversation="off"))
+        self.assertTrue(new <= self.names("off"))
 
 
 class IsolationTests(unittest.TestCase):

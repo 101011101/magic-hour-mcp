@@ -146,6 +146,29 @@ class TicketTests(unittest.TestCase):
         self.assertAlmostEqual(self.mean_db(music, 1.5, 1), self.mean_db(music, 4.5, 1), delta=0.5)   # one steady bed
         self.assertAlmostEqual(self.mean_db(effects, 4.5, 1) - self.mean_db(music, 4.5, 1), m.MUSIC_UNDER_SPEECH_DB, delta=1.5)
 
+    def talking_film(self, street):
+        """8 s: a voice (300 Hz) from 3 to 6 s over a steady street (pink noise of amplitude `street`)."""
+        film = self.dir / "talk.mp4"
+        subprocess.check_call(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc=s=320x240:d=8", "-f", "lavfi",
+                               "-i", f"anoisesrc=c=pink:a={street}:d=8:r=48000", "-f", "lavfi", "-i", "sine=f=300:d=8:r=48000",
+                               "-filter_complex", "[2:a]volume='0.5*between(t,3,6)':eval=frame[v];[1:a][v]amix=inputs=2:normalize=0[a]",
+                               "-map", "0:v", "-map", "[a]", "-t", "8", "-c:v", "libx264", "-c:a", "aac", str(film)])
+        return film
+
+    def test_a_street_far_under_a_spoken_line_is_lifted_and_the_voice_is_not(self):
+        """W06 w22l (user, 2026-11-22, version A): the street was 53 dB under her voice, heard only at full volume."""
+        film = self.talking_film(0.002)
+        done = m.lift_bed(film, [(3, 6)], [(0, 8)], self.dir / "lifted.mp4")
+        self.assertGreater(done["raised_db"], 10)
+        out = self.dir / "lifted.mp4"
+        self.assertGreater(self.mean_db(out, 1, 1) - self.mean_db(film, 1, 1), 10)               # the street, before she speaks
+        self.assertAlmostEqual(self.mean_db(out, 4, 1), self.mean_db(film, 4, 1), delta=1)        # her voice
+        self.assertAlmostEqual(m.probe(out)["seconds"], 8, delta=0.1)
+
+    def test_a_street_already_heard_under_the_voice_is_left_alone(self):
+        self.assertIsNone(m.lift_bed(self.talking_film(0.1), [(3, 6)], [(0, 8)], self.dir / "lifted.mp4"))
+        self.assertIsNone(m.lift_bed(self.silent_film(), [(3, 6)], [(0, 8)], self.dir / "lifted.mp4"))   # nothing to lift
+
     def test_music_first_is_never_lowered(self):
         m.add_sound(self.silent_film(), self.dir / "out.mp4", self.tone("voice.wav", 2, 660), [{"start": 0, "end": 2, "at": 3}],
                     self.tone("music.wav", 8), music_first=True, layers=self.dir / "l")

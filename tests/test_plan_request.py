@@ -282,7 +282,8 @@ class PlanRequestTests(unittest.IsolatedAsyncioTestCase):
         for p in self.patches:
             p.start()
             self.addCleanup(p.stop)
-        self.mcp = create_mcp()
+        with patch.dict("os.environ", {"MAGIC_HOUR_CONVERSATION": "off"}):   # plan_conversation is the default (2026-11-21)
+            self.mcp = create_mcp()
         self.caller = await self.enterAsyncContext(Client(self.mcp))
         self.tools = {tool.name: tool for tool in await self.caller.list_tools()}
         if TOOL not in self.tools:
@@ -735,7 +736,9 @@ class CompositionPathOnlyTests(unittest.TestCase):
         from mcp_magichour.openapi_policies import API_TOOL_METADATA
 
         async def tools():
-            async with Client(create_mcp()) as client:
+            with patch.dict("os.environ", {"MAGIC_HOUR_CONVERSATION": "off"}):
+                server = create_mcp()
+            async with Client(server) as client:
                 return {t.name: t.description for t in await client.list_tools()}
 
         import asyncio

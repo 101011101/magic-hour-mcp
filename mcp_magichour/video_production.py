@@ -646,7 +646,6 @@ def plan(story: dict, strategy: str = "idea", max_seconds: int = TRIGGER_SECONDS
         c.setdefault("made_by", "api")
     result = {
         "ok": True, "strategy": strategy, "max_seconds": max_seconds,
-        "needs_production": needs_production(story),
         "seconds": sum(c["seconds"] for c in out),
         "credits": sum(s["credits"] for c in out for s in c["steps"]),
         "clips": out, "join": [c["n"] for c in out], "rounds": rounds(out),
@@ -849,6 +848,28 @@ LATE_MUSIC = re.compile(r"\bthen\b[^.;]{0,40}\b(?:music|sting|jingle|tune)\b|\b(
 SILENT = re.compile(r"\b(silent|no (music|sound|audio)|without (music|sound|audio)|mute[d]?)\b", re.I)
 
 
+FRAMING = re.compile(r"\b(extreme close[- ]up|close[- ]up|close|medium|wide|two[- ]shot|over[- ]the[- ]shoulder|"
+                     r"from behind|aerial|overhead|top[- ]down)\b", re.I)
+
+
+def beat_framing(text: str) -> frozenset[str] | None:
+    """The framing a beat's text opens with ("Close two-shot: ...", "Wide shot from behind: ..."); empty if none.
+    None when the text keeps the shot before ("Same two-shot: ...", dry run w23d W05)."""
+    head = text.split(":", 1)[0] if ":" in text[:50] else text[:40]
+    if re.search(r"\bsame\b", head, re.I):
+        return None
+    words = {re.sub(r"[- ]up$|extreme ", "", m.lower()).replace("-", " ") for m in FRAMING.findall(head)}
+    return frozenset(words)
+
+
+def beat_actions(beat: dict) -> int:
+    """About how many actions a beat holds: one, plus one for each ';' and each 'then' in its text. A beat with a spoken
+    line adds only its ';' and 'then': the tool times the line itself (W06: four beats of one woman talking held)."""
+    text = beat.get("text", "")
+    extra = text.count(";") + len(re.findall(r"\bthen\b", text, re.I))
+    return extra if beat.get("spoken") else 1 + extra
+
+
 def advise(story: dict, planned: dict, request: str | None = None) -> list[dict]:
     """Warnings on a plan, each with the run that showed it. They change nothing: the host decides. (Words in a scene,
     a spoken line with other beats and colour codes are `questions`, not advice.)
@@ -876,6 +897,29 @@ def advise(story: dict, planned: dict, request: str | None = None) -> list[dict]
         # 2026-11-20 audit: the same limit as the split: 15 s, a pictured person 30 s (production.md, user 2026-11-05)
         if clip["seconds"] > clip_limit(story, parts) or ideas > 2:
             warn("ideas-per-call", clip["n"], f"Clip {clip['n']}: {clip['seconds']} s with {ideas} separate ideas in one call.")
+        # 2026-11-22 (prompt guides: one shot and few actions per clip; separate subject moves, camera moves and cuts)
+        shots, at = [], 0
+        for p in parts:
+            framing = beat_framing(p.get("text", ""))
+            if framing and (not shots or framing != shots[-1][0]):
+                shots.append((framing, at))
+            at += p["seconds"]
+        if len(shots) > 1:
+            seen = ", then ".join(f"{' '.join(sorted(f))} at {t} s" for f, t in shots)
+            out.append({"clip": clip["n"], "note": "shot-change", "evidence": (
+                "2026-11-21, W05 w22l clip 2: close two-shot, umbrella, wide from behind in one 10 s call; a second open "
+                "umbrella came in front of the camera."),
+                "warning": f"Clip {clip['n']} changes the shot inside one call ({seen}). The model turns a new shot inside a "
+                           "clip into an unclear move. Give each shot its own clip: the next clip starts from this clip's "
+                           "last frame."})
+        actions = sum(beat_actions(p) for p in parts)
+        if actions > 3:
+            out.append({"clip": clip["n"], "note": "actions-per-clip", "evidence": (
+                "2026-11-21, W07 w22l clip 3: seven actions in one 12 s beat; Wilbur rose into the air with the plane. "
+                "w19l, three actions in the same 12 s: he stayed on the sand."),
+                "warning": f"Clip {clip['n']} holds about {actions} actions in {clip['seconds']} s. After three, the model merges "
+                           "or drops actions. Give each action its own beat, at most three in a clip, and say where each "
+                           "person ends (lets go, stays on the sand)."})
         # C7 was ltx-2.5 only; minimax-h3 is the scene model since 2026-11-14 (2026-11-20 audit)
         if model == "ltx-2.5" and len(places) > 1 and clip["reference"]["kind"] not in ("picture", "file"):
             warn("words-only-places-merge", clip["n"], f"Clip {clip['n']} has {len(places)} places and no picture reference.")
@@ -952,6 +996,15 @@ def advise(story: dict, planned: dict, request: str | None = None) -> list[dict]
                 missing = f"The request asks for {item['value']}; the story is {story['aspect']}."
             if missing:
                 out.append({"clip": None, "note": "not-carried", "warning": missing, "evidence": ""})
+        # 2026-11-22 (user): a card only when the user asks for one, checked by code so a vague request gets it too.
+        # A card that an answer to a words question made (words_route "card") was chosen, not guessed.
+        if not re.search(r"\bcards?\b", request, re.I):
+            for n, beat in enumerate(beats, start=1):
+                if beat.get("kind") == "card" and beat.get("words_route") != "card":
+                    out.append({"clip": None, "note": "card-not-asked", "evidence": (
+                        "2026-11-22 cf ablation, W10: with no card rule the host made an unasked title card in 3 of 4 runs."),
+                        "warning": f"Beat {n} is a card, and the request does not ask for a card. Make it a scene beat with "
+                                   "its words in `exact_words`, unless the user asked for a card later in the chat."})
     return out
 
 

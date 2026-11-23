@@ -44,7 +44,7 @@ Rule (user, 2026-11-13): tool management does not touch video composition.
 - New files only: `mcp_magichour/tool_plan.py`, the notes file, the question sheets, `tests/test_tool_plan.py`.
 - One registration line in `openapi_server.py`, behind `MAGIC_HOUR_TOOL_PLAN` (default `off`). Off: the server is as before.
 - No changes to: `plan_request.py`, `video_production.py`, `video_production_tool.py`, `gates.py`, `media_tools.py`, `openapi_policies.py`. No imports from the first four. A helper that is needed is copied, not shared.
-- Tool knowledge goes in `plan_tool_call`'s output, never in the API tools' descriptions (`openapi_policies.py`): the host reads those during video composition too.
+- Tool lessons may go in the API tools' descriptions (`openapi_policies.py`) (user, 2026-11-21; replaces the 2026-11-13 rule). Why: every host reads them, also a host that skips `plan_conversation`. The 2026-11-13 rule kept tool management apart from video composition; `plan_conversation` (MCP-28) joined the two.
 - Read only: `upload_media`, `kept_files.py`, the benchmark runs.
 - New tools (`tool_media.py`) reuse the shared media code unchanged: `media_tools` (ffmpeg work) and `media_helpers_tool` (fetch a file, deliver a result). `media_helpers_tool` itself imports from `video_production_tool`; tool management imports nothing from the protected files directly.
 

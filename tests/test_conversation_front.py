@@ -32,7 +32,9 @@ def test_film_asks_open_rows_once_then_plans():
     ask = front("film", "an ad for my bottle", {"kind": "ad", "exact_words": "ask", "product_picture": "ask"})
     assert ask["stage"] == "ask_the_user" and {q["id"] for q in ask["questions"]} == {"exact_words", "product_picture"}
     done = front("film", "an ad for my bottle", {"kind": "ad", "exact_words": "ask", "product_picture": "ask"}, questions_asked=True)
-    assert done["ready"] and done["story_rules"]
+    assert done["ready"] and "story_rules" not in done   # 2026-11-22: the rules moved to the video tool
+    words = {d["id"]: d["value"] for d in done["decisions"]}["exact_words"]
+    assert "call-to-action" in words   # K21: a skipped words question on an ad still gives a call to action
     assert not any("tell_the_user" in d for d in done["decisions"]) and "Tell the user" not in done["next"]
 
 
@@ -42,9 +44,14 @@ def test_film_never_asks_about_sound():
 
 
 def test_no_talking_is_not_silence():
-    out = front("film", "an ad with mellow music and no talking", {"kind": "ad", "sound": "music only", "who_speaks": "nobody"})
-    vals = {d["id"]: d["value"] for d in out["decisions"]}
-    assert vals["sound"] == "on" and vals["who_speaks"] == "scene_sound" and "audio` is true" in out["next"]
+    # 2026-11-22: no rewrites; "nobody" stays nobody, and its text says the sound comes from music and sound effects
+    out = front("film", "an ad with mellow music and no talking", {"kind": "ad", "sound": "on", "who_speaks": "nobody"})
+    vals = {d["id"]: d for d in out["decisions"]}
+    assert vals["sound"]["value"] == "on" and vals["who_speaks"]["value"] == "nobody" and "not sound in every clip" in out["next"]
+    assert "music" in vals["who_speaks"]["instruction"] and "Silent" not in vals["who_speaks"]["instruction"]
+    with pytest.raises(ToolError):   # a value that is not an option is the host's to fix, not rewritten
+        front("film", "an ad with mellow music and no talking", {"kind": "ad", "sound": "music only", "who_speaks": "nobody"})
+    assert "audio` is true" not in out["next"]   # sound in the video, not the story's `audio` (user, 2026-11-22)
 
 
 def test_silence_asked_stays_silent():
@@ -201,3 +208,11 @@ def test_a_row_the_host_answers_is_never_put_to_the_user():
         front("film", "a film", {"kind": "ask"})
     out = front("new_video", "a 5 s clip of rain", {"from_picture": "words", "length": "5 s", "shape": "16:9", "sound": "ask"})
     assert out["stage"] == "plan" and next(d for d in out["decisions"] if d["id"] == "sound")["value"] == "Natural sound on."
+
+
+def test_the_rows_come_with_the_answer_rules():
+    # 2026-11-21: the rules left the description (Claude Code keeps 2,048 bytes); the first call returns them with the rows
+    from mcp_magichour.conversation_front import ANSWER_RULES, front
+    for family in ("new_video", "film"):
+        out = front(family, "a cat")
+        assert out["stage"] == "fill_the_sheet" and out["next"].endswith(ANSWER_RULES)
