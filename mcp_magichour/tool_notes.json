@@ -220,7 +220,7 @@
       ],
       "limits": [
         "The new face is a blend; graders did not recognise the portrait (C15a 2.7). Warn the user. No head swap exists for video.",
-        "Two faces in one clip: both barely change and the sound was lost (C15c: 1.0 to 1.3)."
+        "Two faces in one clip: both barely change and the sound was lost (C15c: 1.0 to 1.3).", "One person can be several face crops (a turned head): map each crop of that person, or the old face comes back when the head turns (b1 K13)."
       ],
       "deciding_question": "Which person, and which part of the clip?",
       "bench": "Right tool: 10 runs, average 1.8."
@@ -577,7 +577,7 @@
       ],
       "limits": [
         "Resolution 480p or 720p.",
-        "The clip is as long as asked even when the speech is shorter: an 8 s clip with 4.5 s of speech ends with 3 s of silence (wlive2 C17a). Ask the length from the line, or trim_media after.",
+        "The clip is as long as asked even when the speech is shorter: an 8 s clip with 4.5 s of speech ends with 3 s of silence (wlive2 C17a), or repeats the line's start (b1 C17a: \"Hi ev\" again at 4.9 s). Longer than the line: pad the line with silence first (mix_audio `seconds`).",
         "Lip movement failed in 1 of 2 test runs."
       ],
       "deciding_question": "The exact line, and the shape?",

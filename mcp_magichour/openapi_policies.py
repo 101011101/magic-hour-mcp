@@ -90,8 +90,11 @@ API_TOOL_METADATA = {
         "Use a still portrait and an existing speech recording to make the portrait speak. "
         "A written script needs audio first. For a prepared ad image and written script, use "
         "create_spoken_ad_video. For existing video and replacement audio, use "
-        "create_lip_sync_video. Starts a background job that costs credits; returns a project id "
-        "for wait_for_video_project.",
+        "create_lip_sync_video. The video is at most as long as the recording: a longer one repeats "
+        "the recording's start (b1 C17a: 8 s asked, 4.8 s line, \"Hi ev\" again at 4.9 s). When the user "
+        "wants a longer video than the line, first pad the recording with silence to that length "
+        "(mix_audio: the voice as the one track, `seconds` the length). Starts a background job that "
+        "costs credits; returns a project id for wait_for_video_project.",
     ),
     ("POST", "/v1/ai-ugc-ad"): (
         "create_spoken_ad_video",
@@ -163,7 +166,10 @@ API_TOOL_METADATA = {
         "If the hair (colour, length, curl) or skin tone differ, the result does not look like the "
         "photo's person (benchmark C15a: dark curly hair onto a blonde woman was not recognisable): "
         "use replace_character_in_video instead, even when the user says 'face', and tell the user the "
-        "hair and clothes come from the photo. Starts a background job that costs credits; returns a "
+        "hair and clothes come from the photo. In individual-faces mode, map every face crop of the "
+        "chosen person: detection lists one person more than once when the head turns (b1 K13: the man "
+        "facing the camera was 0-0, the same man turned away was 0-3; only 0-0 was mapped, so his own "
+        "face came back each time he turned). Starts a background job that costs credits; returns a "
         "project id for wait_for_video_project.",
     ),
     ("POST", "/v1/image-to-video"): (
@@ -183,7 +189,8 @@ API_TOOL_METADATA = {
         "Create lip sync video",
         "Use existing video and replacement audio to match the speaker's lip movements to "
         "the recording. For a still portrait and existing speech recording, use "
-        "create_talking_photo. Starts a background job that costs credits; returns a project id "
+        "create_talking_photo. The video is at most as long as the recording: a longer one repeats "
+        "the recording's start. Starts a background job that costs credits; returns a project id "
         "for wait_for_video_project.",
     ),
     ("POST", "/v1/text-to-video"): (
@@ -390,6 +397,13 @@ GENERATION_PARAMETER_DESCRIPTIONS = {
     },
     "/v1/ai-voice-cloner": {
         ("style",): "Text to speak in the supplied voice, with language and speech-speed options.",
+    },
+    # User, 2026-11-23 (K16): always pick the voice that matches the character, never the default. Hosts mostly took
+    # cv-0001 (the first voice listed) for every speaker.
+    "/v1/ai-voice-generator": {
+        ("style", "voice_name"): "The `id` of a stock voice from voices_list. Pick the voice that best matches the "
+        "person or character who speaks: gender, age, accent and style (each voice lists them). Do not take the first "
+        "voice in the list or the example as a default.",
     },
     "/v1/lip-sync": {
         ("style", "generation_mode"): "Select the lip-sync mode. `lite` costs 1 credit per video frame. "

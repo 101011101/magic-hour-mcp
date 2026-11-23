@@ -111,6 +111,12 @@ class TicketTests(unittest.TestCase):
                           self.dir / "intro.m4a", 20, fade_out=2)
         self.assertAlmostEqual(m.probe(out)["seconds"], 20, delta=0.2)
 
+    def test_a_mix_longer_than_its_track_ends_in_silence(self):
+        """b1 C17a: a 4.8 s line padded to the 8 s a talking photo asks, so the photo does not repeat the line."""
+        out = m.mix_audio([{"file": self.tone("line.wav", 4.8, 660)}], self.dir / "padded.wav", 8)
+        self.assertAlmostEqual(m.probe(out)["seconds"], 8, delta=0.1)
+        self.assertLess(self.mean_db(out, 5.5, 2), -80)
+
     def mean_db(self, path, start, seconds):
         err = subprocess.run(["ffmpeg", "-hide_banner", "-ss", str(start), "-t", str(seconds), "-i", str(path), "-af", "volumedetect",
                               "-f", "null", "-"], capture_output=True, text=True).stderr

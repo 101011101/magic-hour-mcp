@@ -95,7 +95,8 @@ FILM_ROWS = [
                  "narrator": "A voice-over (in the user's own voice when they give a sample).",
                  "one_on_screen": "One person speaks on camera.",
                  "people_talking": "People talk to each other."},
-     "default": "Read from the words; else nobody.", "ask_when": "the words want speech but do not say who speaks"},
+     "default": "Read from the words; else nobody. Several speak: join them with ' + ' (narrator + one_on_screen).",
+     "ask_when": "the words want speech but do not say who speaks"},
     {"id": "sound", "kind": "required", "ask": "(Implied.) The video has sound.",
      "answers": {"on": "The video has sound; who_speaks and music say where it comes from. Not every clip needs its own sound.",
                  "silent": "Only when the user asked for silence."}, "default": "on."},
@@ -176,6 +177,12 @@ def _files(family: str, attachments: list[dict], request: str = "", answers: dic
 # 2026-11-20 audit: case-insensitive ("Silent clip of rain" stayed loud)
 SILENCE = re.compile(r"\b(?:silent|silence|no sound|no audio|mute[d]?|without sound|sound off)\b", re.I)
 OPTION_ROWS = ("kind", "who_speaks", "sound", "music", "captions", "product_picture")
+# 2026-11-23 (b2d X01, X04): a narrator and people on screen in one film had no option; both hosts were refused once
+SEVERAL = {"who_speaks"}
+
+
+def _parts(row: str, value: str) -> list[str]:
+    return [p.strip() for p in value.split("+")] if row in SEVERAL else [value]
 
 
 ONLY_THESE = tool_plan.ONLY_THESE   # K26 lb1l stupid (2026-11-20): the host offered 5-10 s, the plan made 15 s
@@ -211,9 +218,11 @@ def _film(request: str, answers: dict[str, str] | None, questions_asked: bool, f
     silent = sound == "silent" or (sound not in ("on", "silent") and bool(re.search(SILENCE, request)))
     notes = []
     # 2026-11-22 ablation (cf, 78 dry chats): no answer rewrites; the front guides the refined prompt only (user)
-    bad = [f"{i}={v!r}" for i, v in answers.items() if i in OPTION_ROWS and v not in (ASK, YOUR_CALL, NOT_APPLICABLE) and v not in rows[i]["answers"]]
+    bad = [f"{i}={v!r}" for i, v in answers.items() if i in OPTION_ROWS and v not in (ASK, YOUR_CALL, NOT_APPLICABLE)
+           and (any(p not in rows[i]["answers"] for p in _parts(i, v)) or (len(_parts(i, v)) > 1 and "nobody" in _parts(i, v)))]
     if bad:
-        raise ToolError(f"Not an option: {', '.join(bad)}. " + "; ".join(f"{i}: {', '.join(rows[i]['answers'])}" for i in OPTION_ROWS))
+        raise ToolError(f"Not an option: {', '.join(bad)}. " + "; ".join(f"{i}: {', '.join(rows[i]['answers'])}" for i in OPTION_ROWS)
+                        + ". who_speaks takes several joined with ' + ' (narrator + people_talking).")
     # 2026-11-20 audit: 'n/a' on a row that always applies (no ask_when) takes its default, as in the families;
     # before, the row was dropped and the plan had no shape or length.
     always_na = [i for i, r in rows.items() if answers.get(i) == NOT_APPLICABLE and "ask_when" not in r and i != "sound"]
@@ -228,7 +237,7 @@ def _film(request: str, answers: dict[str, str] | None, questions_asked: bool, f
         elif value in (ASK, YOUR_CALL):
             decisions.append({"id": i, "value": r["default"]})
         elif value != NOT_APPLICABLE:
-            decisions.append({"id": i, "value": value, "instruction": r["answers"].get(value, "")})
+            decisions.append({"id": i, "value": value, "instruction": " ".join(r["answers"].get(p, "") for p in _parts(i, value))})
     return {"ready": True, "stage": "plan", "family": "film", "request": request, "decisions": decisions,
             "implied": IMPLIED, "files": files, **({"changed": notes} if notes else {}),
             "next": ("Write the story from the decisions, then call plan_video_production with it. `narrator`, "

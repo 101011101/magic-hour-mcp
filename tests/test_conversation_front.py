@@ -241,3 +241,14 @@ def test_the_rows_come_with_the_answer_rules():
     for family in ("new_video", "film"):
         out = front(family, "a cat")
         assert out["stage"] == "fill_the_sheet" and out["next"].endswith(ANSWER_RULES)
+
+
+def test_a_narrator_and_people_on_screen_are_one_answer():
+    """b2d X01, X04 (2026-11-23): a narrator plus a presenter had no who_speaks option; both hosts were refused once."""
+    out = front("film", "a narrator, and a beekeeper says a line to the camera", {"kind": "explainer_list", "who_speaks": "narrator + one_on_screen"})
+    who = {d["id"]: d for d in out["decisions"]}["who_speaks"]
+    assert who["value"] == "narrator + one_on_screen" and "voice-over" in who["instruction"] and "on camera" in who["instruction"]
+    for bad in ("nobody + narrator", "narrator + crowd"):
+        with pytest.raises(ToolError):
+            front("film", "a film", {"kind": "story_mood", "who_speaks": bad})
+

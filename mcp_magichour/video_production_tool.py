@@ -85,7 +85,10 @@ class Reference(BaseModel):
 
 
 class Beat(BaseModel):
-    seconds: int = Field(ge=1, description="Length of this beat.")
+    seconds: int = Field(ge=1, description=(
+        "Length of this beat. An action the user gives a length (it flies for 12 seconds) is a beat of that length; its "
+        "start and its end (the take-off, the landing) are beats of their own (b1 W07: all three in one 12 s beat gave "
+        "about 4 s of flight)."))
     text: str = Field(description=(
         "What is seen in this beat: one action, and the framing if it matters (wide, close). Write the action as its "
         "start, its move and its end: where each person and thing is at the start and at the end (a closed umbrella in her "

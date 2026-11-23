@@ -313,7 +313,7 @@ def register_media_helpers(mcp: FastMCP) -> None:
             "a jingle. `tracks`: [{media, at, volume, fade_in}]: media is a URL, a file_path, or a finished audio or video "
             "project id; at = seconds into the mix where it starts (for example music at 0, the voice at 3 for a "
             "music-only opening); volume 1 = as it is (music under a voice: about 0.25); fade_in in seconds. `seconds`: "
-            "the length of the mix (default: to the end of the longest track). `fade_out`: seconds of fade at the end. "
+            "the length of the mix (default: to the end of the longest track; longer than the tracks ends in silence). `fade_out`: seconds of fade at the end. "
             "`format`: m4a, mp3 or wav. Returns download_url, seconds, loudness_db and audio_file_path. Spends no credits."
         ),
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True),

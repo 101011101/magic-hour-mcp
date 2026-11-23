@@ -883,6 +883,13 @@ SOCIAL = re.compile(r"\b(reels?|ads?|advert\w*|promo\w*|commercial|tiktok|instag
 LATE_MUSIC = re.compile(r"\bthen\b[^.;]{0,40}\b(?:music|sting|jingle|tune)\b|\b(?:music|sting|jingle|tune)\b[^.;]{0,30}\b(?:after|once|as soon as)\b"
                         r"|\bmusic (?:comes|kicks|starts) in\b|\bsting\b", re.I)
 SILENT = re.compile(r"\b(silent|no (music|sound|audio)|without (music|sound|audio)|mute[d]?)\b", re.I)
+# An action the user gives its own length: "flies low for about 12 seconds" (W07).
+NUMBER_WORDS = {w: n for n, w in enumerate(
+    "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen "
+    "eighteen nineteen twenty".split())}
+NUMBER_WORDS["thirty"] = 30
+TIMED_ACTION = re.compile(r"\b(?:for|lasting)\s+(?:(?:about|around|roughly|nearly|almost|some|a full|a good|at least|just over)\s+)?"
+                          r"(\d+(?:\.\d+)?|" + "|".join(NUMBER_WORDS) + r")[- ](?:full )?(?:seconds?|secs?)\b", re.I)
 
 
 FRAMING = re.compile(r"\b(extreme close[- ]up|close[- ]up|close|medium|wide|two[- ]shot|over[- ]the[- ]shoulder|"
@@ -993,6 +1000,24 @@ def advise(story: dict, planned: dict, request: str | None = None) -> list[dict]
         out.append({"clip": None, "note": "music-default", "evidence": "2026-11-12, D20c: a reel was made silent; the user expected sound.",
                     "warning": "This is a reel, an ad or a social post, and the story has no `music`. Such videos get music unless the "
                                "user asks for silence: set `music` (a mood and instruments), or tell the user it is silent."})
+    if request:
+        total = sum(b["seconds"] for b in beats)
+        scenes = [b["seconds"] for b in beats if b.get("kind", "scene") != "card"]
+        for m in TIMED_ACTION.finditer(request):
+            word = m.group(1).lower()
+            n = float(NUMBER_WORDS.get(word, word))
+            if abs(n - total) <= 1 or any(abs(s - n) <= 1 for s in scenes):   # the film's own length, or a beat of it
+                continue
+            start = max(request.rfind(c, 0, m.start()) for c in ".;:!?\n") + 1
+            said = request[start:m.end()].strip()
+            out.append({"clip": None, "note": "timed-action", "evidence": (
+                "2026-11-23, W07 b2l: 'flies low for about 12 seconds' was written as an 8 s and a 4 s beat with the take-off "
+                "and the landing inside them; about 3 s of flight. A prompt with 0-2 s take-off, 2-14 s flight and 14-16 s "
+                "landing gave about 12 s of flight (direct test)."),
+                "warning": f"The user gives one action its own length: '{said}'. No beat is about {n:g} s long. Make that "
+                           f"action one beat of {n:g} s. Its start and its end (a take-off, a landing) are beats of their own, "
+                           "before and after it. When the start and the end are in the same beat, the model gives the action "
+                           "only a part of the time."})
     for n, beat in enumerate(beats, start=1):
         words = len(" ".join(beat.get("says") or []).split())
         need = round(words / VOICE_WORDS_PER_SECOND + 0.1, 1)   # the join can start the words 0.1 s into the beat

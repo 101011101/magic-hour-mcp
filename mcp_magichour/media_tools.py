@@ -321,7 +321,8 @@ def mix_audio(tracks: list[dict], out: Path, seconds: float | None = None, fade_
         chain.append(f"[{i}:a]{','.join(steps)}[t{i}]")
     total = seconds or max(float(t.get("at", 0)) + probe(Path(t["file"]))["seconds"] for t in tracks)
     end = f",afade=t=out:st={max(0, total - fade_out):.2f}:d={fade_out:.2f}" if fade_out else ""
-    chain.append("".join(f"[t{i}]" for i in range(len(tracks))) + f"amix=inputs={len(tracks)}:duration=longest:normalize=0,atrim=0:{total:.2f}{end}[a]")
+    # apad: a `seconds` longer than the tracks ends in silence (b1 C17a: a line padded to the video's length)
+    chain.append("".join(f"[t{i}]" for i in range(len(tracks))) + f"amix=inputs={len(tracks)}:duration=longest:normalize=0,apad,atrim=0:{total:.2f}{end}[a]")
     codec = {".wav": ["-c:a", "pcm_s16le"], ".mp3": ["-c:a", "libmp3lame", "-q:a", "2"]}.get(out.suffix.lower(), ["-c:a", "aac", "-b:a", "192k"])
     _ffmpeg([*inputs, "-filter_complex", ";".join(chain), "-map", "[a]", "-vn", *codec, "-t", f"{total:.2f}", str(out)])
     return out

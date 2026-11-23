@@ -146,6 +146,14 @@ class DryRunFixTests(unittest.TestCase):
         self.assertNotIn("several_in_one", out["gaps"])
         self.assertIn("put_pictures_side_by_side", out["tools"])
 
+    def test_an_outfit_picture_plans_the_clothes_tool(self):
+        """User, 2026-11-23 (b1td K06): the picture-change family lists the clothes tool."""
+        out = tool_plan.plan("change_picture", "swap my T-shirt for the coat in her picture",
+                             {"keep_or_redraw": "redraw", "outfit": "outfit picture"})
+        self.assertIn("change_clothes_in_photo", out["tools"])
+        out = tool_plan.plan("change_picture", "make my car red", {"keep_or_redraw": "redraw"})
+        self.assertNotIn("change_clothes_in_photo", out["tools"])   # the row has `applies`: left out, it does not apply
+
 class OnlyWhenNeededTests(unittest.TestCase):
     """User, 2026-11-13: the planner only when the answer would materially change the result."""
 

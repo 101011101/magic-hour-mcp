@@ -85,3 +85,34 @@ def test_sheet_texts_from_the_review():
     assert "same voice" not in notes and "same voice" not in sheets   # K29: the API does not promise the voice
     assert "generation_mode lite. The line" not in sheets and "generation_mode standard" in sheets   # K16
     assert "model minimax-h3 on the free plan" in sheets   # K02: free-tier model named (user, 2026-11-04)
+
+
+# W07 as the host wrote it in b2l (2026-11-23): "flies low for about 12 seconds" became 8 s + 4 s with the take-off and
+# the landing inside; about 3 s of flight.
+W07 = {"title": "First Flight", "aspect": "16:9", "audio": False, "setting": "Sand dunes at Kitty Hawk, 1903.",
+       "subjects": [{"id": "flyer", "words": "A wooden biplane of 1903 on a launch rail.", "role": "product"}],
+       "beats": [{"seconds": 3, "text": "A black card with the date.", "kind": "card", "exact_words": ["17 December 1903"], "clip": 1},
+                 {"seconds": 5, "text": "Wide shot: the biplane rests on its launch rail.", "place": "dunes", "subjects": ["flyer"],
+                  "link": "new", "clip": 2},
+                 {"seconds": 8, "text": "Wide side shot: the biplane slides along the rail, lifts off and flies low.",
+                  "place": "dunes", "subjects": ["flyer"], "link": "event", "clip": 3},
+                 {"seconds": 4, "text": "Wide shot: the biplane flies low, sinks and lands in the sand.", "place": "dunes",
+                  "subjects": ["flyer"], "link": "continues", "clip": 3},
+                 {"seconds": 10, "text": "Wide shot: the biplane rests on the sand.", "place": "dunes", "subjects": ["flyer"],
+                  "link": "event", "clip": 4}]}
+W07_REQUEST = ("A 30-second film, 16:9. It opens with a 3-second title card. Then the plane lifts off and flies low for "
+               "about 12 seconds before landing in the sand.")
+
+
+def test_an_action_with_its_own_length_needs_a_beat_of_that_length():   # W07 b2l
+    s = copy.deepcopy(W07)
+    timed = [a for a in advise(s, planned(s), W07_REQUEST) if a["note"] == "timed-action"]
+    assert len(timed) == 1 and "flies low for about 12 seconds" in timed[0]["warning"] and "12 s" in timed[0]["warning"]
+    # take-off 2 s, flight 12 s, landing 2 s: no advice; the 3-second card and the 30-second film never count
+    s["beats"][2:4] = [{**s["beats"][2], "seconds": 2, "text": "The biplane slides along the rail and lifts off."},
+                       {**s["beats"][3], "seconds": 12, "text": "The biplane flies low and level over the sand."},
+                       {**s["beats"][3], "seconds": 2, "text": "The biplane sinks and lands in the sand."}]
+    s["beats"][-1]["seconds"] = 6
+    assert "timed-action" not in [a["note"] for a in advise(s, planned(s), W07_REQUEST)]
+    s = copy.deepcopy(W07)   # a number in words
+    assert "timed-action" in [a["note"] for a in advise(s, planned(s), "The plane flies for twelve full seconds.")]

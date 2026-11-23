@@ -139,7 +139,8 @@
         "upscale_image",
         "remove_image_background",
         "adjust_colours",
-        "put_pictures_side_by_side"
+        "put_pictures_side_by_side",
+        "change_clothes_in_photo"
       ],
       "settings": {
         "edit_image": {
@@ -303,6 +304,22 @@
           },
           "default": "not exact.",
           "why": "Run wgen J49b: regeneration drifted (1.28x). Run wset J49b: edit_image with the exact instruction drifted (1.78x, the cup redrawn) and the host skipped a compare-and-fall-back step. User, 2026-11-14 (option C): one edit_image, and say it is approximate. A deterministic redraw would change the font."
+        },
+        {
+          "id": "outfit",
+          "kind": "deciding",
+          "applies": "new clothes on a person in a photo",
+          "ask": "(Read from the files and words.) Is the new outfit a picture or words, and which part changes?",
+          "read_from": [
+            "An attached outfit picture.",
+            "'A navy blazer', 'jeans instead', 'a red dress'."
+          ],
+          "answers": {
+            "outfit picture": "change_clothes_in_photo with the person's photo and the outfit picture; garment_type upper_body (a shirt, a jacket), lower_body (trousers, a skirt), else entire_outfit.",
+            "outfit in words": "edit_image: change only the clothes to the user's words; keep the face, hair, pose and background."
+          },
+          "default": "An outfit picture when one is attached, else outfit in words.",
+          "why": "Copied from the faces sheet (user, 2026-11-23: add the clothes tool to this list). Run b1td K06: this family listed no clothes tool and the host used edit_image for an outfit picture."
         }
       ]
     },
@@ -785,8 +802,8 @@
             "No person → a voice-over (GAP on the user's video)."
           ],
           "answers": {
-            "photo": "Make the line's audio first: ai_voice_generator_create_audio (a stock voice) or the user's own recording; then create_talking_photo with the photo and that audio file (it takes audio, not words).",
-            "video with a presenter": "create_lip_sync_video; tell the user the footage may be re-made.",
+            "photo": "Make the line's audio first: ai_voice_generator_create_audio (a stock voice that matches the person: gender, age, accent, style; not the first voice listed) or the user's own recording; then create_talking_photo with the photo and that audio file (it takes audio, not words).",
+            "video with a presenter": "Make the line's audio first: ai_voice_generator_create_audio (a stock voice that matches the person: gender, age, accent, style; not the first voice listed) or the user's own recording; then create_lip_sync_video; tell the user the footage may be re-made.",
             "no presenter": "Voice-over on the video: make the voice, then add_sound_to_video (change_video sound_on_video)."
           },
           "default": "—",
@@ -916,8 +933,8 @@
             "'Two hosts', 'two voices', 'A says, B says'; 'with music behind'."
           ],
           "answers": {
-            "one voice": "ai_voice_generator_create_audio.",
-            "several voices": "ai_voice_generator_create_audio per line, then join_videos (sound files).",
+            "one voice": "ai_voice_generator_create_audio with the stock voice that matches the speaker: gender, age, accent, style; not the first voice listed.",
+            "several voices": "ai_voice_generator_create_audio per line, a matching stock voice per speaker, then join_videos (sound files).",
             "over music": "Then mix_audio: music first, voice from a few seconds in, music at about 0.25."
           },
           "default": "One voice, no music.",
