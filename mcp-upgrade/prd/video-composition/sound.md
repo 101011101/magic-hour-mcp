@@ -8,6 +8,11 @@ Code: `video_production.py` (`plan_sound`), `video_production_tool.py` (`create_
 - Story fields: `says` on each beat, `narrator`, `narrator_voice`, `voice`, `music`, `captions`, `caption_source`, `caption_font`, `voice_sample`.
 - `create_production_sound` makes one narration track and one music track for the whole film.
 - The join places each part of the narration on its clip (timing by pauses, about ±0.5 s), mixes the music, draws the captions (needs Pillow).
+- Captions from two sources in one film (user, 2026-11-23). `script` draws the `says` lines at the voice-over's pauses and the `spoken` lines when the person says them. Exact words, 0 credits.
+- Spoken-line timing: the speech heard near the line's prompt slot, in the clip's own sound. Nothing heard: the slot. The user's clip has no slot: its `spoken` lines go over the speech heard in it, in order, by length. Code: `media_tools.time_spoken`.
+- Check: 7 films joined again with captions on, 0 credits (W05, W06, W08, the user's clip). The user: the captions look good.
+- `speech`: the subtitle tool on the whole film. Only when the story has none of the words. A user's clip with unknown talking in a film with words: subtitle that clip alone before the join; the tool returns only the part between `start_seconds` and `end_seconds`.
+- The subtitle tool refuses the 5 caption fonts (`invalid_font`); it uses Archivo (`SUBTITLE_FONT`, 2026-11-23).
 
 ## Narration
 
@@ -38,7 +43,8 @@ Code: `video_production.py` (`plan_sound`), `video_production_tool.py` (`create_
 
 ## Music
 
-- `music` in the story: one instrumental track (`/v1/ai-music-generator`), as long as the film.
+- `music` in the story: one track (`/v1/ai-music-generator`), as long as the film. Instrumental by default.
+- `music_vocals` (story field, only when the user asks for singing): the track sings (user, 2026-11-23). Before, code forced instrumental, with no recorded decision.
 - The cloner path keeps the music (bug fixed 2026-11-10).
 - Sound effects: `sounds` on a beat ("a short whoosh as the lines meet"). The clip makes them, so that clip is made with sound (user, 2026-11-13, W09). Never music.
 - The clip's own sound comes from `minimax-h3` (user, 2026-11-14). `ltx-2.5` missed most background sound and second speakers ([production](production.md#models-user-2026-11-14)). The API has no sound-effects endpoint.
@@ -58,6 +64,7 @@ Code: `video_production.py` (`plan_sound`), `video_production_tool.py` (`create_
 - `music_swell` (story field, only when the user asks): the music rises 8 dB between the lines. Gaps under 1 s stay lowered. Ramps of 0.3 s.
 - `music_from_beat` (story field, only when the user asks for the music to start later): the music starts at that beat. Before it, the film's own sound is not lowered. A quiet cue there (a whoosh) is raised to the music's loudness, at most 15 dB (W09, 2026-11-18).
 - Effects: 10 dB under narration or music. A spoken line is never lowered.
+- Background under a spoken line (W06, user, 2026-11-22, version A): the clip's steady background is raised to 23 LU under the line, at most 30 dB (`media_tools.lift_bed`). `lift_background` false (story field, only when the user asks): the background stays as made (user, 2026-11-23).
 - `music_first` (story field): the music is never lowered. For a music video.
 - The layers stay separate until the end. The join keeps each layer as its own file beside the film (`<film>.layers/`).
 - Music is made once for the whole film and added last. Clips can still have their own speech and sound.

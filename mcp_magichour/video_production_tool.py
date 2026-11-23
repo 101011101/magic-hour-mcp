@@ -28,7 +28,7 @@ from mcp.types import ToolAnnotations
 from pydantic import BaseModel, Field
 
 from . import kept_files, media_tools
-from .video_production import word_match, ROUTING_RULE, advise, apply_answers, held_merges, host_cuts, plan, questions
+from .video_production import word_match, ROUTING_RULE, advise, apply_answers, held_merges, host_cuts, plan, questions, spoken_slots
 
 FILMS_PATH = "/films"
 FILMS_DIR = Path(os.getenv("MAGIC_HOUR_FILMS_DIR", Path(tempfile.gettempdir()) / "magic-hour-films"))
@@ -98,6 +98,9 @@ class Beat(BaseModel):
     kind: Literal["scene", "card"] = Field(default="scene", description=(
         "scene: made by the video model. card: a still with words, made by the picture model. Make a card only when "
         "the user asks for a card (W10: unasked title cards)."))
+    card_motion: str | None = Field(default=None, description=(
+        "On a card, only when the user asks the card to move: the move in the user's words (\"the title slides in from "
+        "the left\", \"a slow zoom in\"). Not set: the card holds still."))
     place: str | None = Field(default=None, description="Short name of the place. The same name means the same place.")
     subjects: list[str] = Field(default_factory=list, description="ids of the subjects seen in this beat.")
     link: Literal["continues", "event", "moves", "new"] | None = Field(
@@ -130,8 +133,10 @@ class Beat(BaseModel):
         "On a card the user asked for: a picture to show on it (its file_path from upload_media, or a URL). The card is "
         "generated from it by the image editor, with its exact_words; the picture may change a little (user, 2026-11-21). "
         "Make a card only when the user asks for a card. "
-        "A picture of the user's that must stay unchanged (a screenshot) is not a card: put it in a `source` beat, "
-        "shown as it is (W08; user, 2026-11-22). "
+        "You choose how to use a picture of the user's (a screenshot, a photo, a logo), from the user's words: shown as "
+        "it is, held still (a `source` beat; W08: a screenshot \"full and unchanged\"); lightly edited first (edit_image, "
+        "then its result as the `source` or a `reference.file`); on a card the user asked for (this field); or brought to "
+        "life (a subject's `picture`: the video model moves it, and it may change a little). (User, 2026-11-23.) "
         "A logo reveal, or a logo that forms or moves, is a scene beat with the logo as its subject's `picture`: the video "
         "makes the motion, and the logo may change a little. Do not follow it with this card, also when the user says the "
         "logo stays exactly as in the file: the reference keeps it close, and the plan merges such a card into the reveal "
@@ -156,7 +161,8 @@ class Beat(BaseModel):
     spoken: list[str] = Field(default_factory=list, description=(
         "A line a person on screen says out loud in this beat, word for word. Not the narrator (that is `says`). The "
         "beat's `text` then gives only the look and the action (\"smiles at the camera\"), with no talking verb (talks, speaks, "
-        "answers, explains): the tool adds the line. A talking verb there makes the model invent speech after the line."))
+        "answers, explains): the tool adds the line. A talking verb there makes the model invent speech after the line. "
+        "On a `source` beat: what is said in the user's clip, if you know it; it is not generated, only captioned."))
     sounds: list[str] = Field(default_factory=list, description=(
         "Sound effects the clip itself makes in this beat, said plainly: \"a short whoosh as the lines meet\", \"a door slams\". "
         "The clip is then made with sound. Never music: music is one track for the whole film (`music`)."))
@@ -213,14 +219,25 @@ class Story(BaseModel):
     music_from_beat: int | None = Field(default=None, ge=1, description=(
         "The beat (1 = first) the music starts on, when the user asks for it to come in later: after a sound effect, as a "
         "logo lands, on the reveal. Not set: the music runs from the start of the film."))
+    music_vocals: bool = Field(default=False, description=(
+        "True only when the user asks for singing in the music: say the voice and what it sings in `music`. Otherwise "
+        "the music is instrumental."))
+    lift_background: bool = Field(default=True, description=(
+        "False only when the user wants a clip's own background sound left as it was made under a spoken line (a quiet "
+        "room, a hushed scene). Otherwise the steady background (a street, a crowd) under a spoken line is raised, so "
+        "the place is still heard while the person speaks (W06)."))
     captions: bool = Field(default=False, description=(
         "Words of what is said on the picture: white letters with a black outline. Words already on screen at that time "
         "are not captioned again."))
     caption_source: Literal["script", "speech"] | None = Field(default=None, description=(
-        "script (default when there is a voice-over): the exact `says` sentences, drawn by code when they are said, 0 "
-        "credits, always spelled right. speech: Magic Hour's subtitle tool transcribes the finished film; use it only when "
-        "people talk and there is no script (the user's own clip of a talk or an interview). It costs credits and can "
-        "miss a line or misspell a name."))
+        "script (default when the story has the words): the exact `says` sentences at the voice-over's pauses, and the "
+        "exact `spoken` lines when the person says them; drawn by code, 0 credits, always spelled right. Both kinds in "
+        "one film is fine. speech: Magic Hour's subtitle tool transcribes the finished film; use it only when people talk "
+        "and the story has none of their words (the user's own clip of a talk). It costs credits and can miss a line or "
+        "misspell a name. A film with words in the story and also a user's clip with unknown talking: keep script, and "
+        "before the join call add_subtitles_to_video on that clip alone (start_seconds and end_seconds: the part you use; "
+        "it returns only that part), then put the new video project id in the beat's `source`, with no source_start or "
+        "source_end."))
     caption_font: Literal["Archivo Black", "Anton", "Bebas Neue", "Lilita One", "Permanent Marker"] | None = Field(default=None, description=(
         "The caption font, if the user wants one. Default Archivo Black."))
     voice_sample: str | None = Field(default=None, description=(
@@ -305,7 +322,7 @@ def register_video_production(mcp: FastMCP) -> None:
                 "through `checklist`: the join returns `checked` for the lines code can measure; confirm the others from "
                 "the clips. Tell the user plainly which lines are not met; do not present them as done."
             )
-            if planned.get("sound"):
+            if {"narration", "music"} & set(planned.get("sound") or {}):
                 planned["how"] += (
                     " This plan has sound: call create_production_sound(production) once (at any time), wait for the ids "
                     "it returns, and pass them to join_production_clips as `sound`."
@@ -562,7 +579,7 @@ async def make_sound(story: dict) -> dict:
     if "music" in sound:
         m = sound["music"]
         created = await _api("POST", "/v1/ai-music-generator", {
-            "name": f"{story.get('title', 'Video')} · music", "duration": m["seconds"], "style": {"prompt": m["prompt"], "instrumental": True}})
+            "name": f"{story.get('title', 'Video')} · music", "duration": m["seconds"], "style": {"prompt": m["prompt"], "instrumental": m.get("instrumental", True)}})
         out["music"] = created["id"]
         out["credits_charged"] += int(created.get("credits_charged", 0))
     cloned = sound.get("narration", {}).get("tool") == "voice_cloner"
@@ -578,12 +595,26 @@ async def _finished(kind: str, project_id: str, out: Path) -> Path:
     return await _download(project["downloads"][0]["url"], out)
 
 
+def _captions(timed: list[dict], overlays: list[dict] | None, font: str | None) -> tuple[list[dict], int]:
+    """The caption lines to draw, one at a time, in the caption look. A line whose words are all on screen at that
+    time already (an overlay or a card) is left out (the double caption). Returns the lines and how many were left out."""
+    timed = sorted(({k: v for k, v in line.items() if k != "timed"} for line in timed), key=lambda line: line["start"])
+    for line, after in zip(timed, timed[1:]):   # one caption at a time
+        line["end"] = min(line["end"], after["start"])
+    plain = lambda text: re.sub(r"[^a-z0-9]", "", text.lower())
+    shown = [line for line in timed if not any(plain(line["text"]) and plain(line["text"]) in plain(o["text"]) and o["start"] < line["end"]
+                                               and line["start"] < o["end"] for o in overlays or [])]
+    return [dict(line, look="caption", **({"font": font} if font else {})) for line in shown], len(timed) - len(shown)
+
+
 def _add_sound(sound_plan: dict, film: Path, narration: Path | None, music: Path | None, out: Path,
                clip_starts: dict[int, float] | None = None, spoken: list[tuple[float, float]] | None = None,
-               music_first: bool = False, music_swell: bool = False, overlays: list[dict] | None = None, music_at: float = 0.0) -> dict:
+               music_first: bool = False, music_swell: bool = False, overlays: list[dict] | None = None, music_at: float = 0.0,
+               said: list[dict] | None = None) -> dict:
     """The file steps of the sound, in one place (run in a thread). Returns what was done.
     clip_starts: where each clip really starts in the joined film (a clip is often a little longer than planned).
-    overlays: the words already on screen; a caption whose words are all among them at that time is left out (the double caption)."""
+    overlays: the words already on screen; a caption whose words are all among them at that time is left out (the double caption).
+    said: the captions of the lines people on screen say (time_spoken), drawn with the voice-over's."""
     parts, done = [], {"narration": False, "music": bool(music), "captions": False}
     if narration:
         wanted = sound_plan["narration"]["parts"]
@@ -606,7 +637,7 @@ def _add_sound(sound_plan: dict, film: Path, narration: Path | None, music: Path
     if music and music_at > 0:
         done["music_starts_at"] = round(music_at, 2)
     done["loudness_lufs"] = mix["lufs"]
-    if sound_plan.get("captions") and parts and media_tools.have_captions():
+    if sound_plan.get("captions") and (parts or said) and media_tools.have_captions():
         timed = []
         for part in parts:   # each sentence gets a share of its part, by its length
             total, at = sum(media_tools.letters(line) for line in part["lines"]) or 1, part["at"]
@@ -614,14 +645,9 @@ def _add_sound(sound_plan: dict, film: Path, narration: Path | None, music: Path
                 length = (part["end"] - part["start"]) / part.get("tempo", 1.0) * media_tools.letters(line) / total
                 timed.append({"text": line, "start": at, "end": at + length})
                 at += length
-        for line, after in zip(timed, timed[1:]):   # one caption at a time
-            line["end"] = min(line["end"], after["start"])
-        plain = lambda text: re.sub(r"[^a-z0-9]", "", text.lower())
-        shown = [line for line in timed if not any(plain(line["text"]) and plain(line["text"]) in plain(o["text"]) and o["start"] < line["end"]
-                                                   and line["start"] < o["end"] for o in overlays or [])]
-        if len(shown) < len(timed):
-            done["captions_left_out"] = len(timed) - len(shown)
-        timed = [dict(line, look="caption", **({"font": sound_plan["caption_font"]} if sound_plan.get("caption_font") else {})) for line in shown]
+        timed, left_out = _captions(timed + list(said or []), overlays, sound_plan.get("caption_font"))
+        if left_out:
+            done["captions_left_out"] = left_out
         media_tools.draw_captions(mixed, timed, out) if timed else mixed.replace(out)
         mixed.unlink(missing_ok=True)
         done["captions"] = True
@@ -636,6 +662,7 @@ async def join_clips(story: dict, made: dict[str, str], sound: dict[str, str] | 
     _need_ffmpeg()
     planned = _planned(story)
     subtitles = (planned.get("sound") or {}).get("subtitles")
+    captions_on = bool((planned.get("sound") or {}).get("captions"))
     sound_plan = {k: v for k, v in (planned.get("sound") or {}).items() if k != "subtitles"}
     if not ("narration" in sound_plan or "music" in sound_plan):
         sound_plan = {}
@@ -686,6 +713,8 @@ async def join_clips(story: dict, made: dict[str, str], sound: dict[str, str] | 
                     if by_n[n].get("made_by") != "user" and (starts[n], starts[n] + lengths[n]) not in talking:
                         talking.append((starts[n], starts[n] + lengths[n]))
                 inside += beat["seconds"]
+        if story.get("lift_background") is False:   # the user wants the background as it was made (user, 2026-11-23)
+            talking = []
         joined = Path(folder) / "joined.mp4" if (sound_plan or overlays or talking) else FILMS_DIR / name
         # a clip keeps its own sound when it was made with sound (the story's audio, or a spoken line in it)
         # 2026-11-20 audit: the video step's `audio`, not the first step's: a clip that starts from a still has
@@ -696,6 +725,28 @@ async def join_clips(story: dict, made: dict[str, str], sound: dict[str, str] | 
         # user, 2026-11-14 (W05): no sound jump at a cut. The sound overlaps the cut, and a background much louder
         # than the other clips' is turned down.
         await asyncio.to_thread(media_tools.join, files, joined, keep, cut, size, CUT_OVERLAP, True)
+        said: list[dict] = []
+        if captions_on:   # 2026-11-23 (user: two caption sources): the spoken lines, timed from the clips' own sound
+            lines = []
+            for n in planned["join"]:
+                window = (starts[n], starts[n] + lengths[n])
+                beats = [dict(story["beats"][b - 1], n=b) for b in by_n[n].get("beats", [])]
+                if by_n[n].get("made_by") == "user":   # the user's clip: no slot; its lines go where speech is heard in it
+                    lines += [{"text": s["text"], "start": None, "end": None, "clip": window} for s in spoken_slots(beats)]
+                    continue
+                lines += [{"text": s["text"], "start": window[0] + min(s["start"], lengths[n]), "end": window[0] + min(s["end"], lengths[n]),
+                           "clip": window} for s in spoken_slots(beats)]
+            said = await asyncio.to_thread(media_tools.time_spoken, joined, lines)
+            if said:   # "heard": timed from the speech near the line's slot; "slot": nothing was heard there, the slot's times
+                result["spoken_captions"] = said
+            # the user's clip with talking and no words in the story: code cannot caption it
+            unknown = [n for n, k in zip(planned["join"], keep) if k and by_n[n].get("made_by") == "user"
+                       and by_n[n]["steps"][0].get("speech") is not False
+                       and not any(story["beats"][b - 1].get("spoken") for b in by_n[n].get("beats", []))]
+            if unknown:
+                result["captions_missing"] = (f"Clip {', '.join(map(str, unknown))}: the user's clip may have talking, and the story "
+                                              "does not have its words, so it has no captions. Put the words in that beat's `spoken` "
+                                              "and join again, or see `caption_source`.")
         if overlays:   # exact words over a scene, drawn by code (words_route overlay) in a title look, not a caption's
             worded = Path(folder) / "worded.mp4" if (sound_plan or talking) else FILMS_DIR / name
             await asyncio.to_thread(media_tools.draw_captions, joined, [dict(o, place=o.get("place") or "top", large=True,
@@ -710,6 +761,13 @@ async def join_clips(story: dict, made: dict[str, str], sound: dict[str, str] | 
                 result["background_lifted"] = bed
             elif not sound_plan:
                 await asyncio.to_thread(shutil.copyfile, joined, FILMS_DIR / name)
+        if said and not sound_plan and media_tools.have_captions():   # no voice-over and no music: the captions alone
+            timed, left_out = _captions(said, overlays, (planned.get("sound") or {}).get("caption_font"))
+            captioned = Path(folder) / "captioned.mp4"
+            if timed:
+                await asyncio.to_thread(media_tools.draw_captions, FILMS_DIR / name, timed, captioned)
+                await asyncio.to_thread(shutil.move, captioned, FILMS_DIR / name)
+            result["sound"] = {"captions": True, **({"captions_left_out": left_out} if left_out else {})}
         if sound_plan:
             cloned = (sound_plan.get("narration") or {}).get("tool") == "voice_cloner"
             narration = (await _finished("audio" if cloned else "video", sound["narration"], Path(folder) / ("narration" if cloned else "narration.mp4"))
@@ -737,7 +795,7 @@ async def join_clips(story: dict, made: dict[str, str], sound: dict[str, str] | 
             spoken += [(starts[n], starts[n] + lengths[n]) for n in kept_as_speech]
             result["sound"] = await asyncio.to_thread(_add_sound, sound_plan, joined, narration, music, FILMS_DIR / name, starts,
                                                       spoken, bool(story.get("music_first")), bool(story.get("music_swell")),
-                                                      overlays + on_cards, music_at)
+                                                      overlays + on_cards, music_at, said)
             if kept_as_speech:
                 result["sound"]["user_clip_as_speech"] = kept_as_speech
             if narration is not None:

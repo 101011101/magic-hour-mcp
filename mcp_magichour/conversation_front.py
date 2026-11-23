@@ -75,7 +75,7 @@ FILM_ROWS = [
     {"id": "kind", "kind": "deciding", "ask": "(Read from the words.) What kind of film?",
      "answers": {"ad": "Hook in the first 3 s, the selling points, the call to action at the end. Music on.",
                  "someone_speaks": "An interview, a talking head, a demo, people talking: one spoken line per beat.",
-                 "explainer_list": "One step or one point per beat, in order; labels as words on screen or a card.",
+                 "explainer_list": "One step or one point per beat, in order; labels as words on screen.",
                  "story_mood": "A story or a mood piece: the same people and place words in every beat."},
      "default": "story_mood."},
     {"id": "purpose", "kind": "deciding", "ask": "Who is it for, and what should it make them do?",
@@ -111,8 +111,7 @@ FILM_ROWS = [
      # 2026-11-20 audit: the user's 'your call' means write words that fit (user, 2026-11-19), not "none"
      "your_call": "Write short words that fit the request (a title or a call to action), exactly as they will show. Never invent a price, a date or a web address."},
     {"id": "product_picture", "kind": "deciding", "ask": "Do you have a photo of the product? A film made from words only looks like it.",
-     "answers": {"photo": ("Use it as the reference picture (a subject's `picture`) in every clip that shows it. A logo "
-                           "reveal makes the logo from it in the video, in one clip, with no held card after it (W09)."),
+     "answers": {"photo": "The product looks like the user's photo.",
                  "words":"Make it from words; tell the user it is a look-alike."},
      "default": "words.", "ask_when": "a real product or brand is shown and no photo is attached"},
 ]
@@ -202,7 +201,9 @@ def _film(request: str, answers: dict[str, str] | None, questions_asked: bool, f
                          "they skip it. This is the only time the user is asked. Then call again with their answers and "
                          "questions_asked=true." + ONLY_THESE)}
     # Sound is on unless the user's own words ask for silence (user, 2026-11-19). "No talking" or "music only" is not silence.
-    silent = bool(re.search(SILENCE, request))
+    # 2026-11-23 audit: the host's sound answer stands (no answer rewrites, user 2026-11-22); the words decide only when it is open
+    sound = answers.get("sound")
+    silent = sound == "silent" or (sound not in ("on", "silent") and bool(re.search(SILENCE, request)))
     notes = []
     # 2026-11-22 ablation (cf, 78 dry chats): no answer rewrites; the front guides the refined prompt only (user)
     bad = [f"{i}={v!r}" for i, v in answers.items() if i in OPTION_ROWS and v not in (ASK, YOUR_CALL, NOT_APPLICABLE) and v not in rows[i]["answers"]]
@@ -308,9 +309,7 @@ def front(family: str, request: str, answers: dict[str, str] | None = None, ques
     if family == "new_video" and answers and answers.get("sound") == ASK:   # 2026-11-20 audit: sound is implied, never asked
         answers = {**answers, "sound": YOUR_CALL}
         changed.append("sound 'ask' became 'your_call': sound is implied (on unless the user asks for silence), not asked (user, 2026-11-19).")
-    if family == "new_video" and answers and answers.get("sound") == "silent" and not re.search(SILENCE, request):
-        answers = {**answers, "sound": "sound"}
-        changed.append("sound 'silent' became 'sound': the user's words do not ask for silence (user, 2026-11-19).")
+    # 2026-11-23: no "silent" -> "sound" rewrite here either (user, 2026-11-22: no answer rewrites); the host's answer stands.
     tools = set(tool_plan.notes()["tools"]) | {t for f in tool_plan.sheets()["families"].values() for t in f["tools"]}
     named = sorted(k for k in (answers or {}) if k in tools)
     if named:   # hosts sent tool names as rows (c3/c4: 44 of 60 faces chats)
@@ -404,7 +403,7 @@ def register_conversation_front(mcp: FastMCP) -> None:
             "with no answers; the result lists the family's rows, their options and how to answer them. Then send `answers` "
             "for every row in ONE call. Returns every open question in one batch (ask the user once, all together, then call again "
             "with questions_asked=true), or the plan: tools, free-tier settings, known faults, needed files, and for a "
-            "film the story rules for plan_video_production. Read-only; spends no credits and creates nothing."
+            "film the decisions for plan_video_production. Read-only; spends no credits and creates nothing."
         ),
         annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False),
     )

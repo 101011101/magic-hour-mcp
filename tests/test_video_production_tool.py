@@ -399,6 +399,27 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(film["background_lifted"]["raised_db"], 30)
         self.assertEqual((self.films / film["download_url"].rsplit("/", 1)[1]).read_bytes(), b"film with the street lifted")
 
+    async def test_the_user_can_keep_the_background_as_it_was_made(self):
+        # user, 2026-11-23: the lift is a best-practice rule; the user's words override it
+        s = story("c4")
+        s["beats"][1]["spoken"] = ["Pay yourself first."]
+        s["lift_background"] = False
+        p = await self.call("plan_video_production", story=s)
+        self.lift, self.lifted_bed = None, {"raised_db": 30, "voice_lufs": -15.5, "background_lifted": -38.5}
+        film = await self.call("join_production_clips", production=p["production"], made={"1": "a", "2": "b", "3": "c", "4": "d"})
+        self.assertIsNone(self.lift)
+        self.assertNotIn("background_lifted", film)
+        self.assertEqual((self.films / film["download_url"].rsplit("/", 1)[1]).read_bytes(), b"film")
+
+    async def test_the_music_sings_only_when_the_user_asks(self):
+        s = story("c5")
+        s.update(music="an upbeat pop song, a woman sings about the morning", music_vocals=True)
+        p = await self.call("plan_video_production", story=s)
+        self.posts.clear()
+        await self.call("create_production_sound", production=p["production"])
+        (path, music), = [(a, b) for a, b in self.posts if a == "/v1/ai-music-generator"]
+        self.assertFalse(music["style"]["instrumental"])
+
     async def test_the_join_takes_every_finished_clip_in_story_order(self):
         p = await self.planned("c4")
         made = {"1": "a", "2": "b", "3": "c", "4": "d"}

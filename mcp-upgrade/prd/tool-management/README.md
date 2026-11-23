@@ -1,6 +1,6 @@
 # Tool management
 
-The MCP edits media that already exists: one tool call, or a few in order, on the user's clip, photo or audio. Overview: [ARCHITECTURE](../ARCHITECTURE.md). Comes after video composition.
+The MCP edits media that already exists: one tool call, or a few in order, on the user's clip, photo or audio. Overview: [ARCHITECTURE](../ARCHITECTURE.md). Doctrine: [ARCHITECTURE](../ARCHITECTURE.md#doctrine-user-2026-11-23). Comes after video composition.
 
 A separate workflow from video composition (user, 2026-11-13). Its own planner, notes, question sheets, tests and switch.
 

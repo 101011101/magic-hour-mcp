@@ -381,6 +381,108 @@ def speech_spans(audio: Path, noise_db: int = -35, min_gap: float = 0.12) -> lis
     return spans
 
 
+SAID_LEAD, SAID_TAIL = 0.6, 1.2   # how far before and after its slot a spoken line is looked for (2026-11-23)
+
+
+def _heard_in(film: Path, start: float, end: float) -> list[tuple[float, float]]:
+    """Where something is heard in the film's own sound between start and end (film seconds). The threshold is set
+    from the loudest moment there, so a quiet background between the words reads as a pause."""
+    with tempfile.TemporaryDirectory() as folder:
+        part = Path(folder) / "part.wav"
+        _ffmpeg(["-i", str(film), "-ss", f"{start:.3f}", "-t", f"{max(end - start, 0.1):.3f}", "-vn", "-ac", "1", "-ar", "16000", str(part)])
+        report = _ffmpeg(["-i", str(part), "-af", "volumedetect", "-f", "null", "-"], capture=True)
+        loudest = re.search(r"max_volume: (-?\d+\.?\d*) dB", report)
+        if not loudest or float(loudest.group(1)) < -60:
+            return []
+        noise = int(max(-50.0, min(-30.0, float(loudest.group(1)) - 25)))
+        return [(start + a, start + b) for a, b in speech_spans(part, noise_db=noise, min_gap=0.25)]
+
+
+def time_spoken(film: Path, lines: list[dict]) -> list[dict]:
+    """Caption times for the lines people on screen say (2026-11-23, user: a voice-over and a presenter in one film).
+    lines: [{"text", "start", "end", "clip": (start, end)}] in film seconds, in film order; start and end are the
+    line's slot (the time the prompt gave it). The speech heard near the slot, in the film's own sound, sets the
+    times; when nothing is heard there, the slot is used. A line with no slot (start None: the user's own clip) is
+    placed with the other such lines of its clip in the speech heard there, in order, by length (align_parts).
+    Each sentence gets a share of its line's time by its letters. Returns [{"text", "start", "end", "timed": "heard" | "slot"}]."""
+    if not lines:
+        return []
+    sound = probe(film)["audio"]
+    heard: dict[tuple, list[tuple[float, float]]] = {}
+    for clip in {tuple(line["clip"]) for line in lines}:
+        heard[clip] = _heard_in(film, *clip) if sound else []
+    placed: dict[int, tuple[float, float, str]] = {}
+    for clip in {tuple(line["clip"]) for line in lines if line["start"] is None}:
+        free = [i for i, line in enumerate(lines) if line["start"] is None and tuple(line["clip"]) == clip]
+        found = _share_spans(heard[clip], [lines[i]["text"] for i in free])
+        if len(found) == len(free):
+            placed.update({i: (a, b, "heard") for i, (a, b) in zip(free, found)})
+        else:   # nothing heard: the clip's time, shared by letters
+            total, at = sum(letters(lines[i]["text"]) for i in free) or 1, clip[0]
+            for i in free:
+                length = (clip[1] - clip[0]) * letters(lines[i]["text"]) / total
+                placed[i] = (at, at + length, "slot")
+                at += length
+    out, previous = [], None
+    for i, line in enumerate(lines):
+        clip = tuple(line["clip"])
+        if i in placed:
+            start, end, how = placed[i]
+            later = placed[i + 1][0] if i + 1 in placed and tuple(lines[i + 1]["clip"]) == clip else clip[1]
+            end = max(end, min(start + 1.0, later))   # at least a second on screen
+            previous = (clip, end)
+            out += _sentences(line["text"], start, end, how)
+            continue
+        after = lines[i + 1] if i + 1 < len(lines) and tuple(lines[i + 1]["clip"]) == clip else None
+        low = max(clip[0], line["start"] - SAID_LEAD, previous[1] if previous and previous[0] == clip else clip[0])
+        high = min(clip[1], line["end"] + SAID_TAIL, after["start"] + 0.3 if after else clip[1])
+        found = [(max(a, low), min(b, high)) for a, b in heard.get(clip, []) if b > low and a < high]
+        found = [(a, b) for a, b in found if b - a >= 0.15]
+        if found:
+            start, end, how = found[0][0], found[-1][1], "heard"
+        else:
+            start, end, how = max(low, line["start"]), min(high, line["end"]), "slot"
+        end = max(end, min(start + 1.0, high))   # at least a second on screen
+        previous = (clip, end)
+        out += _sentences(line["text"], start, end, how)
+    return out
+
+
+def _share_spans(spans: list[tuple[float, float]], texts: list[str]) -> list[tuple[float, float]]:
+    """Lines said in order over heard spans, with no speech-to-text model: each line takes whole spans, and a line
+    ends at the pause where the speech heard so far is closest to its share of the letters. With fewer spans than
+    lines, align_parts cuts inside the spans."""
+    if not spans or not texts:
+        return []
+    if len(spans) < len(texts):
+        return align_parts(spans, texts)
+    heard, total = [], 0.0
+    for start, end in spans:
+        total += end - start
+        heard.append(total)
+    weights = [letters(t) or 1 for t in texts]
+    out, first, done = [], 0, 0
+    for i, weight in enumerate(weights[:-1]):
+        done += weight
+        target = total * done / sum(weights)
+        last = min(range(first, len(spans) - (len(texts) - 1 - i)), key=lambda k: abs(heard[k] - target))
+        out.append((spans[first][0], spans[last][1]))
+        first = last + 1
+    out.append((spans[first][0], spans[-1][1]))
+    return out
+
+
+def _sentences(text: str, start: float, end: float, how: str) -> list[dict]:
+    """One caption for each sentence of a line, each a share of the line's time by its letters."""
+    sentences = [s for s in re.split(r"(?<=[.!?])\s+", text.strip()) if s]
+    total, at, out = sum(letters(s) for s in sentences) or 1, start, []
+    for s in sentences:
+        length = (end - start) * letters(s) / total
+        out.append({"text": s, "start": round(at, 2), "end": round(at + length, 2), "timed": how})
+        at += length
+    return out
+
+
 def probe_seconds(file: Path) -> float:
     return probe(file)["seconds"]
 

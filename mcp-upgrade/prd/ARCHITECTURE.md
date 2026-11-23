@@ -1,6 +1,6 @@
 # Architecture
 
-The Magic Hour MCP server on branch `video-production` (repo `101011101/magic-hour-mcp`, fork of `magichourhq/magic-hour-mcp`). Updated 2026-11-16.
+The Magic Hour MCP server on branch `video-production` (repo `101011101/magic-hour-mcp`, fork of `magichourhq/magic-hour-mcp`). Updated 2026-11-23.
 Tickets: [`../tickets/TICKETS.md`](../tickets/TICKETS.md).
 
 ## Two subsystems (user, 2026-11-12)
@@ -16,6 +16,15 @@ Tickets: [`../tickets/TICKETS.md`](../tickets/TICKETS.md).
 - Ship video composition first. Tool management comes after.
 - Approval rule: a change is approved when the new build is better than the old MCP on video composition, and not worse on tool management.
 - Shared by both: [shared/](shared/) holds `plan_request` ([conversation](shared/conversation.md)) and the files ([media files](shared/media-files.md)).
+
+## Doctrine (user, 2026-11-23)
+
+- Both subsystems follow it.
+- A best-practice rule applies only when the user does not mention the thing.
+- The user's words always override a best-practice rule.
+- Code never forces a best-practice rule. Each rule has a path for the user's words: a story field, an answer to a question, or the host's text. Examples: `music_vocals`, `lift_background`, `card_motion` (2026-11-23).
+- The only flip: a logic issue with a precedent. Example: the user asks for a short clip, but it is an ad. It still goes to video composition (`plan_video_production`).
+- The conversation builds the best refined prompt. The subsystem that gets the refined prompt respects it.
 
 ## Pipeline (user, 2026-11-14 and 2026-11-16)
 

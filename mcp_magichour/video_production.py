@@ -82,6 +82,7 @@ ROUTING_RULE = (
     "line, a voice-over, music, or words on screen. This is true for one shot too. A single action goes to its own tool: "
     "animate this photo, a 5-second clip of a cat.")
 STILL_MODEL = "qwen-image-2.1"  # exact words on a card
+SUBTITLE_FONT = "Archivo"   # the subtitle tool's font closest to the caption look (Archivo Black is refused, 2026-11-23)
 RESOLUTION = "480p"
 CREDITS_PER_SECOND = 24
 STILL_CREDITS = 10
@@ -216,7 +217,8 @@ def validate_story(story: dict) -> list[str]:
         if beat.get("model") not in (None, *MODEL_MAX_SECONDS):
             problems.append(f"beat {i}: model must be one of {', '.join(MODEL_MAX_SECONDS)}")
         if beat.get("source"):
-            clash = [f for f in ("reference", "spoken", "sounds", "in_scene_words", "exact_words", "words_route", "model", "picture", "background") if beat.get(f)]
+            # `spoken` is allowed: the words said in the user's clip, for its captions only (2026-11-23)
+            clash = [f for f in ("reference", "sounds", "in_scene_words", "exact_words", "words_route", "model", "picture", "background") if beat.get(f)]
             if beat.get("kind", "scene") != "scene" or clash:
                 problems.append(f"beat {i}: a `source` beat is the user's own clip, used as it is; drop {', '.join(clash) or 'kind card'}")
         if (beat.get("source_start") is not None or beat.get("source_end") is not None) and not beat.get("source"):
@@ -443,12 +445,37 @@ def choose_reference(story: dict, clip: dict, previous: dict | None, moves: str 
     return {"kind": "none"}
 
 
+SPOKEN_LABEL = re.compile(r"\s*([A-Z][\w'-]*(?: [A-Z][\w'-]*){0,2}):\s+(.+)")
+
+
+def spoken_slots(parts: list[dict]) -> list[dict]:
+    """Each spoken line of a clip and its time slot in the clip (seconds), as compose_prompt gives it to the model:
+    {"beat", "who", "text", "start", "end"}. The captions of spoken lines start from these slots (2026-11-23)."""
+    out, at = [], 0
+    for part in parts:
+        end = at + part["seconds"]
+        start = at
+        for said in part.get("spoken") or []:
+            label = SPOKEN_LABEL.match(said)
+            who, said = (label.group(1), label.group(2).strip()) if label else ("", said.strip())
+            talk = min(end - start, max(2, math.ceil(len(said.split()) / SPOKEN_WORDS_PER_SECOND)))
+            out.append({"beat": part.get("n"), "who": who, "text": said, "start": start, "end": start + talk if talk > 0 else end})
+            start += talk
+        at = end
+    return out
+
+
 def compose_prompt(story: dict, clip: dict, reference: dict, ends_on: list[str] | None = None, ends_close: bool = False) -> str:
     """One prose prompt from the story's own words. The same words go into every clip that shows the thing."""
     by_id = {s["id"]: s for s in story.get("subjects", [])}
     if clip["kind"] == "card":
         # User, 2026-11-21: the card holds still. "A very slow, barely visible push in" came out as a 1.3-1.5x zoom on
-        # ltx-2.5 (gc1l-gc4l) and cut long words and corner decoration (D23c, W02, C2).
+        # ltx-2.5 (gc1l-gc4l) and cut long words and corner decoration (D23c, W02, C2). This prompt still pushed
+        # 1.13-1.27x on ltx-2.5, so a card goes on minimax-h3 (1.00x, 2026-11-23).
+        motion = next((p["card_motion"].strip().rstrip(".") for p in clip["parts"] if p.get("card_motion")), None)
+        if motion:   # the user asked the card to move (user, 2026-11-23: the user's words override the held card)
+            return (f"The supplied image, with one move for the whole clip: {motion}. Every letter stays exactly as in the "
+                    "image. Nothing else appears.")
         return ("A locked-off static shot of the supplied image for the whole clip: the camera does not move, the "
                 "image fills the frame at the same size from the first frame to the last. Every letter stays exactly "
                 "as in the image. Nothing else appears.")
@@ -484,7 +511,7 @@ def compose_prompt(story: dict, clip: dict, reference: dict, ends_on: list[str] 
         start, text = at, part["text"].strip()
         for said in spoken:
             # W05 (2026-11-14): a script label inside the quote ("Maya: Then we walk.") was said out loud as a name
-            label = re.match(r"\s*([A-Z][\w'-]*(?: [A-Z][\w'-]*){0,2}):\s+(.+)", said)
+            label = SPOKEN_LABEL.match(said)
             who, said = (label.group(1), label.group(2).strip()) if label else ("", said.strip())
             # W08 (2026-11-14): "talks to the camera" over 0-8 s with a 3 s line gave 4 s of made-up speech first.
             # The line in a time slot of its own, then a silent end, gave clean speech (W08 prompt test, 4 variants).
@@ -613,7 +640,9 @@ def plan(story: dict, strategy: str = "idea", max_seconds: int = TRIGGER_SECONDS
         elif reference["kind"] in ("still", "scene_still"):   # words in the still stay exact on ltx-2.5
             # 2026-11-20 audit: a clip with speech or sound needs minimax-h3; ltx-2.5 dropped speech and sound
             # in the sound test (user, 2026-11-14). A silent word still stays on ltx-2.5.
-            tool, model = "create_video_from_image", scene_model if needs_sound else TEXT_MODEL
+            # A card goes on minimax-h3 (user, 2026-11-23: a card holds still). Card test, 9 clips, 792 credits: minimax-h3
+            # from the card still held 1.00x in 3 of 3, letters kept; ltx-2.5 pushed in 1.13-1.27x (gc1l-gc4l).
+            tool, model = "create_video_from_image", scene_model if (needs_sound or clip["kind"] == "card") else TEXT_MODEL
         else:
             tool, model = "create_video_from_text", scene_model
         answered = next((p.get("model") for p in clip["parts"] if p.get("words_route") == "model" and p.get("model")), None)
@@ -683,11 +712,16 @@ def plan_sound(story: dict, clips: list[dict]) -> dict | None:
     # captions (user, 2026-11-17, MCP-23): script = the exact `says` words, drawn by code at the voice-over's pauses
     # (0 credits; the default when there is a script). speech = Magic Hour's subtitle tool transcribes the finished
     # film (for the user's clip with talking and no script; it costs credits and can miss a line).
-    source = story.get("caption_source") or ("script" if parts else "speech")
-    sound: dict = {"captions": bool(story.get("captions")) and bool(parts) and source == "script"}
+    # 2026-11-23 (user: two caption sources in one film): script also covers the `spoken` lines, drawn by code when the
+    # person says them (the speech found near the line's slot in the clip's own sound). W08: a voice-over and a presenter.
+    said = any(p.get("spoken") for clip in clips for p in clip["parts"])
+    source = story.get("caption_source") or ("script" if parts or said else "speech")
+    sound: dict = {"captions": bool(story.get("captions")) and bool(parts or said) and source == "script"}
     if story.get("captions") and source == "speech":
+        # 2026-11-23 test: the subtitle tool refused all five caption fonts (Archivo Black, Anton, Bebas Neue, Lilita One,
+        # Permanent Marker: invalid_font) and took "Archivo", so the subtitles are always in bold Archivo
         sound["subtitles"] = {"tool": "add_subtitles_to_video", "after": "join_production_clips", "style": {"custom_config": {
-            "font": story.get("caption_font") or LOOKS["caption"]["font"], "font_style": "bold", "text_color": "#FFFFFF",
+            "font": SUBTITLE_FONT, "font_style": "bold", "text_color": "#FFFFFF",
             "highlighted_text_color": "#FFFFFF", "stroke_color": "#000000", "stroke_width": 4, "vertical_position": "bottom",
             "horizontal_position": "center"}}}
     if story.get("caption_font") and sound["captions"]:
@@ -714,8 +748,9 @@ def plan_sound(story: dict, clips: list[dict]) -> dict | None:
             }
     if story.get("music"):
         seconds = max(MUSIC_MIN_SECONDS, film_seconds + 2)
-        sound["music"] = {"seconds": seconds, "prompt": story["music"].strip(), "credits": seconds * MUSIC_CREDITS_PER_SECOND}
-    return sound if "narration" in sound or "music" in sound or "subtitles" in sound else None
+        sound["music"] = {"seconds": seconds, "prompt": story["music"].strip(), "credits": seconds * MUSIC_CREDITS_PER_SECOND,
+                          "instrumental": not story.get("music_vocals")}   # singing only when the user asks (user, 2026-11-23)
+    return sound if "narration" in sound or "music" in sound or "subtitles" in sound or sound["captions"] else None
 
 
 def checklist(story: dict, clips: list[dict], sound: dict | None) -> list[dict]:
@@ -730,7 +765,9 @@ def checklist(story: dict, clips: list[dict], sound: dict | None) -> list[dict]:
             lines.append({"id": f"source-{clip['n']}", "want": f"The user's clip used as it is, about {clip['seconds']} s", "how": "measured length"})
         if clip["kind"] == "card":
             words = ", ".join(f'"{w}"' for part in clip["parts"] for w in part.get("exact_words", []))
-            lines.append({"id": f"card-{clip['n']}", "want": f"Card held {clip['seconds']} s with exactly {words}", "how": "measured length, words by eye"})
+            motion = next((p["card_motion"].strip().rstrip(".") for p in clip["parts"] if p.get("card_motion")), None)
+            held = f"Card {clip['seconds']} s, moving ({motion})," if motion else f"Card held {clip['seconds']} s"
+            lines.append({"id": f"card-{clip['n']}", "want": f"{held} with exactly {words}", "how": "measured length, words by eye"})
     for sid in sorted({sid for beat in story["beats"] for sid in beat.get("subjects", [])}):
         lines.append({"id": f"same-{sid}", "want": f"{by_id[sid]['words'].split(',')[0].split(':')[0].strip()} looks the same in every clip", "how": "by eye"})
     for n, beat in enumerate(story["beats"], start=1):
@@ -742,7 +779,7 @@ def checklist(story: dict, clips: list[dict], sound: dict | None) -> list[dict]:
             lines.append({"id": f"words-{n}", "want": f"On screen, spelled exactly: {', '.join(chr(34) + w + chr(34) for w in beat['exact_words'])}", "how": how})
         for words in beat.get("in_scene_words") or []:
             lines.append({"id": f"in-scene-{_letters(words)[:12]}", "want": f"\"{words}\" in the picture (best effort: letters on a moving object may change; tell the user)", "how": "by eye, best effort"})
-    spoken = [said.strip() for beat in story["beats"] for said in beat.get("spoken") or []]
+    spoken = [said.strip() for beat in story["beats"] if not beat.get("source") for said in beat.get("spoken") or []]
     for k, said in enumerate(spoken, start=1):
         lines.append({"id": f"line-{k}", "want": f"Said on screen once, word for word: \"{said}\"", "how": "by ear"})
     if sound and "narration" in sound:
@@ -850,6 +887,8 @@ SILENT = re.compile(r"\b(silent|no (music|sound|audio)|without (music|sound|audi
 
 FRAMING = re.compile(r"\b(extreme close[- ]up|close[- ]up|close|medium|wide|two[- ]shot|over[- ]the[- ]shoulder|"
                      r"from behind|aerial|overhead|top[- ]down)\b", re.I)
+
+
 
 
 def beat_framing(text: str) -> frozenset[str] | None:
@@ -962,7 +1001,7 @@ def advise(story: dict, planned: dict, request: str | None = None) -> list[dict]
                         "warning": f"Beat {n}: the voice-over has {words} words for {beat['seconds']} s. The voice reads about "
                                    f"{VOICE_WORDS_PER_SECOND} words a second, so it needs about {need} s. Cut words or make the beat longer. "
                                    "If not, the join moves the words earlier, reads them up to 15% faster, and holds the last frame."})
-        said = len(" ".join(beat.get("spoken") or []).split())
+        said = 0 if beat.get("source") else len(" ".join(beat.get("spoken") or []).split())   # the user's clip: only captioned
         need = math.ceil(said / SPOKEN_WORDS_PER_SECOND) + 1   # 1 s after the line for the clear end
         if said and need > beat["seconds"]:
             out.append({"clip": None, "note": "spoken-pace", "evidence": "2026-11-18, W06 w14c: 18 words in a 6 s slot; the line ran over and the model made up words after it.",
@@ -1038,7 +1077,7 @@ def questions(story: dict, planned: dict) -> list[dict]:
                         "part of the picture, such as a label or a sign, go in `in_scene_words` instead: no question, best effort.)"),
                 "options": {
                     "overlay": "The scene is made without words, and the join draws the words over it by code for the beat's seconds. Always exact; the beat's `words_look` (bold by default).",
-                    "card": "A card of its own right after this beat, 2 s taken from the beat. The words are not over the scene. Made in the film's style by the picture model, which may misspell them; exact only with a `background` colour (drawn by code).",
+                    "card": "A card of its own right after this beat, 2 s taken from the beat. The words are not over the scene. Made in the film's style by the picture model, which may misspell them.",
                     "model": "minimax-h3 makes this beat's clip and draws the words in the scene. Looks best; 2 of 2 so far; check the frame after.",
                     "still": "A picture of the scene with the words is made first and the clip starts from it. The picture model may misspell them; the words stay on screen for the whole clip.",
                     "accept": "The scene model draws the words as well as it can. They may be misspelled.",

@@ -36,7 +36,11 @@ Code: `video_production.py` (plan, split, questions, prompts), `video_production
 - A beat that does not depend on an earlier beat does not need that beat's clip (user, 2026-11-13, W03).
 - Why (W03, wide set): steps 3 and 4 started from the last frame of the step before. That frame showed the grooving machine, and the prompt said "Continue from it". The model kept cutting grooves: no rods, no second slat. The same step as a fresh 6 s clip showed the rods. One 12 s call written as two shots with a hard cut ("CUT at 6 s", a new angle, no machine in frame) also showed them.
 - Not done: start a new event with no person fresh, not from the last frame. A re-plan of 198 past productions (0 credits) changed 23 clips. Most of them need the last frame to keep a product or a process the same (H40a bottle, H40b candle, W07 plane, I47c water cycle).
-- Two separate actions in one clip: give each its own clip, or write them as two shots with a hard cut and the first action's tool out of frame. The `clip` field and the `continuity` question tell the host.
+- Two separate actions in one clip: give each its own clip (the `clip` field). The `continuity` question also offers two shots with a hard cut, the first action's tool out of frame (user, 2026-11-16).
+- One shot in each clip (user, 2026-11-22: split a little more). A new clip when the framing or the camera angle changes (close to wide, front to behind), the clip holds more than three actions, it is too long (15 s; 30 s with a person's picture), or the next action does not depend on this one. The `shot-change` advice warns on a new framing inside one clip.
+- Why (W05, w22l): a close two-shot, then a wide shot from behind, in one 10 s call with no cut. A second open umbrella came in front of the camera.
+- At most three actions in one clip (`actions-per-clip` advice). Why (W07, w22l): seven actions in one 12 s beat; Wilbur rose into the air with the plane.
+- Back pocket, not built (user, 2026-11-23): if the benchmarks show issues with the split, offer a written hard cut again for a new framing inside one clip ("CUT at 6 s", a new camera angle). The change: the `clip` field says "its own clip, or a hard cut"; the `shot-change` advice does not warn when the beat text writes a cut.
 
 ## Models (user, 2026-11-14)
 
@@ -53,7 +57,7 @@ Code: `video_production.py` (plan, split, questions, prompts), `video_production
 
 ## Beats and questions (user's design, 2026-11-07)
 
-- Beat fields: `clip`, `spoken`, `says`, `reference`, `in_scene_words`, `background`, `picture`, `model`.
+- Beat fields: `clip`, `spoken`, `says`, `reference`, `in_scene_words`, `background`, `picture`, `model`, `card_motion`.
 - The plan asks at known risks and holds until the host answers. Each question has a recommendation; the host decides.
 
 | Question | When | Options | Recommended |
@@ -68,7 +72,7 @@ Code: `video_production.py` (plan, split, questions, prompts), `video_production
 
 - Words (user's pick, 2026-11-07): a card after the scene when the words can stand alone; `minimax-h3` over the scene when they must sit on the picture; never `ltx-2.5`.
 - Words drawn over the scene by code (user, 2026-11-16): the `overlay` words route of `join_production_clips`, at the top, large. A title can sit over the first scene instead of a card. Why: W10b, title over the opening scene, first cut 0.01 → 0.98 picture match (w9). W04 (report of 2026-11-14) used it for its title.
-- Cards are generated, also with an exact colour or the user's picture (user, 2026-11-21). A card only when the user asks for one. A drawn card is made by hand with `make_card_clip`, only when the user asks for it. A misspelled card is made again, at most 3 in all; the best one is kept, also with a small misspelling (user, 2026-11-21). The card clip holds still: no camera move (user, 2026-11-21).
+- Cards are generated, also with an exact colour or the user's picture (user, 2026-11-21). A card only when the user asks for one. A drawn card is made by hand with `make_card_clip`, only when the user asks for it. A misspelled card is made again, at most 3 in all; the best one is kept, also with a small misspelling (user, 2026-11-21). The card clip holds still: no camera move (user, 2026-11-21). It moves only when the user asks: `card_motion` holds the move in the user's words, and the card prompt uses it (user, 2026-11-23). The card clip is made on `minimax-h3` from the card still: 1.00x in 3 of 3; `ltx-2.5` pushed in 1.13-1.27x (test, 2026-11-23, 792 credits).
 - `in_scene_words` (a label, a sign): no question, best effort by the model.
 - Why `line-<n>`: the line was said 0 of 3 times inside a 12 s clip with another beat, 3 of 3 alone in a 4 s close-up (`ltx-2.5`, 2026-11-07).
 - Spoken line prompt (user, 2026-11-16, W08, W05): the line gets a time slot sized by its words (3 words a second, 2 s or more), then a silent end: "stops talking, smiles and nods, mouth closed. Nobody speaks." A script label in the quote ("Maya: Then we walk.") becomes the speaker: `Maya says, word for word: "Then we walk."`.
@@ -78,6 +82,7 @@ Code: `video_production.py` (plan, split, questions, prompts), `video_production
 ## The user's own clip (MCP-14, approved 2026-11-11)
 
 - `source` on a beat: the user's clip (file_path from `upload_media`, URL, or project id). The beat is a clip of its own. Nothing is generated (0 credits); the join uses the clip as it is.
+- A user's picture: the planner picks the use from the user's words (user, 2026-11-23). As it is, held still (`source`; W08 screenshot). Lightly edited first (`edit_image`, then `source` or `reference.file`). On a card the user asked for (card `picture`). Brought to life (a subject's `picture`; the model moves it, and it may change a little).
 - `source_sound`: keep the clip's own sound (default). False: the clip is made silent before the voice-over and music are added.
 - A voice-over, music or captions on the user's clip: a plan with that one beat, `says` on it, then `create_production_sound` and the join.
 - Continue the user's clip: the next clip starts from the source clip's last frame (`link: continues`).

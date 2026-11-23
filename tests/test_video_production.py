@@ -271,7 +271,7 @@ class SoundPlanTests(unittest.TestCase):
 
     def test_music_covers_the_film_and_the_sound_is_in_the_total(self):
         p = plan(self.story_with_voice(), "person", 15)
-        self.assertEqual(p["sound"]["music"], {"seconds": 32, "prompt": "soft piano", "credits": 32})
+        self.assertEqual(p["sound"]["music"], {"seconds": 32, "prompt": "soft piano", "credits": 32, "instrumental": True})
         self.assertTrue(p["sound"]["captions"])
         clips = sum(step["credits"] for clip in p["clips"] for step in clip["steps"])
         self.assertEqual(p["credits"], clips + p["sound"]["narration"]["credits"] + 32)
@@ -314,8 +314,10 @@ class ReferenceTests(unittest.TestCase):
                         video = clip["steps"][-1]
                         self.assertIn(clip["reference"]["kind"], ("none", "last_frame", "picture", "still"))
                         self.assertEqual(video["tool"] == "create_video_from_image", clip["reference"]["kind"] in ("last_frame", "still"))
-                        # minimax-h3 makes every scene clip up to 30 s (user, 2026-11-14); a still with words stays on ltx-2.5
-                        want = "ltx-2.5" if clip["reference"]["kind"] == "still" or (clip["seconds"] > 30 and clip["reference"]["kind"] != "picture") else "minimax-h3"
+                        # minimax-h3 makes every scene clip up to 30 s (user, 2026-11-14); a still with words stays on ltx-2.5;
+                        # a card goes on minimax-h3, which holds it still (user, 2026-11-23)
+                        still = clip["reference"]["kind"] == "still" and clip["kind"] != "card"
+                        want = "ltx-2.5" if still or (clip["seconds"] > 30 and clip["reference"]["kind"] != "picture") else "minimax-h3"
                         self.assertEqual(video["model"], want)
 
     def test_a_clip_that_continues_takes_the_last_frame(self):

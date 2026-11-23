@@ -1,6 +1,6 @@
 # Video composition
 
-The MCP makes the video from end to end. Overview: [ARCHITECTURE](../ARCHITECTURE.md). Ships first.
+The MCP makes the video from end to end. Overview: [ARCHITECTURE](../ARCHITECTURE.md). Doctrine: [ARCHITECTURE](../ARCHITECTURE.md#doctrine-user-2026-11-23). Ships first.
 
 | Doc | Covers | Tools | Code |
 |---|---|---|---|
