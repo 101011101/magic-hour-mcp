@@ -25,6 +25,7 @@ Tickets: [`../tickets/TICKETS.md`](../tickets/TICKETS.md).
 - Code never forces a best-practice rule. Each rule has a path for the user's words: a story field, an answer to a question, or the host's text. Examples: `music_vocals`, `lift_background`, `card_motion` (2026-11-23).
 - The only flip: a logic issue with a precedent. Example: the user asks for a short clip, but it is an ad. It still goes to video composition (`plan_video_production`).
 - The conversation builds the best refined prompt. The subsystem that gets the refined prompt respects it.
+- The conversation only asks questions and records the answers. How to build a video is in the video tool's rules of thumb (`RULES_OF_THUMB`), not in the conversation (2026-11-23).
 
 ## Pipeline (user, 2026-11-14 and 2026-11-16)
 

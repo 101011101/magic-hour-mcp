@@ -73,47 +73,52 @@ FILES = {
 
 FILM_ROWS = [
     {"id": "kind", "kind": "deciding", "ask": "(Read from the words.) What kind of film?",
-     "answers": {"ad": "Hook in the first 3 s, the selling points, the call to action at the end. Music on.",
-                 "someone_speaks": "An interview, a talking head, a demo, people talking: one spoken line per beat.",
-                 "explainer_list": "One step or one point per beat, in order; labels as words on screen.",
-                 "story_mood": "A story or a mood piece: the same people and place words in every beat."},
+     # 2026-11-23 (user): the conversation only asks and records answers; how to build each kind is in the video
+     # tool's RULES_OF_THUMB (hook, call to action, one point per beat, one spoken line per beat, fill the length).
+     "answers": {"ad": "An ad or a promo for a product, a service or a brand.",
+                 "someone_speaks": "An interview, a talking head, a demo, people talking.",
+                 "explainer_list": "An explainer, a how-to or a list.",
+                 "story_mood": "A story or a mood piece."},
      "default": "story_mood."},
     {"id": "purpose", "kind": "deciding", "ask": "Who is it for, and what should it make them do?",
-     "answers": {"stated": "Use it for the hook and the close.", "none": "A general audience."},
+     "answers": {"stated": "The audience and the goal are in the words.", "none": "A general audience."},
      "default": "Read from the words; else a general audience.",
      "ask_when": "an ad or a promo with no audience in the words"},
     {"id": "shape", "kind": "required", "ask": "Where will it be posted (TikTok, Instagram, YouTube, a website)?",
      "answers": {"9:16": "TikTok, Reels, Shorts, a story.", "16:9": "YouTube, a website, a presentation.", "1:1": "An Instagram post."},
      "default": "9:16 for social video, else 16:9."},
     {"id": "length", "kind": "required", "ask": "About how long, in seconds?",
-     "answers": {"seconds": "Fill it with the story; no stretching, no pauses."}, "default": "15 s (a reel); 30 s for an explainer."},
+     "answers": {"seconds": "The length in seconds."}, "default": "15 s (a reel); 30 s for an explainer."},
     {"id": "who_speaks", "kind": "deciding", "ask": "Should anyone talk: a voice-over, a person on camera, people talking to each other, or no one?",
-     "answers": {"nobody": "No spoken lines. The sound comes from what the plan picks: music, sound effects, the scene's own sound.",
+     "answers": {"nobody": "No spoken lines. Sound stays on: music, sound effects or the scene's own sound.",
                  "scene_sound": "The scene's own sound (as the words ask for it), no spoken lines.",
-                 "narrator": "A voice-over: each beat's narration goes in its `says`; the story's `narrator` field is how the voice sounds. The voice cloner reads it (the user's own voice when they give a sample).",
-                 "one_on_screen": "One person says the lines on camera: each line in its own short beat (`spoken`).",
-                 "people_talking": "Each speaker's line in its own beat, in order."},
+                 "narrator": "A voice-over (in the user's own voice when they give a sample).",
+                 "one_on_screen": "One person speaks on camera.",
+                 "people_talking": "People talk to each other."},
      "default": "Read from the words; else nobody.", "ask_when": "the words want speech but do not say who speaks"},
     {"id": "sound", "kind": "required", "ask": "(Implied.) The video has sound.",
      "answers": {"on": "The video has sound; who_speaks and music say where it comes from. Not every clip needs its own sound.",
                  "silent": "Only when the user asked for silence."}, "default": "on."},
     {"id": "music", "kind": "deciding", "ask": "(Implied.) Music under the film?",
-     "answers": {"yes": "One music track at the join, none inside the clips.", "no": "No music."},
+     "answers": {"yes": "Music under the film.", "no": "No music."},
      "default": "Yes for an ad, a reel or a social post; else no."},
     {"id": "captions", "kind": "deciding", "ask": "(Implied.) Captions of the spoken words?",
-     "answers": {"yes": "White letters, black outline.", "no": "No captions."},
+     "answers": {"yes": "Captions of the spoken words.", "no": "No captions."},
      "default": "Yes when someone speaks in a social video (TikTok, Reels, Shorts, an ad); else no."},
     {"id": "exact_words", "kind": "deciding", "ask": "Any words that must appear on screen (a title, a price, a website), spelled exactly?",
-     "answers": {"none": "No words on screen.", "exact words": "Exactly as the user wrote them, in the beat's `exact_words`. A card only when the user asks for one."},
-     # 2026-11-22 (K21: a skipped question gave "none", so the ad had no call to action)
-     "default": "An ad or a promo: short call-to-action words that fit the request. Else none. Never invent a price, a date or a web address.",
+     "answers": {"none": "No words on screen.", "exact words": "Exactly as the user wrote them."},
+     # 2026-11-22 (K21: a skipped question gave "none", so the ad had no call to action). 2026-11-23: not "none" but
+     # not set, so the video tool's rule of thumb (an ad ends on call-to-action words) decides.
+     "default": "Not set: the video plan's rules of thumb decide (an ad ends on call-to-action words).",
      "ask_when": "an ad or a promo with no call-to-action words",
      # 2026-11-20 audit: the user's 'your call' means write words that fit (user, 2026-11-19), not "none"
      "your_call": "Write short words that fit the request (a title or a call to action), exactly as they will show. Never invent a price, a date or a web address."},
     {"id": "product_picture", "kind": "deciding", "ask": "Do you have a photo of the product? A film made from words only looks like it.",
      "answers": {"photo": "The product looks like the user's photo.",
-                 "words":"Make it from words; tell the user it is a look-alike."},
-     "default": "words.", "ask_when": "a real product or brand is shown and no photo is attached"},
+                 "web": "No photo from the user: a free-licence photo of the real product from the web.",
+                 "words": "The user chose a look-alike made from words: answer none to the plan's picture question."},
+     # 2026-11-23 (user): no user wants a worse version; "words" only when the user chooses it or the product is made up
+     "default": "web for a real, sold product; words for a made-up one.", "ask_when": "a real product or brand is shown and no photo is attached"},
 ]
 
 # 2026-11-22: the story rules moved to the video tool (RULES_OF_THUMB in video_production_tool.py) or were dropped:
@@ -303,7 +308,9 @@ def front(family: str, request: str, answers: dict[str, str] | None = None, ques
     short_or_film = (answers or {}).get(SHORT_OR_FILM["id"])
     if short_or_film is not None:   # the user's answer to the "short or longer?" check, not a sheet row
         answers = {k: v for k, v in answers.items() if k != SHORT_OR_FILM["id"]}
-        if re.search(r"\b(?:long|longer|film|story|ad|several)\b", str(short_or_film), re.I):
+        said = re.sub(r"\b(?:not|no|never|without|n't \w+)\s+(?:(?:a|an|the)\s+)?(?:long|longer|film|story|ad|several)\b", "",
+                      str(short_or_film), flags=re.I)   # "short, not an ad" stays short (2026-11-23 audit)
+        if re.search(r"\b(?:long|longer|film|story|ad|several)\b", said, re.I):
             return {"ready": False, "stage": "switch_family", "family": family,
                     "next": "The user wants a longer film: call plan_conversation again with family film and the same request."}
     if family == "new_video" and answers and answers.get("sound") == ASK:   # 2026-11-20 audit: sound is implied, never asked

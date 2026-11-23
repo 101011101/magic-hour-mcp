@@ -223,8 +223,8 @@ class Story(BaseModel):
         "True only when the user asks for singing in the music: say the voice and what it sings in `music`. Otherwise "
         "the music is instrumental."))
     lift_background: bool = Field(default=True, description=(
-        "False only when the user wants a clip's own background sound left as it was made under a spoken line (a quiet "
-        "room, a hushed scene). Otherwise the steady background (a street, a crowd) under a spoken line is raised, so "
+        "False only when the user wants a clip's own background sound left as it was made under a spoken line (no place "
+        "sound, a quiet room, a hushed scene). Otherwise the steady background (a street, a crowd) under a spoken line is raised, so "
         "the place is still heard while the person speaks (W06)."))
     captions: bool = Field(default=False, description=(
         "Words of what is said on the picture: white letters with a black outline. Words already on screen at that time "
@@ -251,8 +251,11 @@ class Story(BaseModel):
 # ones no field text says: the cf ablation (78 dry chats) showed the other rules repeated field texts or changed nothing.
 RULES_OF_THUMB = (
     "Rules of thumb, when the user's words do not say otherwise: no story from the user: write one, with a hook in the "
-    "first 3 s, then the body, then the close. A card only when the user asks for a card; other words on screen go in "
-    "a scene beat's `exact_words`. Keep every concrete detail the user gave, word for word (counts, colours, names, words).")
+    "first 3 s, then the body, then the close. An ad: hook and close aim at its audience; end on call-to-action "
+    "words (no made-up price, date or web address). An explainer or a list: one point per beat, its label in "
+    "`exact_words`. One spoken line per beat. Fill the length: no stretching, no pauses. A card only when the user asks for a card; other "
+    "words on screen go in a scene beat's `exact_words`. Keep every concrete detail the user gave, word for word "
+    "(counts, colours, names, words).")
 
 
 def register_video_production(mcp: FastMCP) -> None:

@@ -75,6 +75,31 @@ def test_video_with_no_length_checks_short_or_film_once():
         assert out["stage"] != "ask_the_user" or "short_or_film" not in [q["id"] for q in out["questions"]]
     longer = front("new_video", "a ufo over a city", {"from_picture": "words", "short_or_film": "a longer film please"}, questions_asked=True)
     assert longer["stage"] == "switch_family" and "family film" in longer["next"]
+    for short in ("short, not an ad", "one short clip, no story", "not a film, just short"):   # 2026-11-23 audit
+        kept = front("new_video", "a ufo over a city", {"from_picture": "words", "short_or_film": short}, questions_asked=True)
+        assert kept["stage"] != "switch_family", short
+    ad = front("new_video", "a ufo over a city", {"from_picture": "words", "short_or_film": "an ad for my shop"}, questions_asked=True)
+    assert ad["stage"] == "switch_family"
+
+
+def test_a_skipped_product_picture_is_a_real_photo_and_words_is_the_users_choice():
+    # 2026-11-23 (user): no user wants a worse version; the look-alike is only the user's choice
+    skipped = front("film", "an ad for my bottle", {"kind": "ad", "product_picture": "ask"}, questions_asked=True)
+    picture = {d["id"]: d["value"] for d in skipped["decisions"]}["product_picture"]
+    assert picture.startswith("web")
+    chose = front("film", "an ad for my bottle", {"kind": "ad", "product_picture": "words"})
+    words = next(d for d in chose["decisions"] if d["id"] == "product_picture")
+    assert "answer none" in words["instruction"]
+
+
+def test_the_conversation_holds_no_video_building_rules():
+    # 2026-11-23 (user): the conversation only asks and records answers; the video tool's rules of thumb build
+    from mcp_magichour.video_production_tool import RULES_OF_THUMB
+    text = str(conversation_front.FILM_ROWS)
+    for rule in ("Hook in the first 3 s", "one spoken line per beat", "Use it for the hook", "no stretching", "One music track", "White letters"):
+        assert rule not in text
+    for rule in ("call-to-action", "one point per beat", "One spoken line per beat", "no stretching"):
+        assert rule in RULES_OF_THUMB
 
 
 def test_media_facts_read_length_and_shape(tmp_path, monkeypatch):

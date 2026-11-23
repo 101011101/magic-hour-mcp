@@ -1142,11 +1142,13 @@ def questions(story: dict, planned: dict) -> list[dict]:
             out.append({
                 "id": f"picture-{subject['id']}", "beat": None,
                 "ask": (f"\"{subject['id']}\" is a product with no photo. The video model draws a product it only knows by "
-                        "name wrongly. A real photo as its `picture` keeps it right in every clip."),
+                        "name wrongly. A real photo as its `picture` keeps it right in every clip. When the user chose a "
+                        "look-alike made from words, answer none: the user's choice wins (user, 2026-11-23)."),
                 "options": {"web": "A real, sold product: find a free-licence photo on the web (for example Wikimedia "
                                    "Commons), upload it, set it as the subject's `picture`, and tell the user its source and licence.",
                             "user": "Ask the user for a photo (their own product, or no free photo found), then set it as `picture`.",
-                            "none": "No photo: the product is made up, or its exact look does not matter."},
+                            "none": "No photo: the product is made up, its exact look does not matter, or the user chose a "
+                                    "look-alike made from words (the conversation's product_picture answer 'words')."},
                 "recommend": "web",
             })
     scene_clips = [c for c in planned.get("clips", []) if c["kind"] == "scene"]

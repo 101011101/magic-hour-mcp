@@ -671,18 +671,19 @@ def lift_bed(film: Path, spoken: list[tuple[float, float]], clips: list[tuple[fl
     street = loudness_between(film, pauses, BED_MEASURE_GAIN_DB)
     if street is not None and street > target - BED_MIN_RAISE_DB:
         return None
-    bed_file = out.with_name(out.stem + "-bed.wav")
-    _ffmpeg(["-i", str(film), "-vn", "-af", BED_FILTER, str(bed_file)])
-    bed = loudness_between(bed_file, pauses, BED_MEASURE_GAIN_DB)
-    if bed is None:
-        return None
-    raise_db = min(BED_MAX_RAISE_DB, target - bed)
-    if raise_db < BED_MIN_RAISE_DB:
-        return None
-    level = f"{10 ** (raise_db / 20):.4f}*({_inside(clips)})"
-    _ffmpeg(["-i", str(film), "-i", str(bed_file), "-filter_complex",
-             f"[1:a]volume='{level}':eval=frame[bed];[0:a][bed]amix=inputs=2:normalize=0:duration=first[a]",
-             "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", str(out)])
+    with tempfile.TemporaryDirectory() as folder:   # the background track is a working file, never beside the film
+        bed_file = Path(folder) / "bed.wav"
+        _ffmpeg(["-i", str(film), "-vn", "-af", BED_FILTER, str(bed_file)])
+        bed = loudness_between(bed_file, pauses, BED_MEASURE_GAIN_DB)
+        if bed is None:
+            return None
+        raise_db = min(BED_MAX_RAISE_DB, target - bed)
+        if raise_db < BED_MIN_RAISE_DB:
+            return None
+        level = f"{10 ** (raise_db / 20):.4f}*({_inside(clips)})"
+        _ffmpeg(["-i", str(film), "-i", str(bed_file), "-filter_complex",
+                 f"[1:a]volume='{level}':eval=frame[bed];[0:a][bed]amix=inputs=2:normalize=0:duration=first[a]",
+                 "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", str(out)])
     return {"raised_db": round(raise_db, 1), "voice_lufs": voice, "background_lufs_before": street,
             "background_lufs": loudness_between(out, pauses, BED_MEASURE_GAIN_DB)}
 

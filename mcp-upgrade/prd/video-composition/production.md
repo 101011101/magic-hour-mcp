@@ -54,10 +54,12 @@ Code: `video_production.py` (plan, split, questions, prompts), `video_production
 - Fault: with no photo, the host made "reference" pictures with an image model. They invented the products (a Steam Deck with no trackpads; a Switch 2 with the first Switch's blue and red controllers).
 - Fix: a real photo as the subject's `picture`. Two free-licence Wikimedia Commons photos made both devices right in every shot.
 - A product with no picture is a question (below). Never a picture made by an image model.
+- The user's choice wins (2026-11-23). The user chose a look-alike made from words: the host answers `none`. The user said nothing: a real photo (the conversation's default is `web`).
 
 ## Beats and questions (user's design, 2026-11-07)
 
 - Beat fields: `clip`, `spoken`, `says`, `reference`, `in_scene_words`, `background`, `picture`, `model`, `card_motion`.
+- Rules of thumb (`RULES_OF_THUMB`, in the tool text): they apply when the user's words do not say otherwise. Hook in the first 3 s, then the body, then the close. An ad: hook and close aim at its audience; end on call-to-action words. An explainer or a list: one point per beat, its label in `exact_words`. One spoken line per beat. Fill the length: no stretching, no pauses. A card only when the user asks. Keep every concrete detail word for word. These moved from the conversation (2026-11-23).
 - The plan asks at known risks and holds until the host answers. Each question has a recommendation; the host decides.
 
 | Question | When | Options | Recommended |
@@ -67,7 +69,7 @@ Code: `video_production.py` (plan, split, questions, prompts), `video_production
 | `colour-codes` | Colour codes in the story | words, keep | words |
 | `held-<n>` | A picture card right after a scene made from the same picture (W09) | merge, keep | merge; keep when the beat is an end card. After its own reveal, the plan merges it with no question (2026-11-21) |
 | `together-<n>` | A beat in another clip than the beat before, with `link: continues`, or `link: event` and a shared person (2026-11-20), and both fit (15 s; 30 s with a pictured person) | join, keep | join |
-| `picture-<id>` | A product subject with no `picture` | web, user, none | web |
+| `picture-<id>` | A product subject with no `picture` | web, user, none | web; none when the user chose a look-alike (2026-11-23) |
 | `continuity` | Every plan with 2 or more scene clips, once: the host checks its own plan for a split continuous motion or asset, and for two actions in one clip with no cut | ok, change | ok |
 
 - Words (user's pick, 2026-11-07): a card after the scene when the words can stand alone; `minimax-h3` over the scene when they must sit on the picture; never `ltx-2.5`.

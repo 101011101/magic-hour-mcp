@@ -164,6 +164,7 @@ class TicketTests(unittest.TestCase):
         self.assertGreater(self.mean_db(out, 1, 1) - self.mean_db(film, 1, 1), 10)               # the street, before she speaks
         self.assertAlmostEqual(self.mean_db(out, 4, 1), self.mean_db(film, 4, 1), delta=1)        # her voice
         self.assertAlmostEqual(m.probe(out)["seconds"], 8, delta=0.1)
+        self.assertEqual(list(self.dir.glob("*-bed.wav")), [])   # the working track stays out of the films folder
 
     def test_a_street_already_heard_under_the_voice_is_left_alone(self):
         self.assertIsNone(m.lift_bed(self.talking_film(0.1), [(3, 6)], [(0, 8)], self.dir / "lifted.mp4"))
