@@ -121,6 +121,10 @@ def side_by_side(pictures: list[Path], out: Path, layout: str = "row", aspect: s
     size = max(16, round(min(cell_w, cell_h) * 0.1))
     bold = ("/System/Library/Fonts/Supplemental/Arial Bold.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
     font = next((ImageFont.truetype(f, size) for f in (*bold, *media_tools.FONTS) if Path(f).exists()), None) or ImageFont.load_default(size)
+    # a label wider than its cell was cut: one smaller font for all labels, so the bands match
+    while (hasattr(font, "font_variant") and font.size > 10
+           and any(draw.textlength(label, font=font) > cell_w * 0.9 for label in labels or [] if label)):
+        font = font.font_variant(size=font.size - 2)
     for i, path in enumerate(pictures):
         pic = Image.open(path).convert("RGB")
         x0, y0 = (i % cols) * (cell_w + gap), (i // cols) * (cell_h + gap)

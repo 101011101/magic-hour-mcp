@@ -139,6 +139,16 @@ class NewPictureToolTests(unittest.TestCase):
         out = side_by_side([self.red, self.wide, self.grey], self.dir / "three.png", "row", "16:9", background="white")
         self.assertEqual(Image.open(out).convert("RGB").getpixel((5, 5)), (255, 255, 255))
 
+    def test_a_label_wider_than_its_cell_is_shrunk_not_cut(self):
+        """'Before treatment week one' in a 320 px cell showed as 'fore treatment week c'."""
+        from PIL import Image
+        out = side_by_side([self.grey] * 4, self.dir / "labels.png", "row", "16:9", background="white",
+                           labels=["Before treatment week one", "After", "x", "y"])
+        band = Image.open(out).convert("L").crop((0, 0, 320, 30)).point(lambda v: 255 if v > 200 else 0)
+        left, _, right, _ = band.getbbox()
+        self.assertGreater(left, 3)      # the first letter is whole
+        self.assertLess(right, 317)      # the last letter is whole
+
     def test_side_by_side_needs_two_to_four(self):
         with self.assertRaises(ValueError):
             side_by_side([self.red], self.dir / "x.png")
