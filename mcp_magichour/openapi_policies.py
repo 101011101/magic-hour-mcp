@@ -155,7 +155,9 @@ API_TOOL_METADATA = {
         "selection (selection_mode points) at that person's position in the first frame, not auto: "
         "with auto the model chooses the person (benchmark C15c). One person per call: run it again on "
         "the result for a second person, with that person's points. Starts a background job that costs credits (about 48 per second at 480p); "
-        "returns a project id for wait_for_video_project.",
+        "returns a project id for wait_for_video_project. Head swap in a video (the user's face and hair, everything else "
+        "kept): get_first_frame, swap_head_in_photo on that frame, then this tool with model wan-animate (free plan: minimax-h3), style.mode animate "
+        "and the head-swapped frame as the picture: the clothes, room, motion and sound stay (test hs2, 2026-11-23).",
     ),
     ("POST", "/v1/face-swap"): (
         "swap_face_in_video",
@@ -165,8 +167,8 @@ API_TOOL_METADATA = {
         "of the person in the video. Before you use it, look at the photo and a frame of the video. "
         "If the hair (colour, length, curl) or skin tone differ, the result does not look like the "
         "photo's person (benchmark C15a: dark curly hair onto a blonde woman was not recognisable): "
-        "use replace_character_in_video instead, even when the user says 'face', and tell the user the "
-        "hair and clothes come from the photo. In individual-faces mode, map every face crop of the "
+        "use the head swap route instead, even when the user says 'face': get_first_frame, swap_head_in_photo on "
+        "that frame, then replace_character_in_video (wan-animate or, on the free plan, minimax-h3; style.mode animate) with the head-swapped frame. In individual-faces mode, map every face crop of the "
         "chosen person: detection lists one person more than once when the head turns (b1 K13: the man "
         "facing the camera was 0-0, the same man turned away was 0-3; only 0-0 was mapped, so his own "
         "face came back each time he turned). Starts a background job that costs credits; returns a "
@@ -310,7 +312,8 @@ API_TOOL_METADATA = {
         "swap_head_in_photo",
         "Swap head in photo",
         "Swaps a head from a supplied image onto a supplied body image. Costs 10 credits; returns "
-        "a project id for wait_for_image_project.",
+        "a project id for wait_for_image_project. It has no person choice: for several people in one photo, each with "
+        "their own new head, use swap_heads_in_photo.",
     ),
     ("POST", "/v1/image-background-remover"): (
         "remove_image_background",

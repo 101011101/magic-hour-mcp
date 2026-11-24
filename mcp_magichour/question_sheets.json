@@ -327,6 +327,7 @@
       "is": "A face or head from one picture onto a person in a photo or video, or a headshot from a photo.",
       "tools": [
         "swap_head_in_photo",
+        "swap_heads_in_photo",
         "swap_face_in_photo",
         "swap_face_in_video",
         "detect_faces",
@@ -335,11 +336,12 @@
         "generate_headshot",
         "change_clothes_in_photo",
         "place_person_in_scene",
-        "replace_character_in_video"
+        "replace_character_in_video",
+        "get_first_frame"
       ],
       "settings": {
-        "swap_face_in_photo": {
-          "face_swap_mode": "individual-faces only when several people each get their own face"
+        "swap_face_in_video": {
+          "face_swap_mode": "individual-faces when several people each get their own face"
         }
       },
       "rows": [
@@ -365,11 +367,11 @@
             "The attached files."
           ],
           "answers": {
-            "photo": "swap_head_in_photo (face, hair and head shape).",
-            "video": "swap_face_in_video; tell the user the face may only look similar and no head swap exists for video."
+            "photo": "swap_head_in_photo (face, hair and head shape). Also when the user says 'just the face' or 'keep their hair': do not offer a face-only swap, a face swap is a blend that does not look like the person (user, 2026-11-23, b5 Y01: 'should be a head swap, not just a face swap', though that request said 'keep their hair'). Tell the user the hair comes from their photo. Several people, each a new head: swap_heads_in_photo.",
+            "video": "Head swap for video, one person: get_first_frame of the video; swap_head_in_photo with that frame as body_file_path and the user's photo as head_file_path (wait_for_image_project); then replace_character_in_video with model wan-animate (free plan: minimax-h3), style.mode animate, the original video as video_file_path, the head-swapped frame's download URL as image_file_path, the resolution nearest the video's, start 0 and end the video length (or the chosen part). The video's motion, mouth, room, clothes and sound stay. About 48 credits per second at 480p. Several people in a video: swap_face_in_video individual-faces."
           },
           "default": "—",
-          "why": "User, 2026-11-13: head swap for faces. Test: C14b 1.5 → 4; C14a head swap clearly the person, face swap a blend. swap_face_in_video limit (C15a 2.7).",
+          "why": "User, 2026-11-13: head swap for faces. Test: C14b 1.5 → 4; C14a head swap clearly the person, face swap a blend. swap_face_in_video limit (C15a 2.7). User, 2026-11-23 (b5 Y01, Y04): 'should be a head swap, not just a face swap'. Test hs2: head-swapped first frame + wan-animate animate kept the kitchen, clothes, hand pose and sound; the mouth moves with the speech.",
           "applies": "a face or head swap"
         },
         {
@@ -383,10 +385,10 @@
           ],
           "answers": {
             "one person": "swap_head_in_photo; if it changes the wrong person, detect_faces then swap_face_in_photo individual-faces.",
-            "each a different face": "detect_faces, then swap_face_in_photo or swap_face_in_video individual-faces."
+            "each a different face": "Photo: swap_heads_in_photo with one {person, head} per person (person 1 = the leftmost face); it finds the faces itself. Video: detect_faces, then swap_face_in_video individual-faces."
           },
           "default": "Ask; do not guess. Still open after the user was asked: make nothing and say why.",
-          "why": "C14b: asked which person, then head swap: 4.",
+          "why": "C14b: asked which person, then head swap: 4. b5 Y01 (2026-11-23): swap_face_in_photo individual-faces was a blend ('didn't work out'). Test hs2: swap_heads_in_photo changed each person to their portrait and kept the beach; a second plain head swap on the whole photo changed both people. Dry run hsd (2026-11-23): face detection stayed queued about 2 minutes and the host stopped polling after 40 s, so the tool waits for detection itself.",
           "no_default": "Which person in the picture gets the new face: with several people, a guess can change the wrong person."
         },
         {
@@ -398,8 +400,8 @@
             "'The first 5 seconds', 'from 0:10 to 0:20'."
           ],
           "answers": {
-            "whole": "swap_face_in_video.",
-            "part": "trim_media first, then swap_face_in_video (MCP-TOOLS-27)."
+            "whole": "The whole clip: end = the video length.",
+            "part": "trim_media first (MCP-TOOLS-27), then the video route of photo_or_video."
           },
           "default": "The whole clip.",
           "why": "swap_face_in_video antitype: asked for 5 s, delivered all 10 s (C15a)."

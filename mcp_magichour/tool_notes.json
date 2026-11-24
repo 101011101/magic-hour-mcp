@@ -159,9 +159,14 @@
       ],
       "antitype": [
         {
-          "job": "A face swap in a video",
-          "use": "swap_face_in_video",
-          "why": "Head swap is photo only."
+          "job": "A face or head swap in a video, one person",
+          "use": "get_first_frame, swap_head_in_photo on that frame, then replace_character_in_video (wan-animate or, on the free plan, minimax-h3; style.mode animate)",
+          "why": "Head swap is photo only; the animated head-swapped frame keeps the video (test hs2, 2026-11-23)."
+        },
+        {
+          "job": "Several people in one photo, each with their own new head",
+          "use": "swap_heads_in_photo",
+          "why": "No person choice: a second head swap on the whole photo changes everyone (test hs, 2026-11-23)."
         },
         {
           "job": "One chosen person in a group photo, if head swap picks the wrong one",
@@ -181,13 +186,18 @@
       "does": "Puts a face from one picture onto faces in another picture. The face only, not hair or head shape.",
       "preferred": "Second choice (user, 2026-11-13): swap_head_in_photo first.",
       "type": [
-        "Several people in one photo, each with their own new face (individual-faces mode, after detect_faces)."
+        "Only when the user refuses a head swap: the face changes, hair and head shape stay."
       ],
       "antitype": [
         {
           "job": "A face swap on one person",
           "use": "swap_head_in_photo",
           "why": "Only the face changes; hair and head shape stay, so the person is less recognisable (C14b 2.0 to 2.3)."
+        },
+        {
+          "job": "Several people in one photo, each with their own new face",
+          "use": "swap_heads_in_photo",
+          "why": "b5 Y01: individual-faces was a blend; user 'should be a head swap'."
         }
       ],
       "limits": [],
@@ -204,9 +214,14 @@
       "family": "faces",
       "does": "Puts a face from a picture onto a person in a video.",
       "type": [
-        "One person in a short clip; motion and framing are kept."
+        "Several people in one clip, each with their own new face (individual-faces)."
       ],
       "antitype": [
+        {
+          "job": "One person in a video gets the user's face",
+          "use": "get_first_frame, swap_head_in_photo on that frame, then replace_character_in_video (wan-animate or, on the free plan, minimax-h3; style.mode animate)",
+          "why": "b5 Y04: face swap, user 'should be a head swap'. Test hs2: recognisable, sound kept."
+        },
         {
           "job": "Only part of the clip",
           "use": "trim_media first, then this tool (MCP-TOOLS-27)",
@@ -219,8 +234,9 @@
         }
       ],
       "limits": [
-        "The new face is a blend; graders did not recognise the portrait (C15a 2.7). Warn the user. No head swap exists for video.",
-        "Two faces in one clip: both barely change and the sound was lost (C15c: 1.0 to 1.3).", "One person can be several face crops (a turned head): map each crop of that person, or the old face comes back when the head turns (b1 K13)."
+        "The new face is a blend; graders did not recognise the portrait (C15a 2.7). Warn the user.",
+        "Two faces in one clip: both barely change and the sound was lost (C15c: 1.0 to 1.3).",
+        "One person can be several face crops (a turned head): map each crop of that person, or the old face comes back when the head turns (b1 K13)."
       ],
       "deciding_question": "Which person, and which part of the clip?",
       "bench": "Right tool: 10 runs, average 1.8."
@@ -398,9 +414,14 @@
       "family": "faces",
       "does": "Finds the faces in a picture or video, for a swap that maps each face.",
       "type": [
-        "Before swap_face_in_photo or swap_face_in_video in individual-faces mode, when several people each get their own face."
+        "Before swap_face_in_video in individual-faces mode, when several people each get their own face. A photo needs no detect_faces call: swap_heads_in_photo finds the faces itself."
       ],
       "antitype": [
+        {
+          "job": "Several people in one photo, each with a new face or head",
+          "use": "swap_heads_in_photo",
+          "why": "Test hsl Y01 (2026-11-23): detect_faces then swap_face_in_photo gave a blend; the faces barely changed."
+        },
         {
           "job": "Any job that is not a per-face swap",
           "use": "no call",
@@ -776,13 +797,14 @@
       "does": "Replaces a person in a video with a character from a picture, or makes the picture copy the video's movement.",
       "type": [
         "style.mode replace: the character takes the person's place.",
-        "style.mode animate: the picture moves like the person in the video."
+        "style.mode animate: the picture moves like the person in the video.",
+        "Head swap in a video: style.mode animate with a head-swapped first frame (get_first_frame, swap_head_in_photo) as the picture. The room, clothes, motion, mouth and sound stay (test hs2, 2026-11-23, wan-animate 480p, 486 credits for 10 s)."
       ],
       "antitype": [
         {
-          "job": "Only the face changes",
+          "job": "Only the face changes, several people in a clip",
           "use": "swap_face_in_video",
-          "why": "This tool replaces the whole person."
+          "why": "This tool replaces one person per call."
         }
       ],
       "limits": [
@@ -854,6 +876,41 @@
       ],
       "deciding_question": "Is the voice the user's own?",
       "bench": "Draft 2026-11-20 from the tool's inputs; no bench runs yet."
+    },
+    "swap_heads_in_photo": {
+      "family": "faces",
+      "does": "Puts a new head (face, hair, head shape) on each of several people in one photo, each from their own picture. 10 credits per person.",
+      "type": [
+        "Two or more people in a photo, each gets their own new head (b5 Y01)."
+      ],
+      "antitype": [
+        {
+          "job": "One person in the photo",
+          "use": "swap_head_in_photo",
+          "why": "One call is enough."
+        },
+        {
+          "job": "A video",
+          "use": "get_first_frame, swap_head_in_photo, then replace_character_in_video (animate)",
+          "why": "Photo only."
+        }
+      ],
+      "limits": [
+        "Each entry: person (1 = leftmost face) and head. The tool runs face detection and waits up to 3 minutes."
+      ],
+      "deciding_question": "Which picture goes on which person?",
+      "bench": "Test hs2 (2026-11-23): both people became their portraits, beach kept, no seam."
+    },
+    "get_first_frame": {
+      "family": "faces",
+      "does": "The first frame of a video as a picture (file_path). Free.",
+      "type": [
+        "The body picture for a head swap in a video: swap_head_in_photo on it, then replace_character_in_video (animate)."
+      ],
+      "antitype": [],
+      "limits": [],
+      "deciding_question": "—",
+      "bench": "Test hs2 (2026-11-23)."
     }
   },
   "free_models": {

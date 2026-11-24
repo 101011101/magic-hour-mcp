@@ -52,7 +52,8 @@ IMPLIED = [
 
 # tool_media.py's tools: registered with MAGIC_HOUR_TOOL_PLAN or MAGIC_HOUR_CONVERSATION (2026-11-20 audit: the
 # sheets route to them, and the conversation bench ran without them).
-TOOL_MEDIA = {"add_sound_to_video", "adjust_colours", "put_pictures_side_by_side", "put_picture_on_video", "make_card_clip"}
+TOOL_MEDIA = {"add_sound_to_video", "adjust_colours", "put_pictures_side_by_side", "put_picture_on_video", "make_card_clip",
+              "swap_heads_in_photo"}
 
 # Tools no family sheet lists yet: they go here with the files they need. Empty since 2026-11-20 (all moved into the sheets).
 EXTRA_TOOLS: dict[str, dict[str, str]] = {}

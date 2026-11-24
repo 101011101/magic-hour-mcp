@@ -199,3 +199,39 @@ class IsolationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HeadSwapPhotoTests(unittest.TestCase):
+    """swap_heads_in_photo helpers (b5 Y01, head swap check 2026-11-23)."""
+
+    def test_cut_box_grows_the_face_and_snaps_to_near_photo_edges(self):
+        from mcp_magichour.tool_media import cut_box
+        self.assertEqual(cut_box((142, 25, 204, 285), (640, 384)), (91, 0, 397, 384))
+        self.assertEqual(cut_box((310, 80, 180, 228), (640, 384)), (265, 0, 535, 384))
+        self.assertEqual(cut_box((300, 300, 100, 100), (1000, 1000)), (275, 270, 425, 430))
+
+    def test_margin_is_added_only_on_photo_edges_and_cut_off_again(self):
+        from PIL import Image, ImageChops
+        from mcp_magichour.tool_media import padded, unpadded
+        photo = Image.effect_noise((640, 384), 60).convert("RGB")
+        box = (91, 0, 397, 384)
+        cut = photo.crop(box)
+        pad, margins = padded(cut, box, photo.size)
+        self.assertEqual(margins, (0, 16, 0, 16))
+        self.assertEqual(pad.size, (306, 416))
+        self.assertIsNone(ImageChops.difference(unpadded(pad, margins, cut.size), cut).getbbox())
+
+    def test_a_face_crop_is_found_where_it_was_cut(self):
+        from PIL import Image
+        from mcp_magichour.tool_media import locate_face
+        photo = Image.effect_noise((640, 384), 80).convert("RGB")
+        self.assertEqual(locate_face(photo, photo.crop((310, 80, 490, 308))), (310, 80, 180, 228))
+
+    def test_tool_is_listed_with_person_places(self):
+        async def tools():
+            async with Client(create_mcp()) as client:
+                return {t.name: t for t in await client.list_tools()}
+        with patch.dict(os.environ, {"MAGIC_HOUR_CONVERSATION": "on"}):
+            listed = asyncio.run(tools())
+        self.assertIn("swap_heads_in_photo", listed)
+        self.assertIn("1 = the leftmost face", listed["swap_heads_in_photo"].description)
