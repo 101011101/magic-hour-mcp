@@ -590,11 +590,11 @@ async def _clip_file(planned: dict, made: dict[str, str], n: int, folder: Path) 
 
 async def _upload(file: Path, kind: str = "image") -> str:
     """Upload to Magic Hour and keep a copy, so this server can read the file again."""
-    data = file.read_bytes()
+    data = await asyncio.to_thread(file.read_bytes)
     item = (await _api("POST", "/v1/files/upload-urls", {"items": [{"type": kind, "extension": file.suffix.lstrip(".").lower()}]}))["items"][0]
     async with httpx.AsyncClient(timeout=httpx.Timeout(120.0)) as client:
         (await client.put(item["upload_url"], content=data)).raise_for_status()
-    kept_files.keep(item["file_path"], data)
+    await asyncio.to_thread(kept_files.keep_if_possible, item["file_path"], data)
     return item["file_path"]
 
 

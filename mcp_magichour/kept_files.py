@@ -16,6 +16,7 @@ tells the host how to pass the file instead.
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 import tempfile
@@ -29,6 +30,7 @@ BLOB_API = "https://vercel.com/api/blob"
 BLOB_API_VERSION = "13"
 TOKEN_VARIABLE = "KEPT_BLOB_READ_WRITE_TOKEN"
 KEEP_DAYS = 7
+logger = logging.getLogger(__name__)
 
 
 class NotKept(Exception):
@@ -86,6 +88,17 @@ def keep(file_path: str, data: bytes) -> None:
     (folder / _key(file_path)).write_bytes(data)
 
 
+def keep_if_possible(file_path: str, data: bytes) -> bool:
+    """keep(), but a store that fails does not fail the upload: the file is on Magic Hour and the generation can go on.
+    Only a later join, trim or frame of this file then asks the host to pass the file again."""
+    try:
+        keep(file_path, data)
+        return True
+    except (httpx.HTTPError, OSError) as error:
+        logger.warning("kept_copy_failed exception_type=%s", type(error).__name__)
+        return False
+
+
 def read(file_path: str, out: Path, account: str) -> Path:
     """Write the kept copy of file_path to out. NotYours when file_path names another account than `account`,
     NotKept when this server has no copy."""
@@ -107,9 +120,10 @@ def read(file_path: str, out: Path, account: str) -> Path:
 
 
 def not_kept_message(file_path: str) -> str:
-    return (f"This server cannot read {file_path}: it was uploaded straight to Magic Hour, which never hands a file "
-            f"back, or more than {KEEP_DAYS} days ago. Upload the file with upload_media (its URL, or its bytes as "
-            "data_base64) and pass the file_path that returns, or pass a URL of the file. Nothing was charged.")
+    return (f"This server has no copy of {file_path}, and Magic Hour never hands a file back. The file was uploaded "
+            f"straight to Magic Hour, more than {KEEP_DAYS} days ago, or the copy could not be stored. Upload the file "
+            "again with upload_media (its URL, or its bytes as data_base64) and pass the file_path that returns, or "
+            "pass a URL of the file. Nothing was charged.")
 
 
 def not_yours_message(file_path: str) -> str:

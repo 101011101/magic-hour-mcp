@@ -85,6 +85,15 @@ class PrivateStoreTests(unittest.TestCase):
         self.assertEqual(get.call_args[1]["headers"], {"authorization": f"Bearer {TOKEN}"})
         self.assertEqual(self.out.read_bytes(), b"bytes")
 
+    def test_a_store_that_fails_does_not_fail_the_upload(self):
+        # Review: a Blob error after the Magic Hour upload failed the whole call, and a paid clip with it.
+        with patch.object(kept_files.httpx, "put", side_effect=kept_files.httpx.ConnectError("down")), \
+             self.assertLogs(kept_files.logger, "WARNING") as logs:
+            self.assertFalse(kept_files.keep_if_possible(MINE, b"bytes"))
+        assert TOKEN not in "".join(logs.output) and "ConnectError" in logs.output[0]
+        with patch.object(kept_files.httpx, "put", return_value=Response(200)):
+            self.assertTrue(kept_files.keep_if_possible(MINE, b"bytes"))
+
     def test_a_missing_or_expired_copy_is_not_kept_and_another_account_makes_no_call(self):
         with patch.object(kept_files.httpx, "get", return_value=Response(404)):
             with self.assertRaises(kept_files.NotKept):

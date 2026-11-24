@@ -586,7 +586,7 @@ async def _upload_chatgpt_file(file: ChatGPTFile, media_type: ProjectType) -> di
             )
             uploaded = await files.put(item["upload_url"], content=bytes(media))
             uploaded.raise_for_status()
-            await asyncio.to_thread(kept_files.keep, item["file_path"], bytes(media))   # read again by join / last frame
+            await asyncio.to_thread(kept_files.keep_if_possible, item["file_path"], bytes(media))   # read again by join / last frame
             return {"file_path": item["file_path"]}
 
     try:
