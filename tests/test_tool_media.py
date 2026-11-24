@@ -64,6 +64,14 @@ class SoundOnVideoTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             mix_onto_video(self.film, self.dir / "out.mp4")
 
+    def test_no_working_files_are_left_behind(self):
+        """Each call with original replace left silent.mp4 and held.mp4 in the temp folder."""
+        scratch = self.dir / "temp"
+        scratch.mkdir()
+        with patch.object(tempfile, "tempdir", str(scratch)):
+            mix_onto_video(self.film, self.dir / "out.mp4", voice=self.long_voice, original="replace")
+        self.assertEqual(list(scratch.iterdir()), [])
+
 
 def mean_rgb(path):
     from PIL import Image, ImageStat

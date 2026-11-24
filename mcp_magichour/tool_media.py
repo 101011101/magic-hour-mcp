@@ -38,26 +38,27 @@ def mix_onto_video(film: Path, out: Path, music: Path | None = None, voice: Path
     is cut (media_tools.fit_parts). Loudness is set to media_tools.TARGET_LUFS. Returns what was done."""
     if not (music or voice):
         raise ValueError("give music, a voice, or both")
-    work = Path(tempfile.mkdtemp())
-    if original == "replace":
-        silent = work / "silent.mp4"
-        media_tools._ffmpeg(["-i", str(film), "-an", "-c:v", "copy", str(silent)])
-        film = silent
-    seconds = media_tools.probe_seconds(film)
-    spoken = []
-    if original == "keep" and media_tools.probe(film)["audio"]:
-        spoken = media_tools.speech_spans(film)
-    parts, fit = [], {"tempo": 1.0, "hold": 0.0, "moved": False}
-    if voice:
-        length = media_tools.probe_seconds(voice)
-        fit = media_tools.fit_parts([{"start": 0.0, "end": length, "at": max(0.0, voice_at)}], seconds)
-        parts = fit["parts"]
-        if fit["hold"] > 0:
-            film = media_tools.hold_end(film, fit["hold"], work / "held.mp4")
-    mix = media_tools.add_sound(film, out, narration=voice, parts=parts or None, music=music, spoken=spoken,
-                                music_swell=music_swell)
-    return {"seconds": round(media_tools.probe_seconds(out), 2), "lufs": mix["lufs"], "original": original,
-            "kept_spoken_spans": len(spoken), "voice_tempo": round(fit["tempo"], 3), "held_end_seconds": round(fit["hold"], 2)}
+    with tempfile.TemporaryDirectory() as folder:   # the working files go when the mix is done
+        work = Path(folder)
+        if original == "replace":
+            silent = work / "silent.mp4"
+            media_tools._ffmpeg(["-i", str(film), "-an", "-c:v", "copy", str(silent)])
+            film = silent
+        seconds = media_tools.probe_seconds(film)
+        spoken = []
+        if original == "keep" and media_tools.probe(film)["audio"]:
+            spoken = media_tools.speech_spans(film)
+        parts, fit = [], {"tempo": 1.0, "hold": 0.0, "moved": False}
+        if voice:
+            length = media_tools.probe_seconds(voice)
+            fit = media_tools.fit_parts([{"start": 0.0, "end": length, "at": max(0.0, voice_at)}], seconds)
+            parts = fit["parts"]
+            if fit["hold"] > 0:
+                film = media_tools.hold_end(film, fit["hold"], work / "held.mp4")
+        mix = media_tools.add_sound(film, out, narration=voice, parts=parts or None, music=music, spoken=spoken,
+                                    music_swell=music_swell)
+        return {"seconds": round(media_tools.probe_seconds(out), 2), "lufs": mix["lufs"], "original": original,
+                "kept_spoken_spans": len(spoken), "voice_tempo": round(fit["tempo"], 3), "held_end_seconds": round(fit["hold"], 2)}
 
 
 # ---- colour change by code
