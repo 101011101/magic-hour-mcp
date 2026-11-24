@@ -7,8 +7,8 @@
     final_check      every checklist line, met or not, with what shows it
 
 MAGIC_HOUR_GATES: off (no gate tools), warn (the create tools run without an approved token and say the gates were
-skipped), refuse (a create tool needs the approved token). The server keeps nothing: each step returns a signed token
-that carries what came before.
+skipped), refuse (a create tool needs the approved token). Each step returns a short token; what it stands for is kept
+in this process's memory, so the gates need one server process.
 """
 
 from __future__ import annotations
