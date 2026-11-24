@@ -1,4 +1,5 @@
-"""General helpers on any file: upload it so this server can read it again, take a video's last frame, join videos.
+"""General helpers on any file: upload it so this server can read it again, take a first or last frame, join, trim,
+reframe, add exact words, mix sound.
 They decide nothing; the host chooses when to use them.
 
 A video is named by a Magic Hour video project id (a finished one), a URL the server can download, or a file_path

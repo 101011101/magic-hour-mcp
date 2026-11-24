@@ -1,6 +1,6 @@
-"""The two file steps a multi-clip video needs: the last frame of a clip, and the join. They need ffmpeg.
+"""The file work this server does itself with ffmpeg: frames, the join, trim and reframe, the sound mix, words on screen.
 
-The hosted server has no ffmpeg at this time. A build on a machine that has ffmpeg can run them.
+ffmpeg comes from the PATH, else from the imageio-ffmpeg package (a server with no ffmpeg installed).
 """
 
 from __future__ import annotations

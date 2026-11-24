@@ -1,8 +1,9 @@
 """The multi-clip video tools: plan the clips, make each clip, join them.
 
-plan_video_production   story in, ordered clips out. Read-only.
-create_production_clip  makes one clip of the plan with its one reference. Spends credits.
-join_production_clips   joins the finished clips in story order. Needs ffmpeg on the server.
+plan_video_production    story in, ordered clips out. Read-only.
+create_production_clip   makes one clip of the plan with its one reference. Spends credits.
+create_production_sound  makes the plan's narration and music. Spends credits.
+join_production_clips    joins the finished clips in story order and adds the sound and the captions.
 
 The server keeps no state. The plan travels as `production`, a packed copy of the story that the host passes back.
 """
