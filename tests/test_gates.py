@@ -105,6 +105,19 @@ class TokenTests(unittest.TestCase):
         with self.assertRaises(ToolError):
             gates.read(token, "approved")
 
+    def test_tokens_expire_and_the_store_keeps_only_the_newest(self):
+        from unittest.mock import patch
+        with patch.object(gates, "MAX_TOKENS", 3):
+            tokens = [gates.sign({"kind": "plan", "n": n}) for n in range(5)]
+            self.assertLessEqual(len(gates._STORE), 3)
+            with self.assertRaises(ToolError):
+                gates.read(tokens[0], "plan")
+            self.assertEqual(gates.read(tokens[-1], "plan")["n"], 4)
+        token = gates.sign({"kind": "plan"})
+        later = gates.time.monotonic() + gates.TOKEN_SECONDS + 1
+        with patch.object(gates.time, "monotonic", return_value=later), self.assertRaises(ToolError):
+            gates.read(token, "plan")
+
 
 class FlowTests(unittest.TestCase):
     def setUp(self):

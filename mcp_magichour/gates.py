@@ -17,6 +17,8 @@ import json
 import os
 import re
 import secrets
+import time
+from collections import OrderedDict
 from typing import Any, Literal
 
 import mcp.types as mt
@@ -49,20 +51,33 @@ SAID = "From the user's words: copy the words that answer it."
 # ---- tokens ----------------------------------------------------------------------------------------------------------
 # A token is a short id; what it stands for is kept on this server. (The first build put the whole state in the token:
 # the host mis-copied the long tokens about 15 times in a dry run.) A deployed server with more than one
-# process would keep this in shared storage.
-_STORE: dict[str, dict] = {}
+# process would keep this in shared storage. Tokens expire and the store has a size limit, so memory stays bounded.
+_STORE: OrderedDict[str, tuple[float, dict]] = OrderedDict()   # token: (when it was made, what it stands for), oldest first
+TOKEN_SECONDS = 24 * 3600
+MAX_TOKENS = 1000
+
+
+def _prune(now: float) -> None:
+    """Drop the expired tokens, and the oldest ones past MAX_TOKENS."""
+    while _STORE and (len(_STORE) > MAX_TOKENS or now - next(iter(_STORE.values()))[0] > TOKEN_SECONDS):
+        _STORE.popitem(last=False)
 
 
 def sign(data: dict) -> str:
     token = f"{data['kind'][:3]}-{secrets.token_hex(5)}"
-    _STORE[token] = json.loads(json.dumps(data))
+    now = time.monotonic()
+    _STORE[token] = (now, json.loads(json.dumps(data)))
+    _prune(now)
     return token
 
 
 def read(token: str, kind: str | tuple[str, ...]) -> dict:
-    data = _STORE.get(token.strip())
-    if data is None:
-        raise ToolError("This token is not one this server made. Use the token the last gate step returned, unchanged.")
+    _prune(time.monotonic())
+    entry = _STORE.get(token.strip())
+    if entry is None:
+        raise ToolError("This token is not one this server made, or it has expired. Use the token the last gate step returned, "
+                        "unchanged; for a request older than a day, call start_request again.")
+    data = entry[1]
     kinds = (kind,) if isinstance(kind, str) else kind
     if data.get("kind") not in kinds:
         raise ToolError(f"This is a {data.get('kind')} token; this step needs a {' or '.join(kinds)} token.")
