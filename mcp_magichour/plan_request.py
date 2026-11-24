@@ -125,25 +125,40 @@ CHANGE_VERB = re.compile(
     r"\b(remove|delete|erase|add|put|place|change|replace|swap|make|turn|fix|clean|brighten|darken|lighten|warm|cool|crop|"
     r"blur|sharpen|colou?r|retouch|convert|extend|fill|move|cut|take out|get rid)", _I)
 OPTIONAL_QUIET = {"look", "keep", "language", "exact_words"}  # never asked just because the host left them open
+# Platform names and shape words only, each a whole word. "The story of how we met", "a fingerprint" and "an x-ray" name no shape.
+# A phrase that names a platform and its shape ("Instagram reels") is one match, so "Instagram" alone does not also count.
+STORY = r"(?:instagram|insta|ig|facebook|fb|snapchat|whatsapp) stor(?:y|ies)\b"
 PLATFORMS = [
-    (r"tiktok|reels?\b|stories|story\b|\bshorts\b|vertical|portrait (?:video|format|mode|orientation|reel)|in portrait\b|phone", "9:16"),
-    (r"youtube|landscape|widescreen|tv\b|wide\b|banner|presentation|desktop", "16:9"),
-    (r"instagram post|square|feed|profile pic", "1:1"),
-    (r"instagram", "1:1"),
-    (r"linkedin|facebook|twitter|\bx\b", "16:9"),
-    (r"print|poster|flyer|a4|letter", "9:16"),
+    (r"\b(?:tiktok\w*|(?:instagram |insta |ig |facebook |fb |youtube )?reels?\b|" + STORY + r"|stories\b|(?:youtube )?shorts\b"
+     r"|(?:on|to) (?:my|our|your) story\b|vertical\w*|portrait (?:video|format|mode|orientation|reel)|in portrait\b"
+     r"|(?:for|on) (?:a |my |the |your )?(?:mobile )?phones?\b|phone (?:screen|wallpaper))", "9:16"),
+    (r"\b(?:youtube\w*|landscape\w*|horizontal\w*|widescreen|tv\b|wide\b|banner\w*|presentation\w*|desktop\w*)", "16:9"),
+    (r"\b(?:instagram (?:post|feed)\w*|square\w*|feeds?\b|profile pic\w*)", "1:1"),
+    (r"\binstagram\w*", "1:1"),
+    (r"\b(?:linkedin\w*|facebook\w*|twitter\w*|(?:on|for|to) (?-i:X)\b(?!-))", "16:9"),
+    (r"\b(?:print(?:ed|ing|s)?\b|posters?\b|flyers?\b|a4\b)", "9:16"),
 ]
+RATIO = re.compile(r"\b(16|9|1|4|3)\s*(?::|x|×|\s+by\s+)\s*(9|16|1|3|4|5)\b", _I)
+RATIOS = {"16:9": "16:9", "9:16": "9:16", "1:1": "1:1", "4:3": "16:9", "3:4": "9:16", "4:5": "9:16"}
+# "Not vertical", "no, landscape not portrait", "16:9 instead of 9:16": the word after the negation is not the shape asked for.
+NOT_SHAPE = re.compile(r"\b(?:not|no|never|instead of|rather than)\s+(?:(?:a|an|in|for|on|the)\s+)?[\w:×]+", _I)
+
+
+def aspect_candidates(text: str) -> list[str]:
+    """Every shape the words name, the strongest first: an exact ratio ("9:16", "16x9"), then platform names in PLATFORMS order."""
+    text = NOT_SHAPE.sub(" ", text)
+    found = [RATIOS[f"{m[1]}:{m[2]}"] for m in RATIO.finditer(text) if f"{m[1]}:{m[2]}" in RATIOS]
+    for pattern, value in PLATFORMS:
+        if re.search(pattern, text, _I):
+            found.append(value)
+            text = re.sub(pattern, " ", text, flags=_I)
+    return list(dict.fromkeys(found))
 
 
 def parse_aspect(text: str) -> str | None:
     """A shape from plain words ("Instagram story") or an exact ratio ("9:16")."""
-    ratio = re.search(r"\b(16:9|9:16|1:1|4:3|3:4|4:5)\b", text, re.ASCII)
-    if ratio:
-        return {"4:5": "9:16", "3:4": "9:16", "4:3": "16:9"}.get(ratio[1], ratio[1])
-    for pattern, value in PLATFORMS:
-        if re.search(pattern, text, _I):
-            return value
-    return None
+    found = aspect_candidates(text)
+    return found[0] if found else None
 
 
 def parse_seconds(text: str) -> int | None:
@@ -315,14 +330,16 @@ def plan_sheet(messages: list[dict], tool: str, params: list[dict], attachments:
             if value is not None:
                 fill(name, value, "derived", "parsed from the user's words")
 
-    # 6. Shape: the user's own words win. Else the picture's own shape, when the output is that picture.
-    #    Ask when the picture's shape is not a safe answer.
+    # 6. Shape: the user's own words win, the newest message that names a shape first ("actually, landscape" after
+    #    "a TikTok"). The host's user value stays when that message names it too ("a widescreen TikTok").
+    #    Else the picture's own shape, when the output is that picture. Ask when the picture's shape is not a safe answer.
     if "aspect" in sheet:
-        shape_text = PRINT_WORDS.sub("", all_user) if attachments else all_user
-        said = parse_aspect(shape_text)
+        shape_texts = [PRINT_WORDS.sub("", text) if attachments else text for text in users]
+        named = next((found for found in map(aspect_candidates, reversed(shape_texts)) if found), [])
+        said = named[0] if named else None
         row = sheet["aspect"]
         if said:
-            if not (row["source"] == "user" and row["value"] == said):
+            if not (row["source"] == "user" and row["value"] in named):
                 fill("aspect", said, "user", "the user's words")
         elif row["source"] != "default":
             missing("aspect")

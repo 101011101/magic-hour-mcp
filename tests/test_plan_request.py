@@ -740,3 +740,44 @@ class CompositionPathOnlyTests(unittest.TestCase):
         image_to_video = API_TOOL_METADATA[("POST", "/v1/image-to-video")][2]
         for planner in ("plan_request", "plan_video_production", "plan_conversation"):
             self.assertNotIn(planner, image_to_video)
+
+
+from mcp_magichour.plan_request import aspect_candidates, parse_aspect  # noqa: E402
+
+FOX = [{"name": "subject", "value": "a fox in the snow", "source": "user"}, {"name": "seconds", "value": 10, "source": "user"},
+       {"name": "sound", "value": "music", "source": "user"}]
+
+
+def sheet_rows(result):
+    return {row["name"]: row for row in result["params"]}
+
+
+class ShapeWordsTests(unittest.TestCase):
+    """The shape comes from a ratio or a platform name, the newest message first."""
+
+    def test_the_newest_message_that_names_a_shape_wins(self):
+        for first, later in [("Make a 10 second TikTok of a fox in the snow with music", "Actually make it landscape for YouTube instead"),
+                             ("Make a 10 second 9:16 video of a fox in the snow with music", "Actually no, 16:9")]:
+            with self.subTest(later=later):
+                result = plan_sheet([user(first), assistant("Sure. Anything else?"), user(later)], "create_video_from_text",
+                                    FOX + [{"name": "aspect", "value": "9:16", "source": "user"}])
+                self.assertEqual((sheet_rows(result)["aspect"]["value"], sheet_rows(result)["aspect"]["source"]), ("16:9", "user"))
+
+    def test_only_ratios_and_platform_names_give_a_shape(self):
+        cases = {"A 10 second YouTube video telling the story of how my parents met": "16:9", "the history of Rome": None,
+                 "a story about a fox": None, "a fingerprint": None, "an x-ray": None, "use the X logo": None, "post it on X": "16:9",
+                 "a letter from grandma": None, "a phone call scene": None, "for my phone": "9:16", "a feedback form": None,
+                 "not vertical": None, "make it vertical, not landscape": "9:16", "no, landscape not portrait": "16:9",
+                 "horizontal": "16:9", "16x9": "16:9", "9 by 16": "9:16", "Instagram story": "9:16", "for YouTube Shorts": "9:16",
+                 "to print": "9:16", "portrait": None}
+        for text, shape in cases.items():
+            with self.subTest(text=text):
+                self.assertEqual(parse_aspect(text), shape)
+        self.assertEqual(aspect_candidates("for Instagram reels"), ["9:16"])
+
+    def test_the_hosts_user_value_stays_when_the_message_names_it_too(self):
+        for host, expected in [("16:9", "16:9"), ("9:16", "9:16"), ("1:1", "9:16")]:
+            with self.subTest(host=host):
+                result = plan_sheet([user("A 10 second widescreen TikTok of a fox in the snow with music")], "create_video_from_text",
+                                    FOX + [{"name": "aspect", "value": host, "source": "user"}])
+                self.assertEqual(sheet_rows(result)["aspect"]["value"], expected)
