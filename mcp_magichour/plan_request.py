@@ -90,7 +90,8 @@ YOUR_CALL = re.compile(r"your call|you (decide|pick|choose)|pick (one|something|
                        r"|up to you|don'?t care|doesn'?t matter|no preference|anything|surprise me|dealer'?s choice"
                        r"|i don'?t know|idk|dunno|just (make|do) it|you know best|i trust you", _I)
 # The user ends the questions: "just make it". Every open choice with a default then takes it, whatever was asked last.
-GIVE_UP = re.compile(r"just (make|do) (it|something|whatever|the cheapest)|\bmake it\W*$|stop asking|your call on anything else"
+# A closing "make it" counts as an order, not as a question: "Can you make it?" asks for the video, it does not end the questions.
+GIVE_UP = re.compile(r"just (make|do) (it|something|whatever|the cheapest)|\bmake it[^\w?]*$|stop asking|your call on anything else"
                      r"|whatever you think is best|go ahead and make it", _I)
 # The user handed the wording over, in the brief or later: "you write them", "you pick the words", "the exact words are your call",
 # "choose a headline yourself". The host may then write the words itself.

@@ -877,6 +877,19 @@ class NoTextWordsTests(unittest.TestCase):
                 self.assertTrue(result["ready"])
 
 
+class CanYouMakeItTests(unittest.TestCase):
+    def test_can_you_make_it_asks_for_the_video_and_does_not_end_the_questions(self):
+        for brief in ["I need a promo video for my bakery's grand opening. Can you make it?", "Promo video for my bakery. Could you make it ?"]:
+            with self.subTest(brief=brief):
+                result = plan_sheet([user(brief)], "create_video_from_text", [{"name": "subject", "value": "bakery promo", "source": "user"}])
+                self.assertFalse(result["ready"])
+                self.assertIn("seconds", [q["param"] for q in result["questions"]])
+                self.assertNotIn("default", {row["source"] for row in result["params"]})
+        result = plan_sheet([user("Promo video for my bakery"), assistant(QUESTIONS["seconds"]), user("Can you just make it?")],
+                            "create_video_from_text", [{"name": "subject", "value": "bakery promo", "source": "user"}])
+        self.assertEqual(sheet_rows(result)["seconds"]["source"], "default")
+
+
 class AnyScriptWordsTests(unittest.TestCase):
     """Exact words in any script are compared letter by letter; they never shrink to an empty string that matches anything."""
 
