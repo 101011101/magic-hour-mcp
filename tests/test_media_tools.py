@@ -247,6 +247,24 @@ class PhonePhotoTests(MediaTest):
         self.assertColour(frame.getpixel((40, 10)), (255, 0, 0))
 
 
+class LongWordTests(unittest.TestCase):
+    def test_one_word_wider_than_the_frame_is_made_smaller_to_fit(self):
+        from PIL import Image
+        with tempfile.TemporaryDirectory() as folder:
+            out = m._caption_png("www.magichour.ai/pricing?plan=annual", (360, 640), Path(folder) / "c.png", share=0.075)
+            image = Image.open(out).convert("RGBA")
+        letters = [x for x in range(image.width) for y in range(0, image.height, 2)
+                   if image.getpixel((x, y)) == (255, 255, 255, 255)]
+        self.assertTrue(letters)
+        self.assertGreaterEqual(min(letters), 360 * 0.05)
+        self.assertLessEqual(max(letters), 360 * 0.95)
+
+    def test_words_that_fit_keep_their_size(self):
+        with tempfile.TemporaryDirectory() as folder, mock.patch.object(m, "load_font", wraps=m.load_font) as load:
+            m._caption_png("Hello there", (360, 640), Path(folder) / "c.png", share=0.075)
+        self.assertEqual(load.call_args.args[0], 27)
+
+
 class LimitTests(MediaTest):
     def test_an_ffmpeg_run_past_the_time_limit_is_stopped_with_a_clear_error(self):
         slow = ["-re", "-f", "lavfi", "-i", "anullsrc=r=8000:cl=mono", "-t", "3", "-f", "null", "-"]   # 3 s at real speed

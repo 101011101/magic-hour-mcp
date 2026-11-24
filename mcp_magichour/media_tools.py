@@ -991,16 +991,27 @@ def _caption_png(text: str, size: tuple[int, int], out: Path, at: float = 0.80, 
     font = load_font(points, font)
     image = Image.new("RGBA", size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)
-    lines = []
-    for given in text.split("\n"):
-        current = ""
-        for word in given.split():
-            if current and draw.textlength(f"{current} {word}", font=font) > width * 0.84:
-                lines.append(current)
-                current = word
-            else:
-                current = f"{current} {word}".strip()
-        lines.append(current)
+
+    def wrapped():
+        lines = []
+        for given in text.split("\n"):
+            current = ""
+            for word in given.split():
+                if current and draw.textlength(f"{current} {word}", font=font) > width * 0.84:
+                    lines.append(current)
+                    current = word
+                else:
+                    current = f"{current} {word}".strip()
+            lines.append(current)
+        return lines
+
+    lines = wrapped()
+    # one word wider than the frame (a web address) is not cut at the edges: the letters are made smaller until it fits
+    while hasattr(font, "font_variant") and points > 10 and max(draw.textlength(line, font=font) for line in lines) > width * 0.84:
+        widest = max(draw.textlength(line, font=font) for line in lines)
+        points = max(10, min(points - 1, int(points * width * 0.84 / widest)))
+        font = font.font_variant(size=points)
+        lines = wrapped()
     line_height = round(points * 1.3)
     top = round(height * at) - line_height * len(lines) // 2
     top = max(round(points * 0.5), min(top, height - line_height * len(lines) - round(points * 0.5)))   # the band stays inside the frame
