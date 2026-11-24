@@ -12,6 +12,7 @@ from mcp_magichour.video_production import (
     choose_reference,
     count_ideas,
     needs_production,
+    pick_voice,
     plan,
     split,
     validate_story,
@@ -420,6 +421,23 @@ class PlanTests(unittest.TestCase):
                 p = plan(s, strategy, cuts=[2])
                 self.assertFalse(p["ok"])
                 self.assertTrue(p["problems"])
+
+
+class NarratorVoiceTests(unittest.TestCase):
+    def test_a_deep_womans_voice_is_a_womans_voice(self):
+        for said in ("a deep, warm woman's voice", "deep, calm female narrator", "she speaks with a deep calm tone"):
+            with self.subTest(said):
+                self.assertTrue(pick_voice({"narrator": said})["tags"].startswith("Female,"))
+        self.assertTrue(pick_voice({"narrator": "a deep, calm voice"})["tags"].startswith("Male,"))
+
+    def test_a_voice_that_is_not_a_preset_is_a_problem(self):
+        s = {"title": "Sea", "aspect": "16:9", "setting": "A grey beach.", "narrator": "warm female",
+             "beats": [{"seconds": 5, "text": "Waves roll in.", "says": ["The sea is calm today."]}]}
+        self.assertEqual(validate_story({**s, "voice": "cv-0001"}), [])
+        for voice in ("cv-9999", "Ashley"):
+            with self.subTest(voice):
+                self.assertFalse(plan({**s, "voice": voice})["ok"])
+        self.assertIn("cv-0001", " ".join(validate_story({**s, "voice": "Ashley"})))
 
 
 class OutputCheckTests(unittest.TestCase):

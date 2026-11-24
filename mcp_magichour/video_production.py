@@ -110,7 +110,9 @@ def word_match(heard: str, script: str) -> float:
 # The host gives the narrator's profile (`narrator_voice`: gender, age, style) and the code
 # takes the best tagged preset. Before, every film got Ashley or Daniel. In testing, the host's own pick
 # from a short list of 24 broke its own brief in 3 of 6 requests; the profile match kept it in 6 of 6.
-MALE_WORDS = re.compile(r"\b(man|man's|male|men|he|his|him|guy|boy|gentleman|father|dad|deep)\b", re.I)
+MALE_WORDS = re.compile(r"\b(man|man's|male|men|he|his|him|guy|boy|gentleman|father|dad)\b", re.I)
+FEMALE_WORDS = re.compile(r"\b(woman|woman's|women|female|she|her|girl|lady|mother|mom|mum)\b", re.I)
+DEEP = re.compile(r"\bdeep\b", re.I)   # a deep voice is a man's, unless the words say a woman's
 ACCENTS = ("American", "British", "Australian", "Irish", "Scottish", "Indian", "Nigerian", "African", "Southern", "Canadian")
 _PLAIN = set("a an the and with of for to in on voice voices male female natural is it its that this like".split())
 
@@ -133,7 +135,7 @@ def pick_voice(story: dict) -> dict:
             return {"id": hit[0], "name": hit[1], "url": hit[6], "tags": f"{hit[2]}, {hit[3]}, {hit[4]}"}
     said = story.get("narrator") or ""
     profile = story.get("narrator_voice") or {}
-    gender = profile.get("gender") or ("Male" if MALE_WORDS.search(said) else "Female")
+    gender = profile.get("gender") or ("Male" if MALE_WORDS.search(said) or (DEEP.search(said) and not FEMALE_WORDS.search(said)) else "Female")
     age, style = profile.get("age") or "Middle-aged", profile.get("style") or "Conversational"
     accents, words = {a for a in ACCENTS if a.lower() in said.lower()}, _words(said)
 
@@ -232,6 +234,11 @@ def validate_story(story: dict) -> list[str]:
         total = sum(b["seconds"] for b in beats)
         if total != story["seconds"]:
             problems.append(f"beats add up to {total} s, the story says {story['seconds']} s")
+    voice = story.get("voice")
+    if voice and not any(v[0] == voice for v in VOICES):   # pick_voice would take another voice with no word
+        named = next((v[0] for v in VOICES if v[1].lower() == str(voice).lower()), None)
+        problems.append(f"voice {voice} is not a preset voice id: " + (f"use {named} ({voice}), or " if named else "")
+                        + "leave `voice` empty and the plan picks one from narrator_voice")
     return problems
 
 
