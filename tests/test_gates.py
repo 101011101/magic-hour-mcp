@@ -210,6 +210,24 @@ class MiddlewareTests(unittest.TestCase):
         self.assertFalse(err)
         self.assertIn("Gates skipped", text)
 
+    def test_warn_keeps_an_api_error_an_error(self):
+        # An error result checked against the output schema became "Output validation error" and lost the recovery text.
+        from fastmcp.tools.base import ToolResult
+        from mcp.types import TextContent
+
+        mcp = FastMCP("test")
+        error = {"error": {"code": "insufficient_credits", "next_action": "Add credits."}}
+
+        @mcp.tool(name="generate_image", output_schema={"type": "object", "properties": {"id": {"type": "string"}}, "required": ["id"]})
+        async def generate_image(prompt: str):
+            return ToolResult(content=[TextContent(type="text", text=json.dumps(error))], structured_content=error, is_error=True)
+
+        gates.register_gates(mcp, "warn")
+        err, _, text = call(mcp, "generate_image", {"prompt": "x"})
+        self.assertTrue(err)
+        self.assertIn("insufficient_credits", text)
+        self.assertNotIn("Output validation error", text)
+
     def test_listing_adds_plan_token(self):
         async def go(mode):
             async with Client(server(mode)) as client:

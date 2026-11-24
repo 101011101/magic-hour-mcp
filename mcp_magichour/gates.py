@@ -335,5 +335,7 @@ class GateMiddleware(Middleware):
         result = await call_next(context)
         if problem:
             note = TextContent(type="text", text=f"Gates skipped: {problem}. If this request is hard by the comparison, the plan was not checked.")
-            result = ToolResult(content=[note, *result.content], structured_content=result.structured_content, meta=result.meta)
+            # Keep is_error: an error result checked against the output schema loses its recovery text.
+            result = ToolResult(content=[note, *result.content], structured_content=result.structured_content, meta=result.meta,
+                                is_error=result.is_error)
         return result
