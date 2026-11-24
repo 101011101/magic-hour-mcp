@@ -180,6 +180,30 @@ class NewPictureToolTests(unittest.TestCase):
         self.assertGreater(im.getpixel((285, 30))[1], 200)   # the 60 px logo ends 9 px from the right edge: yellow
         self.assertLess(im.getpixel((215, 30))[1], 80)       # left of it: the red band
 
+    def see_through_logo(self):
+        """A 300x300 PNG, see-through but for a green disc in the middle."""
+        from PIL import Image, ImageDraw
+        logo = Image.new("RGBA", (300, 300), (0, 0, 0, 0))
+        ImageDraw.Draw(logo).ellipse((50, 50, 250, 250), fill=(0, 200, 0, 255))
+        logo.save(self.dir / "see-through.png")
+        return self.dir / "see-through.png"
+
+    def test_side_by_side_shows_the_background_where_a_picture_is_see_through(self):
+        """The see-through part of a PNG was black, even on a white background."""
+        from PIL import Image
+        sheet = Image.open(side_by_side([self.see_through_logo(), self.grey], self.dir / "sbs.png", "row", "16:9",
+                                        background="white")).convert("RGB")
+        self.assertEqual(sheet.getpixel((330, 370)), (0, 200, 0))   # the disc, in the middle of the 640x640 fitted logo
+        self.assertEqual(sheet.getpixel((20, 60)), (255, 255, 255))  # a see-through corner of the logo
+
+    def test_new_colours_keep_a_logo_see_through(self):
+        """adjust_colours made a see-through logo opaque."""
+        from PIL import Image
+        out = Image.open(recolour(self.see_through_logo(), self.dir / "warm-logo.png", warmth=0.3))
+        self.assertEqual(out.mode, "RGBA")
+        self.assertEqual(out.getpixel((2, 2))[3], 0)
+        self.assertEqual(out.getpixel((150, 150))[3], 255)
+
     def test_side_by_side_needs_two_to_four(self):
         with self.assertRaises(ValueError):
             side_by_side([self.red], self.dir / "x.png")
@@ -445,3 +469,17 @@ class SwapHeadsToolTests(unittest.TestCase):
         self.assertFalse(error, text)
         self.assertEqual(Image.open(api.detected).size, (384, 640))
         self.assertEqual(Image.open(json.loads(text)["file"]).size, (384, 640))
+
+    def test_a_see_through_photo_stays_see_through(self):
+        """The see-through part of a PNG came back black."""
+        from PIL import Image
+        photo, alpha = Image.open(self.photo).convert("RGBA"), Image.new("L", (640, 384), 0)
+        alpha.paste(255, (0, 0, 600, 384))   # the 40 px on the right are see-through
+        photo.putalpha(alpha)
+        photo.save(self.dir / "cut-out.png")
+        error, text = FakeMagicHour(self.boxes).swap(self.dir / "cut-out.png", [{"person": 1, "head": "https://h/a.png"}])
+        self.assertFalse(error, text)
+        out = Image.open(json.loads(text)["file"])
+        self.assertEqual(out.mode, "RGBA")
+        self.assertEqual(out.getpixel((630, 200))[3], 0)
+        self.assertEqual(out.getpixel((100, 130))[3], 255)

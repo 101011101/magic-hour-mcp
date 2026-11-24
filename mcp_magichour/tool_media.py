@@ -79,6 +79,11 @@ def mix_onto_video(film: Path, out: Path, music: Path | None = None, voice: Path
 
 # ---- colour change by code
 
+def _see_through(image) -> bool:
+    """A picture with see-through parts (an alpha channel or a transparent colour)."""
+    return image.mode in ("RGBA", "LA", "PA") or "transparency" in image.info
+
+
 def recolour(source: Path, out: Path, warmth: float = 0.0, saturation: float = 1.0, brightness: float = 0.0,
              contrast: float = 1.0) -> Path:
     """Change only the colours of a picture or video, nothing redrawn. warmth -1 (cooler) to 1 (warmer); saturation 0
@@ -95,6 +100,15 @@ def recolour(source: Path, out: Path, warmth: float = 0.0, saturation: float = 1
     if not picture:
         args += ["-c:v", "libx264", "-c:a", "copy"]
     media_tools._ffmpeg([*args, str(out)])
+    if picture and out.suffix.lower() == ".png":
+        from PIL import Image, ImageOps
+
+        before = ImageOps.exif_transpose(Image.open(source))
+        made = Image.open(out)
+        if _see_through(before) and made.size == before.size:   # ffmpeg dropped the see-through parts: put them back
+            made = made.convert("RGB")
+            made.putalpha(before.convert("RGBA").getchannel("A"))
+            made.save(out)
     return out
 
 
@@ -126,11 +140,15 @@ def side_by_side(pictures: list[Path], out: Path, layout: str = "row", aspect: s
            and any(draw.textlength(label, font=font) > cell_w * 0.9 for label in labels or [] if label)):
         font = font.font_variant(size=font.size - 2)
     for i, path in enumerate(pictures):
-        pic = ImageOps.exif_transpose(Image.open(path)).convert("RGB")   # a phone photo upright, as it is shown
+        pic = ImageOps.exif_transpose(Image.open(path))   # a phone photo upright, as it is shown
+        # a see-through part shows the cell's background (it was black)
+        see_through = _see_through(pic)
+        pic = pic.convert("RGBA" if see_through else "RGB")
         x0, y0 = (i % cols) * (cell_w + gap), (i // cols) * (cell_h + gap)
         if background == "blur":
+            flat = Image.alpha_composite(Image.new("RGBA", pic.size, "white"), pic).convert("RGB") if see_through else pic
             cover = max(cell_w / pic.width, cell_h / pic.height)
-            wide = pic.resize((round(pic.width * cover) + 1, round(pic.height * cover) + 1), Image.LANCZOS)
+            wide = flat.resize((round(pic.width * cover) + 1, round(pic.height * cover) + 1), Image.LANCZOS)
             left, top = (wide.width - cell_w) // 2, (wide.height - cell_h) // 2
             bg = wide.crop((left, top, left + cell_w, top + cell_h)).filter(ImageFilter.GaussianBlur(22))
             sheet.paste(Image.blend(bg, Image.new("RGB", bg.size, (0, 0, 0)), 0.25), (x0, y0))
@@ -141,7 +159,7 @@ def side_by_side(pictures: list[Path], out: Path, layout: str = "row", aspect: s
         scale = min(cell_w / pic.width, (cell_h - band) / pic.height)
         fitted = pic.resize((max(1, round(pic.width * scale)), max(1, round(pic.height * scale))), Image.LANCZOS)
         x, y = x0 + (cell_w - fitted.width) // 2, y0 + band + (cell_h - band - fitted.height) // 2
-        sheet.paste(fitted, (x, y))
+        sheet.paste(fitted, (x, y), fitted if see_through else None)
         if band:
             draw.rectangle((x0, y0, x0 + cell_w - 1, y0 + band - 1), fill=(20, 20, 20))
             draw.text((x0 + (cell_w - (box[2] - box[0])) // 2 - box[0], y0 + (band - (box[3] - box[1])) // 2 - box[1]),
@@ -496,7 +514,9 @@ def register_tool_media(mcp: FastMCP) -> None:
             source, is_picture = await _fetch_media(picture, f, ("image",))
             if not is_picture:
                 raise ToolError("`picture` is not a picture. For a video, see swap_face_in_video.")
-            photo = ImageOps.exif_transpose(Image.open(source)).convert("RGB")   # a phone photo upright, as it is shown
+            photo = ImageOps.exif_transpose(Image.open(source))   # a phone photo upright, as it is shown
+            alpha = photo.convert("RGBA").getchannel("A") if _see_through(photo) else None
+            photo = photo.convert("RGB")
             found = []
             if any(not s.get("face") for s in swaps):
                 photo_file = f / "photo.png"
@@ -532,6 +552,8 @@ def register_tool_media(mcp: FastMCP) -> None:
                 keep = ImageChops.lighter(keep, pasted)
                 done.append({"person": s.get("person"), "face": s.get("face"), "head": s["head"], "project_id": job["id"], "cut_out": list(box)})
             out = f / "heads-swapped.png"
+            if alpha:   # the see-through parts stay see-through (they came back black)
+                photo.putalpha(alpha)
             photo.save(out)
             return {**await _deliver(out, True), "credits_charged": credits, "people": done}
 
