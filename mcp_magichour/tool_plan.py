@@ -141,10 +141,11 @@ def plan(family: str, request: str, answers: dict[str, str] | None, questions_as
             return {"ready": False, "stage": "missing_answer", "family": family, "rows": stuck,
                     "next": ("Make nothing. Tell the user plainly what is still missing and why it matters: "
                              + " ".join(rows[i]["no_default"] for i in stuck) + " Do not ask again in this turn.")}
-        handed = {i for i, v in answers.items() if v == YOUR_CALL}   # the user handed it over; skipped rows take the default
+        # the user handed it over; skipped rows take the default; an 'n/a' made 'your_call' above was not handed over
+        handed = {i for i, v in answers.items() if v == YOUR_CALL and i not in always}
         answers = {i: (YOUR_CALL if v == ASK else v) for i, v in answers.items()}
     else:
-        handed = {i for i, v in answers.items() if v == YOUR_CALL}
+        handed = {i for i, v in answers.items() if v == YOUR_CALL and i not in always}
 
     decisions, texts = [], []
     for i, r in rows.items():

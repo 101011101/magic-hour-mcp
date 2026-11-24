@@ -134,6 +134,13 @@ class DryRunFixTests(unittest.TestCase):
         self.assertEqual(d["value"], "KwickFixx")
         self.assertIn("generate_image with the exact words in the prompt", d["instruction"])   # generation first
 
+    def test_n_a_on_the_words_row_takes_its_default(self):
+        """'n/a' became 'your_call' and then counted as the user's hand-over: the plan wrote words nobody asked for."""
+        answers = {"look": "a grey cat on a blue sofa", "exact_words": "n/a", "shape": "1:1", "set": "one", "transparent": "no"}
+        for asked in (False, True):
+            out = tool_plan.plan("new_picture", "a photo of a cat sleeping on a sofa", answers, questions_asked=asked)
+            self.assertEqual(next(d for d in out["decisions"] if d["id"] == "exact_words")["value"], "No words.")
+
     def test_consent_none_is_an_option(self):
         out = tool_plan.plan("faces", "my face", {"consent": "none", "photo_or_video": "photo", "which_person": "n/a",
                              "which_part": "n/a", "headshot_look": "n/a"})
