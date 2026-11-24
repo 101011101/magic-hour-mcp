@@ -1113,17 +1113,22 @@ def colour_name(code: str) -> str:
     return min(COLOUR_NAMES, key=lambda k: sum((x - y) ** 2 for x, y in zip(COLOUR_NAMES[k], (r, g, b))))
 
 
-def questions(story: dict, planned: dict) -> list[dict]:
+def questions(story: dict, planned: dict, numbers: list[int | None] | None = None) -> list[dict]:
     """The questions a plan must answer before it is made: risks with a known better way. Ids stay the same while the
-    story is the same, so the answers can go back with it. Each has a recommendation; the host decides."""
+    story is the same, so the answers can go back with it. Each has a recommendation; the host decides.
+
+    numbers: for a story that answers changed (answer_story), the host's number of each beat; None for a card an
+    answer added. The questions name the beats by these numbers, the numbers the answers are read by."""
     out: list[dict] = []
     beats = story["beats"]
+    own = numbers or list(range(1, len(beats) + 1))
     for n, beat in enumerate(beats, start=1):
-        if beat.get("kind", "scene") == "scene" and beat.get("exact_words") and not beat.get("words_route"):
+        k = own[n - 1]
+        if k and beat.get("kind", "scene") == "scene" and beat.get("exact_words") and not beat.get("words_route"):
             words = " and ".join(f'"{w}"' for w in beat["exact_words"])
             out.append({
-                "id": f"words-{n}", "beat": n,
-                "ask": (f"Beat {n} asks for the words {words} on screen over the scene. A video model asked to spell words in a scene: "
+                "id": f"words-{k}", "beat": k,
+                "ask": (f"Beat {k} asks for the words {words} on screen over the scene. A video model asked to spell words in a scene: "
                         "ltx-2.5 got them wrong 0 of 4 times; minimax-h3 right 2 of 2. How should they be made? (Words that are "
                         "part of the picture, such as a label or a sign, go in `in_scene_words` instead: no question, best effort.)"),
                 "options": {
@@ -1142,23 +1147,27 @@ def questions(story: dict, planned: dict) -> list[dict]:
         if clip["kind"] == "card" or len(clip["beats"]) < 2 or model != "ltx-2.5":
             continue
         for n in clip["beats"]:
-            if beats[n - 1].get("spoken") and not beats[n - 1].get("spoken_route"):
+            k = own[n - 1]
+            if k and beats[n - 1].get("spoken") and not beats[n - 1].get("spoken_route"):
                 out.append({
-                    "id": f"line-{n}", "beat": n,
-                    "ask": (f"Beat {n} has a spoken line and shares clip {clip['n']} with {len(clip['beats']) - 1} other beat(s). "
+                    "id": f"line-{k}", "beat": k,
+                    "ask": (f"Beat {k} has a spoken line and shares clip {clip['n']} with {len(clip['beats']) - 1} other beat(s). "
                             "With another beat in the clip the line was said 0 of 3 times; alone in a short clip, 3 of 3."),
-                    "options": {"split": "Give beat {0} a clip of its own.".format(n), "keep": "Keep the clip. The line may not be said."},
+                    "options": {"split": "Give beat {0} a clip of its own.".format(k), "keep": "Keep the clip. The line may not be said."},
                     "recommend": "split",
                 })
     joined: list[dict] = []   # the clip of the beat before, with the joins recommended so far (they add up)
     for n, beat in enumerate(beats, start=1):
         before = beats[n - 2] if n > 1 else None
+        k, j = own[n - 1], (own[n - 2] if n > 1 else None)   # this beat and the beat before, as the host numbered them
+        if not k:
+            continue
         if _held_after_reveal(story, beat, before):
             out.append({
-                "id": f"held-{n}", "beat": n,
-                "ask": (f"Beat {n} holds the picture still right after beat {n - 1}, which already makes it move. A held still "
+                "id": f"held-{k}", "beat": k,
+                "ask": (f"Beat {k} holds the picture still right after beat {j}, which already makes it move. A held still "
                         "after a reveal reads as a pasted picture, and it jumped in size at the cut."),
-                "options": {"merge": f"Drop the held card: beat {n - 1} runs {beat['seconds']} s longer and ends on the picture; the card's words go over it.",
+                "options": {"merge": f"Drop the held card: beat {j} runs {beat['seconds']} s longer and ends on the picture; the card's words go over it.",
                             "keep": "Keep the card: generated from the picture, which may change a little. Choose it when the user asked for an end card."},
                 # An end card the user asked for stays; a still after a reveal goes.
                 "recommend": "keep" if "card" in beat.get("text", "").lower() else "merge",
@@ -1167,24 +1176,20 @@ def questions(story: dict, planned: dict) -> list[dict]:
         # person with the beat before. The same person is one idea and stays in one clip while it fits.
         # A process with no person is not joined.
         link = beat.get("link")
-        shared = bool(people(story, [beat]) & people(story, [before])) if before else False
-        if (beat.get("clip") and before and before.get("clip") and beat["clip"] != before["clip"]
-                and (link == "continues" or (link == "event" and shared))
-                and beat.get("kind", "scene") == "scene" and before.get("kind", "scene") == "scene" and not before.get("source")
-                and not beat.get("together_route")):   # the user's own clip is never generated, so it cannot be joined
+        if _cut_in_one_idea(story, beat, before) and not beat.get("together_route"):
             group = (joined if joined and joined[-1] is before else [b for b in beats if b.get("clip") == before["clip"]]) + [beat]
             together = sum(b["seconds"] for b in group)
             # a line the host split off on an ltx-2.5 clip (line-<n>) stays split
             if together <= clip_limit(story, group) and not any(b.get("spoken_route") == "split" for b in group):
                 joined = group
-                why = (f"Beat {n} continues the same shot as beat {n - 1}, but they are in different clips. A cut in the "
+                why = (f"Beat {k} continues the same shot as beat {j}, but they are in different clips. A cut in the "
                        "middle of one motion shows as a jump.") if link == "continues" else (
-                       f"Beat {n} has the same place and person as beat {n - 1}, but they are in different clips. The same "
+                       f"Beat {k} has the same place and person as beat {j}, but they are in different clips. The same "
                        "person is one idea: one clip while it fits, which also keeps the face and the place the same.")
                 out.append({
-                    "id": f"together-{n}", "beat": n,
+                    "id": f"together-{k}", "beat": k,
                     "ask": why,
-                    "options": {"join": f"Put beat {n} in clip {before['clip']} ({together} s).", "keep": "Keep the cut."},
+                    "options": {"join": f"Put beat {k} in clip {before['clip']} ({together} s).", "keep": "Keep the cut."},
                     "recommend": "join",
                 })
     # In testing, with no photo, the host made "reference" pictures with an image model and they invented the
@@ -1234,8 +1239,24 @@ def questions(story: dict, planned: dict) -> list[dict]:
 
 def _held_after_reveal(story: dict, beat: dict, before: dict | None) -> bool:
     """A card that holds the picture still right after the scene beat that is made from the same picture."""
+    return _holds_reveal(story, beat, before) and not beat.get("held_route")
+
+
+def _holds_reveal(story: dict, beat: dict, before: dict | None) -> bool:
     return bool(beat.get("kind") == "card" and beat.get("picture") and before and before.get("kind", "scene") == "scene"
-                and beat["picture"] in _beat_pictures(story, before) and not beat.get("held_route"))
+                and beat["picture"] in _beat_pictures(story, before))
+
+
+def _cut_in_one_idea(story: dict, beat: dict, before: dict | None) -> bool:
+    """The beat is in another clip than the beat before, and goes on with it: the same shot, or an event with the same
+    person. The user's own clip is never generated, so it cannot be joined."""
+    link, by_id = beat.get("link"), {s["id"]: s for s in story.get("subjects", [])}
+    # like people(), but an unknown subject id is not a crash: answers are read before the story is checked
+    person = lambda b: {sid for sid in b.get("subjects", []) if by_id.get(sid, {}).get("role") == "person"}
+    shared = bool(person(beat) & person(before)) if before else False
+    return bool(beat.get("clip") and before and before.get("clip") and beat["clip"] != before["clip"]
+                and (link == "continues" or (link == "event" and shared))
+                and beat.get("kind", "scene") == "scene" and before.get("kind", "scene") == "scene" and not before.get("source"))
 
 
 def held_merges(story: dict, strategy: str = "idea", max_seconds: int = TRIGGER_SECONDS) -> dict[str, str]:
@@ -1276,14 +1297,30 @@ def _beat_pictures(story: dict, beat: dict) -> set[str]:
 
 def apply_answers(story: dict, answers: dict[str, str]) -> tuple[dict, list[str]]:
     """The story changed the way the chosen options say. Returns (story, problems with the answers)."""
+    story, problems, _ = answer_story(story, answers)
+    return story, problems
+
+
+def _answer_order(item: tuple[str, str]) -> tuple[int, int]:
+    """Held merges first, in beat order: they change the beat before, which other answers read (a merged card's words).
+    Joins last, in beat order: each puts a beat in the clip that the beat before is in by then."""
+    if re.fullmatch(r"held-\d+", item[0]):
+        return 0, int(item[0].split("-")[1])
+    if re.fullmatch(r"together-\d+", item[0]):
+        return 2, int(item[0].split("-")[1])
+    return 1, 0
+
+
+def answer_story(story: dict, answers: dict[str, str]) -> tuple[dict, list[str], list[int | None]]:
+    """apply_answers, and for each beat of the story that comes back its number in the story given (None: a card an
+    answer added). An answer whose beat is not what its question is about is refused: it was not asked."""
     story = deepcopy(story)
     beats, problems = story["beats"], []
+    numbers: list[int | None] = list(range(1, len(beats) + 1))
     groups = [b.get("clip") for b in beats]   # the host's grouping, kept while beats are added or split off
     inserts: list[tuple[int, dict]] = []
     drops: list[int] = []   # beats removed by an answer (index), after the answers are read
-    # The joins go last, in beat order: each puts a beat in the clip that the beat before is in by then.
-    joins_last = lambda item: int(item[0].split("-")[1]) if re.fullmatch(r"together-\d+", item[0]) else 0
-    for key, choice in sorted(answers.items(), key=joins_last):
+    for key, choice in sorted(answers.items(), key=_answer_order):
         kind, _, num = key.partition("-")
         if key == "colour-codes":
             if choice == "words":
@@ -1331,6 +1368,16 @@ def apply_answers(story: dict, answers: dict[str, str]) -> tuple[dict, list[str]
             problems.append(f"no question {key}")
             continue
         beat = beats[int(num) - 1]
+        # the beat before, as the questions saw it: a held card merged into its reveal is gone
+        at = next((i for i in range(int(num) - 2, -1, -1) if i not in drops), None)
+        before = beats[at] if at is not None else None
+        asked = {"words": lambda: beat.get("kind", "scene") == "scene" and bool(beat.get("exact_words")),
+                 "held": lambda: _holds_reveal(story, beat, before),
+                 "together": lambda: _cut_in_one_idea(story, beat, before),
+                 "line": lambda: bool(beat.get("spoken"))}
+        if not asked.get(kind, lambda: False)():   # in testing, held-2 on a plain scene deleted it and its voice-over
+            problems.append(f"no question {key}")
+            continue
         if kind == "words":
             if choice not in WORD_ROUTES:
                 problems.append(f"{key}: choose one of {', '.join(WORD_ROUTES)}")
@@ -1353,8 +1400,7 @@ def apply_answers(story: dict, answers: dict[str, str]) -> tuple[dict, list[str]
                 problems.append(f"{key}: choose merge or keep")
                 continue
             beat["held_route"] = choice
-            if choice == "merge" and int(num) > 1:
-                before = beats[int(num) - 2]
+            if choice == "merge":
                 before["seconds"] += beat["seconds"]
                 before["exact_words"] = before.get("exact_words", []) + beat.get("exact_words", [])
                 for field in ("says", "spoken", "sounds", "in_scene_words"):   # what is heard or seen on the card stays
@@ -1367,8 +1413,8 @@ def apply_answers(story: dict, answers: dict[str, str]) -> tuple[dict, list[str]
                 problems.append(f"{key}: choose join or keep")
                 continue
             beat["together_route"] = choice
-            if choice == "join" and int(num) > 1:
-                groups[int(num) - 1] = groups[int(num) - 2]
+            if choice == "join":
+                groups[int(num) - 1] = groups[at]
         elif kind == "line":
             if choice not in ("split", "keep"):
                 problems.append(f"{key}: choose split or keep")
@@ -1376,15 +1422,15 @@ def apply_answers(story: dict, answers: dict[str, str]) -> tuple[dict, list[str]
             beat["spoken_route"] = choice
             if choice == "split":
                 beat["_own"] = True
-        else:
-            problems.append(f"no question {key}")
     for at in sorted(drops, reverse=True):
         del beats[at]
         del groups[at]
+        del numbers[at]
         inserts = [(i - 1 if i > at else i, c) for i, c in inserts]
     for at, card in sorted(inserts, reverse=True):
         beats.insert(at, card)
         groups.insert(at, None)
+        numbers.insert(at, None)
     if all(g is not None for g in groups if g is not None) and any(g is not None for g in groups):
         _renumber(beats, groups)
     else:
@@ -1392,7 +1438,7 @@ def apply_answers(story: dict, answers: dict[str, str]) -> tuple[dict, list[str]
             b.pop("_own", None)
     if (inserts or drops) and "seconds" in story:
         story["seconds"] = sum(b["seconds"] for b in beats)
-    return story, problems
+    return story, problems, numbers
 
 
 def _renumber(beats: list[dict], groups: list) -> None:

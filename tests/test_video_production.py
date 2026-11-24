@@ -502,6 +502,36 @@ class TogetherTests(unittest.TestCase):
         self.assertTrue(plan(answered, "manual", cuts=vp.host_cuts(answered))["ok"])
 
 
+class AnswerIdTests(unittest.TestCase):
+    def test_an_answer_that_no_question_asks_is_refused_and_changes_nothing(self):
+        s = {"title": "City", "aspect": "16:9", "setting": "A busy street.",
+             "beats": [{"seconds": 4, "text": "Maya waves.", "clip": 1},
+                       {"seconds": 4, "text": "A bus drives past.", "clip": 2, "link": "new", "says": ["The city wakes."]}]}
+        for key, choice in {"held-2": "merge", "together-2": "join", "words-1": "card", "line-2": "split"}.items():
+            with self.subTest(key):
+                answered, problems = vp.apply_answers(s, {key: choice})
+                self.assertEqual(problems, [f"no question {key}"])
+                self.assertEqual(answered["beats"], s["beats"])
+
+    def test_question_ids_name_the_beats_as_the_host_wrote_them(self):
+        s = logo_reveal(exact_words=["Acme"])
+        s["beats"].append({"seconds": 5, "text": "A customer opens a parcel.", "exact_words": ["Shop now"], "clip": 3, "link": "new"})
+        answered, problems, numbers = vp.answer_story(s, vp.held_merges(s))   # the card (beat 2) goes into beat 1
+        self.assertEqual((problems, numbers), ([], [1, 3]))
+        asked = [q for q in vp.questions(answered, plan(answered, "manual", cuts=[2]), numbers) if q["beat"]]
+        self.assertEqual([(q["id"], q["beat"]) for q in asked], [("words-1", 1), ("words-3", 3)])
+        self.assertTrue(asked[1]["ask"].startswith("Beat 3 asks"))
+
+    def test_a_join_after_a_merged_card_puts_the_beat_with_the_reveal(self):
+        s = logo_reveal(reveal_seconds=5, card_seconds=2)
+        s["beats"].append({"seconds": 4, "text": "The logo spins on.", "subjects": ["logo"], "clip": 3, "link": "continues"})
+        answered, _, numbers = vp.answer_story(s, vp.held_merges(s))
+        asked = vp.questions(answered, plan(answered, "manual", cuts=vp.host_cuts(answered)), numbers)
+        self.assertIn("together-3", [q["id"] for q in asked])
+        joined, problems, _ = vp.answer_story(s, {**vp.held_merges(s), "together-3": "join"})
+        self.assertEqual((problems, [b["clip"] for b in joined["beats"]]), ([], [1, 1]))
+
+
 class WordMatchTests(unittest.TestCase):
     def test_a_script_in_another_alphabet_is_compared_word_by_word(self):
         self.assertEqual(vp.word_match("Привет, мир. Как дела?", "Привет, мир! Как дела?"), 1.0)

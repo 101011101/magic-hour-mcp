@@ -33,7 +33,7 @@ from mcp.types import ToolAnnotations
 from pydantic import BaseModel, Field
 
 from . import kept_files, media_tools
-from .video_production import word_match, ROUTING_RULE, advise, apply_answers, held_merges, host_cuts, plan, questions, spoken_slots
+from .video_production import word_match, ROUTING_RULE, advise, answer_story, held_merges, host_cuts, plan, questions, spoken_slots
 
 FILMS_PATH = "/films"
 FILMS_DIR = Path(os.getenv("MAGIC_HOUR_FILMS_DIR", Path(tempfile.gettempdir()) / "magic-hour-films"))
@@ -291,15 +291,17 @@ def register_video_production(mcp: FastMCP) -> None:
         # A held still of the picture the scene before forms is merged by code, first, whatever the host answers.
         merged = held_merges(data, SPLIT_STRATEGY, SPLIT_MAX_SECONDS)
         answers = {**merged, **{k: v for k, v in (answers or {}).items() if k not in merged}} or None
+        numbers = None   # the host's number of each beat, after answers added or removed beats
         if answers:
             if host_cuts(data) is None:   # the answers keep the clips as they are: number them first
                 first = plan_story(data)
                 for clip in first.get("clips", []):
                     for n in clip["beats"]:
                         data["beats"][n - 1]["clip"] = clip["n"]
-            data, answer_problems = apply_answers(data, answers)
+            data, answer_problems, numbers = answer_story(data, answers)
         planned = plan_story(data)
-        open_questions = questions(data, planned) if planned.get("clips") else []
+        # The questions name the beats as the host wrote them: the next answers are read against the same story.
+        open_questions = questions(data, planned, numbers) if planned.get("clips") else []
         planned["advice"] = advise(data, planned, request) if planned.get("clips") else []
         for key in merged:
             n = int(key.split("-")[1])

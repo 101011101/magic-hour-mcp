@@ -128,6 +128,40 @@ class VideoProductionToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([c["kind"] for c in kept["clips"]], ["scene", "card"])
         self.assertIn("production", kept)
 
+    async def recommended_until_done(self, s, answers=None):
+        """Answer every question with its recommendation, round after round, as a host does."""
+        answers = dict(answers or {})
+        for _ in range(5):
+            p = await self.answer(s, answers)
+            if "questions" not in p:
+                return p, answers
+            answers.update({q["id"]: q["recommend"] for q in p["questions"]})
+        self.fail(f"the questions never end: {[q['id'] for q in p['questions']]}")
+
+    async def test_the_answers_to_a_merged_held_card_story_end_the_questions(self):
+        # the code merges the held card (beat 2) into beat 1: the questions still name beat 3 as 3
+        logo = "https://example.com/logo.png"
+        s = {"title": "Acme", "aspect": "16:9", "setting": "A white studio.",
+             "subjects": [{"id": "logo", "role": "product", "words": "the Acme logo, a blue triangle", "picture": logo}],
+             "beats": [{"seconds": 5, "text": "The Acme logo forms from blue light.", "subjects": ["logo"], "clip": 1},
+                       {"seconds": 2, "kind": "card", "text": "The logo held still.", "picture": logo, "exact_words": ["Acme"], "clip": 2},
+                       {"seconds": 5, "text": "A happy customer opens a parcel.", "exact_words": ["Shop now"], "clip": 3, "link": "new"}]}
+        p, answers = await self.recommended_until_done(s)
+        self.assertEqual(sorted(answers), ["continuity", "words-1", "words-3"])
+        self.assertIn("production", p)
+
+    async def test_a_card_an_answer_adds_does_not_move_the_question_ids(self):
+        s = {"title": "Day", "aspect": "16:9", "setting": "A sunny park.",
+             "beats": [{"seconds": 4, "text": "A girl runs.", "clip": 1},
+                       {"seconds": 5, "text": "She jumps a wall.", "exact_words": ["Jump"], "clip": 2, "link": "new"},
+                       {"seconds": 4, "text": "A dog barks.", "clip": 3, "link": "new"},
+                       {"seconds": 5, "text": "The dog sleeps.", "exact_words": ["Rest"], "clip": 4, "link": "new"}]}
+        p = await self.answer(s, {"words-2": "card", "continuity": "ok"})   # a card goes in after beat 2
+        self.assertEqual([q["id"] for q in p["questions"]], ["words-4"])
+        p = await self.answer(s, {"words-2": "card", "continuity": "ok", "words-4": "overlay"})
+        self.assertTrue(p["ok"], p["problems"])
+        self.assertIn("production", p)
+
 
 class TranscribeTests(unittest.IsolatedAsyncioTestCase):
     async def test_the_word_check_does_not_force_english(self):
