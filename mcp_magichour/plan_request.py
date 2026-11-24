@@ -123,7 +123,8 @@ DESIGNED_PIECE = re.compile(r"\b(post|poster|flyer|banner|card|ad|advert|announc
 DESTINATION = re.compile(r"\b(website|web ?site|web|social|socials|online|site|homepage|ad|advert)\b", _I)
 PRINT_WORDS = re.compile(r"\b(poster|flyer|print|a4|letter)\b", _I)
 # A file name is not the user's wording: "portrait-woman.jpg" does not ask for a tall picture.
-ATTACHED = re.compile(r"\[Attached:[^\]]*\]|\S+\.(?:png|jpe?g|webp|gif|mp4|mov|webm|mp3|wav|m4a)\b", _I)
+# A file name starts after a space: trying every letter of a long pasted URL or data URI as a start took seconds.
+ATTACHED = re.compile(r"\[Attached:[^\]]*\]|(?<!\S)\S+\.(?:png|jpe?g|webp|gif|mp4|mov|webm|mp3|wav|m4a)\b", _I)
 # An edit is stated when the user's words name a change.
 CHANGE_VERB = re.compile(
     r"\b(remove|delete|erase|add|put|place|change|replace|swap|make|turn|fix|clean|brighten|darken|lighten|warm|cool|crop|"
@@ -290,7 +291,8 @@ def _said(word: str, said: str, raw: str) -> bool:
 
 def asked_about(name: str, message: str) -> bool:
     """The message put this parameter's question: word for word, or in other words (a question sentence about the same thing)."""
-    questions = " ".join(re.findall(r"[^.!?\n]*\?", message))   # a suggestion that mentions "vertical" is not a question about shape
+    # A suggestion that mentions "vertical" is not a question about shape. A sentence starts after an end mark, not inside one.
+    questions = " ".join(re.findall(r"(?<![^.!?\n])[^.!?\n]*\?", message))
     return QUESTIONS[name] in message or bool(re.search(ASKED_ABOUT.get(name, r"(?!)"), questions, _I))
 
 

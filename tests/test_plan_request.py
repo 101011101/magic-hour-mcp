@@ -890,6 +890,24 @@ class CanYouMakeItTests(unittest.TestCase):
         self.assertEqual(sheet_rows(result)["seconds"]["source"], "default")
 
 
+from mcp_magichour.plan_request import ATTACHED, asked_about  # noqa: E402
+
+
+class LongPasteTests(unittest.TestCase):
+    def test_a_long_pasted_url_is_read_fast_and_file_names_still_say_nothing(self):
+        import time
+        start = time.perf_counter()
+        plan_sheet([user("make a video of this https://example.com/" + "a" * 100_000)], "create_video_from_text",
+                   [{"name": "subject", "value": "x", "source": "user"}])
+        self.assertLess(time.perf_counter() - start, 1.0)
+        start = time.perf_counter()
+        self.assertFalse(asked_about("sound", "word " * 8_000))
+        self.assertLess(time.perf_counter() - start, 1.0)
+        for text in ["make a video of portrait-woman.jpg", "a video of (https://cdn.example.com/u/portrait.png)", "[Attached: portrait.jpg] animate it"]:
+            with self.subTest(text=text):
+                self.assertIsNone(parse_aspect(ATTACHED.sub(" ", text)))
+
+
 class AnyScriptWordsTests(unittest.TestCase):
     """Exact words in any script are compared letter by letter; they never shrink to an empty string that matches anything."""
 
