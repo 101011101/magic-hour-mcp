@@ -507,7 +507,9 @@ def register_tool_media(mcp: FastMCP) -> None:
             "The tool cuts each person out, swaps the head on the cut-out, and puts back only the new head with a soft "
             "edge, one person after another, so the other people do not change. The head swap tool alone cannot do "
             "this: it has no person choice, and a second call changes everyone. `picture`: the photo (file_path, URL or "
-            "finished image project id). 10 credits per person. Returns download_url, file_path and credits_charged."
+            "finished image project id). 10 credits per person. Returns download_url, file_path and credits_charged. "
+            "When a person's head swap fails, the photo comes back with the heads done before it, with `failed` (that "
+            "person and the error) and `not_tried`."
         ),
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True),
     )
@@ -524,6 +526,12 @@ def register_tool_media(mcp: FastMCP) -> None:
             photo = ImageOps.exif_transpose(Image.open(source))   # a phone photo upright, as it is shown
             alpha = photo.convert("RGBA").getchannel("A") if _see_through(photo) else None
             photo = photo.convert("RGB")
+            heads = []   # every head is checked before the first charge: a wrong project id failed after others were paid for
+            for s in swaps:
+                try:
+                    heads.append(await _head_ref(str(s["head"])))
+                except ToolError as error:
+                    raise ToolError(f"{_who(s)}: the head {s['head']} cannot be used ({error}). Nothing was charged.") from None
             found = []
             if any(not s.get("face") for s in swaps):
                 photo_file = f / "photo.png"
@@ -549,29 +557,41 @@ def register_tool_media(mcp: FastMCP) -> None:
                     raise ToolError(f"{given[tuple(face)]} and {_who(s)} are the same face in the photo. Give each person "
                                     "once. Nothing was charged.")
                 given[tuple(face)] = _who(s)
-            credits, done = 0, []
+            credits, done, failed = 0, [], None
             # people in the photo who get no new head keep their own area; each pasted head is kept from later pastes
             keep = Image.new("L", photo.size, 0)
             others = [x for x in found if tuple(x) not in {tuple(y) for y in faces}]   # people who get no new head
             for i, s in enumerate(swaps):
                 box = cut_box(faces[i], photo.size)
-                cut_file = f / f"cut{i}.png"
-                cut, margins = padded(photo.crop(box), box, photo.size)
-                cut.save(cut_file)
-                body = await _upload(cut_file)
-                job = await _api("POST", "/v1/head-swap", {"name": f"{name or 'Head swap'} · person {i + 1}",
-                                                           "assets": {"body_file_path": body, "head_file_path": await _head_ref(s["head"])}})
-                credits += job.get("credits_charged") or 0
-                new = unpadded(Image.open(await _download(await _image_url(job["id"]), f / f"swapped{i}.png")), margins,
-                               (box[2] - box[0], box[3] - box[1]))
-                pasted = await asyncio.to_thread(put_head_back, photo, new, box, i, faces, keep, faces[i + 1:] + others)
+                job = {}
+                try:
+                    cut_file = f / f"cut{i}.png"
+                    cut, margins = padded(photo.crop(box), box, photo.size)
+                    cut.save(cut_file)
+                    body = await _upload(cut_file)
+                    job = await _api("POST", "/v1/head-swap", {"name": f"{name or 'Head swap'} · person {i + 1}",
+                                                               "assets": {"body_file_path": body, "head_file_path": heads[i]}})
+                    credits += job.get("credits_charged") or 0
+                    new = unpadded(Image.open(await _download(await _image_url(job["id"]), f / f"swapped{i}.png")), margins,
+                                   (box[2] - box[0], box[3] - box[1]))
+                    pasted = await asyncio.to_thread(put_head_back, photo, new, box, i, faces, keep, faces[i + 1:] + others)
+                except Exception as error:
+                    if not done:
+                        raise
+                    # a failure here lost the heads paid for before it: the photo now comes back with them
+                    failed = {"person": s.get("person"), "face": s.get("face"), "head": s["head"], "project_id": job.get("id"),
+                              "error": str(error)}
+                    break
                 keep = ImageChops.lighter(keep, pasted)
                 done.append({"person": s.get("person"), "face": s.get("face"), "head": s["head"], "project_id": job["id"], "cut_out": list(box)})
             out = f / "heads-swapped.png"
             if alpha:   # the see-through parts stay see-through (they came back black)
                 photo.putalpha(alpha)
             photo.save(out)
-            return {**await _deliver(out, True), "credits_charged": credits, "people": done}
+            result = {**await _deliver(out, True), "credits_charged": credits, "people": done}
+            if failed:
+                result |= {"failed": failed, "not_tried": [_who(s) for s in swaps[len(done) + 1:]]}
+            return result
 
     @mcp.tool(
         name="put_pictures_side_by_side",

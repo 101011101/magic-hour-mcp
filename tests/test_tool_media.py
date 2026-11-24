@@ -467,6 +467,31 @@ class SwapHeadsToolTests(unittest.TestCase):
         self.assertGreater(change_in(before, after, self.boxes[1]), 50)
         self.assertEqual(change_in(before, after, self.boxes[2]), 0)
 
+    def test_every_head_is_checked_before_the_first_charge(self):
+        """Person 2's head was a wrong project id: person 1 was charged, then the call failed with nothing to show."""
+        api = FakeMagicHour(self.boxes, missing={"nosuchproject"})
+        error, text = api.swap(self.photo, [{"person": 1, "head": "https://h/a.png"}, {"person": 2, "head": "nosuchproject"}])
+        self.assertTrue(error, text)
+        self.assertIn("Nothing was charged", text)
+        self.assertEqual((api.charged, api.jobs), (0, {}))
+
+    def test_a_failed_head_swap_keeps_the_heads_paid_for_before_it(self):
+        """Person 2's head swap ended in error: person 1's paid head was lost with it."""
+        from PIL import Image
+        api = FakeMagicHour(self.boxes, failed_job="hs1")
+        error, text = api.swap(self.photo, [{"person": 1, "head": "https://h/a.png"}, {"person": 2, "head": "https://h/b.png"},
+                                            {"person": 3, "head": "https://h/c.png"}])
+        self.assertFalse(error, text)
+        done = json.loads(text)
+        self.assertEqual(done["credits_charged"], 20)
+        self.assertEqual([p["project_id"] for p in done["people"]], ["hs0"])
+        self.assertEqual((done["failed"]["person"], done["failed"]["project_id"]), (2, "hs1"))
+        self.assertIn("no face", done["failed"]["error"])
+        self.assertEqual(done["not_tried"], ["person 3"])
+        before, after = Image.open(self.photo).convert("RGB"), Image.open(done["file"]).convert("RGB")
+        self.assertGreater(change_in(before, after, self.boxes[0]), 50)
+        self.assertEqual(change_in(before, after, self.boxes[1]), 0)
+
     def test_a_person_given_twice_is_refused_before_any_charge(self):
         """The same person twice (or once by number, once by face path) was charged twice and one head was lost."""
         for second in ({"person": 1, "head": "https://h/b.png"}, {"face": "api-assets/acc/det1/0.png", "head": "https://h/b.png"}):
