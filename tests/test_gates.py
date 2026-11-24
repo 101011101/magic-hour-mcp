@@ -62,6 +62,21 @@ class BackstopTests(unittest.TestCase):
         self.assertTrue(any("shots" in s for s in signals))
         self.assertEqual(gates.hard_signals(ROBOT, []), [])
 
+    def test_hard_signals_in_other_wordings(self):
+        for request, signal in {"Make a 1:30 promo video for my gym": "90 seconds is longer than 15",
+                                "Make a thirty second promo video for my gym": "30 seconds is longer than 15",
+                                "Make a 2 minute video of my gym": "120 seconds is longer than 15",
+                                "Make a video for my gym that ends on the words 'JOIN TODAY' in white": "exact words in quotes",
+                                "A 12 second clip; the end card says ‘Join today’": "exact words in quotes",
+                                "Scene 1: a runner at dawn.\nScene 2: the finish line.": "shots listed in order",
+                                "Shot 1: a runner at dawn\nShot 2: the finish line": "shots listed in order"}.items():
+            with self.subTest(request=request):
+                self.assertIn(signal, gates.hard_signals(request, []))
+        for request in ["A 6 second 80s VHS style clip of my car", "It's my mom's birthday, make a 6 second clip of the kids' party"]:
+            with self.subTest(request=request):
+                self.assertEqual(gates.hard_signals(request, []), [])
+        self.assertIn(("words", "JOIN TODAY"), {(i["kind"], i["value"]) for i in gates.brief_items("Ends on 'JOIN TODAY' in white", [])})
+
     def test_continue_request_is_square_twelve_seconds_not_a_tall_six(self):
         request = ("The attached clip is 6 seconds long. It was made from the attached portrait. Continue the clip for 6 more seconds. "
                    "Give me one 12-second video file.")

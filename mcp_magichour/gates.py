@@ -85,16 +85,20 @@ def read(token: str, kind: str | tuple[str, ...]) -> dict:
 
 
 # ---- what the user's words show, by code -------------------------------------------------------------------------------
-QUOTED = re.compile(r"[\"“]([^\"”]{2,120})[\"”]")
+# Double quotes, curly single quotes, or straight single quotes that are not apostrophes ("it's", "the boys' bikes").
+QUOTED = re.compile(r"[\"“]([^\"”]{2,120})[\"”]|‘([^’\n]{2,120})’|(?<!\w)'([^'\n]{2,120})'(?!\w)")
 CONTINUE = re.compile(r"\b(continue|extend|carry on|keep going|add .* (more )?seconds)\b", re.I)
-SHOTS = re.compile(r"(?m)^\s*(?:\d+[.)]|shot \d|scene \d)")
+SHOTS = re.compile(r"(?im)^\s*(?:\d+[.)]|shot \d|scene \d)")
 SOUND = re.compile(r"\b(music|voice[- ]?over|narrat\w*|silent|no sound|dialogue|captions?|subtitles?)\b", re.I)
-LENGTH = re.compile(r"(\d+(?:\.\d+)?)[\s-]*(?:s\b|sec\b|seconds?\b)", re.I)
+
+
+def quoted(original: str) -> list[str]:
+    return [next(g for g in m.groups() if g is not None).strip() for m in QUOTED.finditer(original)]
 
 
 def brief_items(original: str, attachments: list[str]) -> list[dict]:
     """The things the user's words name that a checklist must carry: quoted words, length, shape, files, sound."""
-    items = [{"kind": "words", "value": q.strip()} for q in QUOTED.findall(original)]
+    items = [{"kind": "words", "value": q} for q in quoted(original)]
     lengths = stated_lengths(original)   # "80s VHS style" is a decade, "2 minutes" is 120 s
     seconds, aspect = (max(lengths) if lengths else None), parse_aspect(original)
     if seconds:
@@ -114,8 +118,8 @@ def brief_items(original: str, attachments: list[str]) -> list[dict]:
 
 def hard_signals(original: str, attachments: list[str]) -> list[str]:
     out = []
-    lengths = [float(x) for x in LENGTH.findall(original)]
-    seconds = int(max(lengths) + 0.5) if lengths else parse_seconds(original)
+    lengths = stated_lengths(original)   # "1:30", "thirty seconds" and "2 minutes" are lengths; "80s style" is not
+    seconds = max(lengths) if lengths else parse_seconds(original)
     if seconds and seconds > 15:
         out.append(f"{seconds} seconds is longer than 15")
     if QUOTED.search(original):
