@@ -493,6 +493,17 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.posts[1][1]["assets"], {"image_file_path": "https://images.example.test/still/output.png"})
         self.assertEqual(made["credits_charged"], 154)
 
+    async def test_a_refused_video_call_returns_the_paid_still(self):
+        # Review: the still was paid, the video call failed, and the error named no still: the next try paid again.
+        p = await self.planned("c4")
+        self.refuse = {"/v1/image-to-video"}
+        with self.assertRaises(ToolError) as caught:
+            await self.call("create_production_clip", production=p["production"], clip=1)
+        message = str(caught.exception)
+        self.assertIn("HTTP 422", message)
+        self.assertIn("https://images.example.test/still/output.png", message)
+        self.assertIn("Do not make it again", message)
+
     async def test_a_card_with_the_users_logo_is_made_by_the_image_editor_from_it(self):
         # every card is generated; the logo goes to the image editor as its input picture
         s = story("c4")

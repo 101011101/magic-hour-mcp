@@ -641,15 +641,20 @@ async def make_clip(story: dict, n: int, made: dict[str, str]) -> dict:
                        "resolution": "640px", "style": {"prompt": still["prompt"]}}
             if still["tool"] == "edit_image":   # a card made from the user's picture
                 request["assets"] = {"image_file_paths": [still["picture"]]}
-            created = await _api("POST", "/v1/ai-image-editor" if still["tool"] == "edit_image" else "/v1/ai-image-generator", request)
-            credits += int(created.get("credits_charged", 0))
-            for _ in range(STILL_WAIT_SECONDS // 3):
-                project = await _api("GET", f"/v1/image-projects/{created['id']}")
-                if project.get("status") in ("complete", "error", "canceled"):
-                    break
-                await asyncio.sleep(3)
-            if project.get("status") != "complete" or not project.get("downloads"):
-                raise ToolError(f"The still for clip {n} did not finish (image project {created['id']}: {project.get('status')}).")
+            try:
+                created = await _api("POST", "/v1/ai-image-editor" if still["tool"] == "edit_image" else "/v1/ai-image-generator", request)
+                credits += int(created.get("credits_charged", 0))
+                for _ in range(STILL_WAIT_SECONDS // 3):
+                    project = await _api("GET", f"/v1/image-projects/{created['id']}")
+                    if project.get("status") in ("complete", "error", "canceled"):
+                        break
+                    await asyncio.sleep(3)
+                if project.get("status") != "complete" or not project.get("downloads"):
+                    raise ToolError(f"The still for clip {n} did not finish (image project {created['id']}: {project.get('status')}).")
+            except ToolError:
+                if best is None:
+                    raise
+                break   # a new try failed: the paid still made before it is used
             url = project["downloads"][0]["url"]
             check = None
             if wanted and media_tools.have_ffmpeg():
@@ -674,7 +679,15 @@ async def make_clip(story: dict, n: int, made: dict[str, str]) -> dict:
         if reference["kind"] in ("picture", "file"):
             pictures = reference.get("pictures") or [{"subject": reference["subject"], "file": reference["file"]}]
             body["references"] = [{"name": p["subject"], "file_path": p["file"]} for p in pictures]
-    created = await _api("POST", "/v1/image-to-video" if "assets" in body else "/v1/text-to-video", body)
+    try:
+        created = await _api("POST", "/v1/image-to-video" if "assets" in body else "/v1/text-to-video", body)
+    except ToolError as error:
+        if not credits:
+            raise
+        raise ToolError(f"{error} The still for clip {n} is made and paid ({credits} credits): "
+                        f"{body['assets']['image_file_path']}. Do not make it again. To make the clip from it, call "
+                        f"create_video_from_image with that image_file_path, end_seconds {video['seconds']}, model "
+                        f"{video['model']} and the clip's prompt, then pass the video project id in `made`.") from None
     spelling = {"still_words": checks} if reference["kind"] in ("still", "scene_still") and checks else {}
     return {"clip": n, "id": created["id"], "credits_charged": credits + int(created.get("credits_charged", 0)), **spelling,
             "seconds": video["seconds"], "model": video["model"], "reference": reference["kind"],
