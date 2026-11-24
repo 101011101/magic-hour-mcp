@@ -212,19 +212,30 @@ def parse_seconds(text: str) -> int | None:
     return None
 
 
+# Silence. "Silent film style with piano", "no sound but music", "muted colours" and "a mute swan" are not; "quiet" is a level.
+SILENCE = re.compile(r"\bsilen(?:t|ce)\b(?!\s+(?:film|movie|era)\b)|\bno (?:sound|audio)\b(?!\s+(?:but|except|other than|apart from|besides)\b)"
+                     r"|\bmuted?\b(?!\s+(?:colou?rs?|tones?|palette|shades?|hues?|swans?)\b)|\bnone\b", _I)
+# "No music", "without any music", "don't add music", "no background music": a sound named after a negation is not asked for.
+NOT_SOUND = re.compile(r"\b(?:no|without|never|don'?t (?:add|want|use|include|need|put|play)|do not (?:add|want|use|include|need|put|play))"
+                       r"\s+(?:(?:any|background|added|extra|more|loud|the|a|kind of|other)\s+){0,2}"
+                       r"(?:music|songs?|beats?|tracks?|voice-?overs?|voices?|narrat\w*|words?|dialog\w*)\b", _I)
+
+
 def parse_sound(text: str) -> str | None:
     """A sound choice from one message. "No music" is not a request for music."""
-    if re.search(r"silent|no sound|mute|none|quiet", text, _I):
+    if SILENCE.search(text):
         return "none"
-    text = re.sub(r"\b(no|without)\s+(music|voice-?over|voice|narrat\w*|words?|dialog\w*)\b", " ", text, flags=_I)
-    if re.search(r"dialog", text, _I):
+    text = NOT_SOUND.sub(" ", text)
+    if re.search(r"\bdialog", text, _I):
         return "dialogue"
-    if re.search(r"voice|narrat|speak|talk|say", text, _I):
+    if re.search(r"\b(?:voice|narrat|speak|talk)|\bsa(?:y|ys|ying)\b", text, _I):   # not "essay"
         return "narration"
-    if re.search(r"music|song|beat|track", text, _I):
+    if re.search(r"\b(?:music|song)|\b(?:up)?beats?\b(?!\s+(?:the|them|him|her|it|my|our|your|their|a|an)\b)|track", text, _I):   # not "beat the odds"
         return "music"
     if re.search(r"ambient|natural sound|sfx", text, _I):
         return "ambient"
+    if re.search(r"\bsilent (?:film|movie)", text, _I):   # a silent film with no sound named
+        return "none"
     return None
 
 

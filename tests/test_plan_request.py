@@ -818,3 +818,25 @@ class LengthWordsTests(unittest.TestCase):
                               "a reel": 15, "make a short clip of her": 8}.items():
             with self.subTest(text=text):
                 self.assertEqual(parse_seconds(text), seconds)
+
+
+from mcp_magichour.plan_request import parse_sound  # noqa: E402
+
+
+class SoundWordsTests(unittest.TestCase):
+    """Sound words are whole words; a negation before one cancels it; quiet or muted colours are not silence."""
+
+    def test_sound_words(self):
+        cases = {"quiet piano music": "music", "silent film style with piano music": "music", "no sound but music": "music",
+                 "keep it muted colors, with music": "music", "a mute swan": None, "don't add music": None,
+                 "without any music": None, "no background music": None, "beat the odds": None, "the essay video": None,
+                 "silent": "none", "no sound": "none", "keep it muted": "none", "a silent film": "none", "with a beat": "music"}
+        for text, sound in cases.items():
+            with self.subTest(text=text):
+                self.assertEqual(parse_sound(text), sound)
+
+    def test_an_answer_with_quiet_music_is_music(self):
+        result = plan_sheet([user("Make a 10 second YouTube video of a fox in the snow"), assistant(QUESTIONS["sound"]), user("quiet piano music")],
+                            "create_video_from_text", [FOX[0], FOX[1], {"name": "aspect", "value": "16:9", "source": "user"},
+                                                       {"name": "sound", "value": None, "source": "missing"}])
+        self.assertEqual((sheet_rows(result)["sound"]["value"], sheet_rows(result)["sound"]["source"]), ("music", "derived"))
