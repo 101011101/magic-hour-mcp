@@ -177,10 +177,17 @@ CLOCK_ONLY = re.compile(r"(?:\W*\b(?:about|around|roughly|approx\w*|maybe|like|e
 BARE = re.compile(r"(?<![\w:./])(\d{1,3})(?![\w:./%])", _I)
 BARE_THEN = {"please", "pls", "max", "maximum", "tops", "or", "to", "ish", "is", "sounds", "works", "ok", "okay", "thanks", "thx",
              "then", "long", "total", "at", "segundos", "segundo", "sekunden", "sekunde", "secondes", "seconde", "secondi", "seconden"}
+# A simple number word with a unit: "thirty seconds", "a forty-five second ad", "two minutes". Not "one second" (a figure of speech).
+ONES = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9}
+TENS = {"twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90}
+TEENS = {"ten": 10, "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14, "fifteen": 15, "sixteen": 16, "seventeen": 17,
+         "eighteen": 18, "nineteen": 19}
+SINGLE = {**TEENS, **{word: n for word, n in ONES.items() if word != "one"}}
+WORD_STATED = re.compile(rf"\b(?:({'|'.join(TENS)})(?:[\s-]+({'|'.join(ONES)}))?|({'|'.join(SINGLE)}))[\s-]*(secs?|seconds?|mins?|minutes?)\b", _I)
 
 
 def stated_lengths(text: str) -> list[int]:
-    """Every length the words state as a length, in order, in seconds: "20 seconds", "a 30s ad", "2 minutes", "1:30"."""
+    """Every length the words state as a length, in order, in seconds: "20 seconds", "a 30s ad", "2 minutes", "1:30", "thirty seconds"."""
     text = RATIO.sub(lambda m: " " * len(m[0]), text)   # "16:9" and "1:1" are shapes
     found = []
     for m in STATED.finditer(text):
@@ -189,6 +196,10 @@ def stated_lengths(text: str) -> list[int]:
             re.search(r"\bthe\s+$", text[max(0, m.start() - 6):m.start()], _I) or DECADE_AFTER.match(text, m.end()))))
         if not decade:
             found.append((m.start(), value * 60 if unit.startswith("min") else value))
+    for m in WORD_STATED.finditer(text):
+        tens, ones, single, unit = m[1], m[2], m[3], m[4].lower()
+        value = SINGLE[single.lower()] if single else TENS[tens.lower()] + (ONES[ones.lower()] if ones else 0)
+        found.append((m.start(), value * 60 if unit.startswith("min") else value))
     for m in CLOCK.finditer(text):
         if (len(text) <= 60 and CLOCK_ONLY.fullmatch(text[:m.start()] + " " + text[m.end():])) or CLOCK_LENGTH.match(text, m.end()):
             found.append((m.start(), int(m[1]) * 60 + int(m[2])))

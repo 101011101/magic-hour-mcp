@@ -819,6 +819,12 @@ class LengthWordsTests(unittest.TestCase):
             with self.subTest(text=text):
                 self.assertEqual(parse_seconds(text), seconds)
 
+    def test_a_length_in_number_words(self):
+        for text, seconds in {"thirty seconds": 30, "a forty-five second ad": 45, "a thirty-second spot": 30, "two minutes please": 120,
+                              "fifteen seconds max": 15, "Twenty-one secs": 21, "give me one second": None, "the eighties": None}.items():
+            with self.subTest(text=text):
+                self.assertEqual(parse_seconds(text), seconds)
+
 
 from mcp_magichour.plan_request import parse_sound  # noqa: E402
 
