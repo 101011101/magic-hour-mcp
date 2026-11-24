@@ -117,6 +117,7 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.posts, self.uploads, self.joined = [], [], []
         self.video_status = "complete"
+        self.refuse = set()   # POST paths the fake API refuses
 
         self.paths = []
 
@@ -132,6 +133,8 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
                 return httpx.Response(200, json={"items": [{"upload_url": "https://storage.example.test/frame.jpg", "file_path": "api-assets/test/frame.jpg"}]})
             if path == "/v1/account":   # whose key it is; kept copies are read only for that account
                 return httpx.Response(200, json={"id": "test"})
+            if request.method == "POST" and path in self.refuse:
+                return httpx.Response(422, json={"message": "refused"})
             if request.method == "POST":
                 self.posts.append((path, json.loads(request.content)))
                 return httpx.Response(200, json={"id": f"job-{len(self.posts)}", "credits_charged": 10 if "image-generator" in path else 144})
@@ -275,6 +278,20 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(voice["result"], "yes")
         self.assertIn("100%", voice["got"])
         self.assertEqual(film["sound"]["words_match"], 1.0)
+
+    async def test_a_refused_music_call_still_returns_the_paid_narration(self):
+        p = await self.planned_with_voice()
+        self.refuse = {"/v1/ai-music-generator"}
+        made = await self.call("create_production_sound", production=p["production"])
+        self.assertEqual(made["narration"], "job-1")
+        self.assertNotIn("music", made)
+        self.assertIn("HTTP 422", made["music_error"])
+        self.assertIn("Do not call create_production_sound again", made["next"])
+
+    async def test_a_film_longer_than_the_music_model_gets_300_seconds_of_music(self):
+        from mcp_magichour.video_production import plan_sound
+        clips = [{"seconds": 15, "parts": [{"seconds": 15, "text": "Rain on a window."}]} for _ in range(22)]   # 330 s
+        self.assertEqual(plan_sound({"music": "soft piano", "beats": []}, clips)["music"]["seconds"], 300)
 
     async def test_a_plan_with_no_sound_has_no_sound_to_make(self):
         p = await self.planned("c4")

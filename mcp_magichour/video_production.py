@@ -693,7 +693,7 @@ NARRATION_WORDS_PER_SECOND = 2.5
 SPOKEN_WORDS_PER_SECOND = 2.5   # a line a person on screen says (minimax-h3), measured
 SPOKEN_QUIET_SECONDS = 3   # most idle time after a spoken line that stays clean (minimax-h3), measured
 VOICE_WORDS_PER_SECOND = 2.7   # the cloner's pace, measured: 22 words in 7.3 s, 16 in 6.2 s
-MUSIC_MIN_SECONDS, MUSIC_CREDITS_PER_SECOND = 15, 1
+MUSIC_MIN_SECONDS, MUSIC_MAX_SECONDS, MUSIC_CREDITS_PER_SECOND = 15, 300, 1   # the music model makes 15 to 300 s
 
 
 def plan_sound(story: dict, clips: list[dict]) -> dict | None:
@@ -747,7 +747,7 @@ def plan_sound(story: dict, clips: list[dict]) -> dict | None:
                            f"\"{script}\" No music, no other sound."),
             }
     if story.get("music"):
-        seconds = max(MUSIC_MIN_SECONDS, film_seconds + 2)
+        seconds = min(MUSIC_MAX_SECONDS, max(MUSIC_MIN_SECONDS, film_seconds + 2))
         sound["music"] = {"seconds": seconds, "prompt": story["music"].strip(), "credits": seconds * MUSIC_CREDITS_PER_SECOND,
                           "instrumental": not story.get("music_vocals")}   # singing only when the user asks
     return sound if "narration" in sound or "music" in sound or "subtitles" in sound or sound["captions"] else None

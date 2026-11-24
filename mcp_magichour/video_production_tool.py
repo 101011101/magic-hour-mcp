@@ -607,15 +607,28 @@ async def make_sound(story: dict) -> dict:
             "model": n["model"], "resolution": n["resolution"], "audio": True, "style": {"prompt": n["prompt"]}})
         out["narration"] = created["id"]
         out["credits_charged"] += int(created.get("credits_charged", 0))
+    cloned = sound.get("narration", {}).get("tool") == "voice_cloner"
+    waits = f"wait_for_{'audio' if cloned else 'video'}_project with `narration`"
     if "music" in sound:
         m = sound["music"]
-        created = await _api("POST", "/v1/ai-music-generator", {
-            "name": f"{story.get('title', 'Video')} · music", "duration": m["seconds"], "style": {"prompt": m["prompt"], "instrumental": m.get("instrumental", True)}})
+        try:
+            created = await _api("POST", "/v1/ai-music-generator", {
+                "name": f"{story.get('title', 'Video')} · music", "duration": m["seconds"], "style": {"prompt": m["prompt"], "instrumental": m.get("instrumental", True)}})
+        except ToolError as error:
+            if "narration" not in out:
+                raise
+            # The narration is paid for: return its id, so that a retry does not pay for it again.
+            out["music_error"] = str(error)
+            out["next"] = (f"The music call failed; the narration is made. {waits}. For the music, call generate_music "
+                           f"({m['seconds']} s, prompt {m['prompt']!r}) and wait_for_audio_project. Then pass {{narration, music}} to "
+                           "join_production_clips as `sound`. Do not call create_production_sound again: it makes the narration again.")
+            return out
         out["music"] = created["id"]
         out["credits_charged"] += int(created.get("credits_charged", 0))
-    cloned = sound.get("narration", {}).get("tool") == "voice_cloner"
-    out["next"] = (f"wait_for_{'audio' if cloned else 'video'}_project with `narration`, wait_for_audio_project with `music`; then pass "
-                   "{narration, music} to join_production_clips as `sound`")
+    waits = [waits] if "narration" in out else []
+    waits += ["wait_for_audio_project with `music`"] if "music" in out else []
+    ids = ", ".join(k for k in ("narration", "music") if k in out)
+    out["next"] = f"{' and '.join(waits)}; then pass {{{ids}}} to join_production_clips as `sound`"
     return out
 
 
