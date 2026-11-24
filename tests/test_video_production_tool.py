@@ -134,6 +134,8 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
             if path == "/v1/files/upload-urls":
                 return httpx.Response(200, json={"items": [{"upload_url": "https://storage.example.test/frame.jpg", "file_path": "api-assets/test/frame.jpg"}]})
             if path == "/v1/account":   # whose key it is; kept copies are read only for that account
+                if getattr(self, "refuse_account", False):
+                    return httpx.Response(401, json={"message": "invalid key"})
                 return httpx.Response(200, json={"id": "test"})
             if request.method == "POST" and path in self.refuse:
                 return httpx.Response(422, json={"message": "refused"})
@@ -291,6 +293,25 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("music", made)
         self.assertIn("HTTP 422", made["music_error"])
         self.assertIn("Do not call create_production_sound again", made["next"])
+
+    async def test_a_join_with_a_key_magic_hour_refuses_downloads_nothing(self):
+        # Review: with a junk key, the join downloaded and rendered the clips before any call checked the key.
+        p = await self.planned_with_voice()
+        from mcp_magichour import video_production_tool as vpt
+        vpt._ACCOUNTS.clear()
+        self.addCleanup(vpt._ACCOUNTS.clear)
+        self.refuse_account = True
+        self.paths.clear()
+        with self.assertRaisesRegex(ToolError, "/v1/account"):
+            await self.call("join_production_clips", production=p["production"], made={"1": "https://cdn.test/a.mp4"})
+        self.assertEqual(self.paths, ["/v1/account"])
+        self.assertEqual(self.joined, [])
+
+    async def test_a_production_that_unpacks_too_large_is_refused(self):
+        import base64, zlib
+        bomb = base64.urlsafe_b64encode(zlib.compress(b" " * (50 * 1024 * 1024))).decode()
+        with self.assertRaisesRegex(ToolError, "`production` is not valid"):
+            await self.call("join_production_clips", production=bomb, made={"1": "a"})
 
     async def test_a_film_longer_than_the_music_model_gets_300_seconds_of_music(self):
         from mcp_magichour.video_production import plan_sound

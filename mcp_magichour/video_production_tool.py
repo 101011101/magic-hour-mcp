@@ -383,16 +383,29 @@ def register_video_production(mcp: FastMCP) -> None:
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True),
     )
     async def join_production_clips(production: str, made: dict[str, str], sound: dict[str, str] | None = None) -> dict:
-        return await join_clips(unpack(production), made, sound or {})
+        story = unpack(production)
+        if not await _account_id():   # the join downloads and renders before any other call checks the key
+            raise ToolError("Magic Hour did not accept this connection's key. Reconnect the Magic Hour account and try again.")
+        return await join_clips(story, made, sound or {})
 
 
 def pack(story: dict) -> str:
     return base64.urlsafe_b64encode(zlib.compress(json.dumps(story, separators=(",", ":")).encode())).decode()
 
 
+PRODUCTION_MAX_BYTES = 2 * 1024 * 1024   # the unpacked plan; a zip bomb in `production` would fill the memory
+
+
 def unpack(production: str) -> dict:
     try:
-        return json.loads(zlib.decompress(base64.urlsafe_b64decode(production.encode())))
+        inflate = zlib.decompressobj()
+        raw = inflate.decompress(base64.urlsafe_b64decode(production.encode()), PRODUCTION_MAX_BYTES)
+        if inflate.unconsumed_tail or not inflate.eof:
+            raise ValueError("too large or cut short")
+        story = json.loads(raw)
+        if not isinstance(story, dict):
+            raise ValueError("not a plan")
+        return story
     except Exception:
         raise ToolError("`production` is not valid. Pass the value from plan_video_production unchanged.") from None
 
