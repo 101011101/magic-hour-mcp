@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from fastmcp.exceptions import ToolError
 
-from mcp_magichour import conversation_front, media_helpers_tool, media_tools
+from mcp_magichour import conversation_front, media_helpers_tool, media_tools, video_production_tool
 from mcp_magichour.conversation_front import front
 
 
@@ -122,7 +122,11 @@ class ConversationFrontTests(unittest.TestCase):
 
         async def fake_fetch(media, folder, kinds=("image", "video")):
             return Path(media), False
+
+        async def account_id():
+            return "acct"
         self.enterContext(patch.object(media_helpers_tool, "_fetch_media", fake_fetch))
+        self.enterContext(patch.object(video_production_tool, "_account_id", account_id))
         conversation_front._MEDIA_CACHE.clear()
         media = asyncio.run(conversation_front.media_facts([{"name": "clip.mp4", "kind": "video", "file_path": str(clip)},
                                                             {"name": "note.txt", "kind": "text", "file_path": "x"},
@@ -143,6 +147,33 @@ class ConversationFrontTests(unittest.TestCase):
         conversation_front._MEDIA_CACHE.clear()
         media = asyncio.run(conversation_front.media_facts([{"name": "a.jpg", "kind": "image", "file_path": "https://example.com/photo-123?w=800"}]))
         assert media == [{"name": "a.jpg", "kind": "image", "width": 1080, "height": 1920, "shape": "9:16"}]
+
+    def test_media_facts_are_kept_per_account_errors_never_and_at_most_256(self):
+        """By file_path only, another account got the facts of an upload it may not read, and an error stayed forever."""
+        from PIL import Image
+        photo = Path(tempfile.mkdtemp()) / "source.png"
+        Image.new("RGB", (64, 64)).save(photo)
+        account, refuse = ["acctA"], {"acctB"}
+
+        async def fetch(media, folder, kinds=("image", "video")):
+            if account[0] in refuse:   # an upload is read only for the account that made it
+                raise RuntimeError("not yours")
+            return photo, True
+
+        async def account_id():
+            return account[0]
+        self.enterContext(patch.object(media_helpers_tool, "_fetch_media", fetch))
+        self.enterContext(patch.object(video_production_tool, "_account_id", account_id))
+        conversation_front._MEDIA_CACHE.clear()
+        upload = [{"name": "me.png", "kind": "image", "file_path": "api-assets/acctA/me.png"}]
+        assert asyncio.run(conversation_front.media_facts(upload))[0]["kind"] == "image"
+        account[0] = "acctB"
+        assert "error" in asyncio.run(conversation_front.media_facts(upload))[0]
+        refuse.clear()   # the file can be read now: the error was not kept
+        assert asyncio.run(conversation_front.media_facts(upload))[0]["kind"] == "image"
+        urls = [{"name": f"{n}.png", "kind": "image", "file_path": f"https://example.com/{n}.png"} for n in range(300)]
+        asyncio.run(conversation_front.media_facts(urls))
+        assert len(conversation_front._MEDIA_CACHE) == 256
 
     def test_media_facts_never_fail_the_plan(self):
         async def broken(media, folder, kinds=("image", "video")):

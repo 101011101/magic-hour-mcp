@@ -275,7 +275,9 @@ def _shape(w: int, h: int) -> str:
     return name if abs(ratio - w / h) / ratio < 0.04 else f"{w}:{h}"
 
 
-_MEDIA_CACHE: dict[str, dict] = {}
+# (account, file_path): an upload is read only for the account that made it. A URL needs no account ("").
+_MEDIA_CACHE: dict[tuple[str, str], dict] = {}
+MEDIA_CACHE_MAX = 256
 
 
 def _picture_facts(file: Path) -> dict | None:
@@ -292,15 +294,16 @@ def _picture_facts(file: Path) -> dict | None:
 
 async def media_facts(attachments: list[dict]) -> list[dict]:
     """Length, size, shape and sound of each attached file with a file_path, read by code (free). Never fails the plan."""
-    from . import media_helpers_tool, media_tools
+    from . import media_helpers_tool, media_tools, video_production_tool
 
     out = []
     for a in attachments:
         fp = a.get("file_path")
         if not fp or a.get("kind") == "text":
             continue
-        if fp not in _MEDIA_CACHE:
-            try:
+        try:
+            key = ("" if fp.startswith(("http://", "https://")) else await video_production_tool._account_id(), fp)
+            if key not in _MEDIA_CACHE:
                 with tempfile.TemporaryDirectory() as tmp:
                     file, picture = await media_helpers_tool._fetch_media(fp, Path(tmp), ("image", "video", "audio"))
                     fact = _picture_facts(file)
@@ -312,10 +315,13 @@ async def media_facts(attachments: list[dict]) -> list[dict]:
                         if info["width"]:
                             fact |= {"width": info["width"], "height": info["height"], "shape": _shape(info["width"], info["height"]),
                                      "has_sound": info["audio"]}
-                _MEDIA_CACHE[fp] = fact
-            except Exception as e:  # a file the server cannot read: the plan goes on without its facts
-                _MEDIA_CACHE[fp] = {"error": f"could not read the file ({type(e).__name__})"}
-        out.append({"name": a["name"], **_MEDIA_CACHE[fp]})
+                if len(_MEDIA_CACHE) >= MEDIA_CACHE_MAX:
+                    _MEDIA_CACHE.pop(next(iter(_MEDIA_CACHE)))   # the oldest
+                _MEDIA_CACHE[key] = fact
+            fact = _MEDIA_CACHE[key]
+        except Exception as e:  # a file the server cannot read: the plan goes on without its facts; not kept, so a retry reads it
+            fact = {"error": f"could not read the file ({type(e).__name__})"}
+        out.append({"name": a["name"], **fact})
     return out
 
 
