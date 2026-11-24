@@ -197,7 +197,7 @@ def _plain(error: BaseException, tool: str) -> str:
     if isinstance(error, subprocess.CalledProcessError):
         return ("ffmpeg could not process the file. Check that each input is the kind this tool takes (a picture, a "
                 "video or a sound) and that the colours, times and sizes are valid.")
-    if isinstance(error, subprocess.TimeoutExpired):
+    if isinstance(error, subprocess.TimeoutExpired) or isinstance(error, RuntimeError) and "ran longer than" in str(error):
         return "ffmpeg took too long on this file. Use a shorter or smaller file."
     if isinstance(error, httpx.HTTPStatusError):
         return f"The link answered HTTP {error.response.status_code}. Give a link that opens the file itself, or upload it with upload_media."
@@ -449,5 +449,8 @@ def register_media_helpers(mcp: FastMCP) -> None:
                     raise ToolError(f"The mix would be {longest:.0f} s; mix_audio makes at most {MIX_MAX_SECONDS} s. "
                                     "Pass a shorter `seconds`, or trim the tracks with trim_media.")
             out = Path(folder) / f"mix.{format}"
-            await asyncio.to_thread(media_tools.mix_audio, laid, out, seconds, fade_out)
+            try:
+                await asyncio.to_thread(media_tools.mix_audio, laid, out, seconds, fade_out)
+            except ValueError as error:   # media_tools reads the lengths again and holds the same limit
+                raise ToolError(str(error)) from None
             return await _deliver(out, False)

@@ -1,6 +1,7 @@
 """A fetched file is judged by its bytes, not by its link; mix_audio has a length limit."""
 
 import asyncio
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -132,6 +133,19 @@ class PlainErrorTests(unittest.IsolatedAsyncioTestCase):
         message = str(caught.exception)
         assert "ffmpeg could not process the file" in message
         assert str(self.dir) not in message and "-filter" not in message and "Command" not in message
+
+    async def test_an_ffmpeg_run_stopped_by_the_time_limit_says_so(self):
+        Image.new("RGB", (64, 64), "red").save(self.dir / "logo.png")
+
+        async def fetch(media, folder, kinds=("image", "video")):
+            return self.dir / "logo.png", True
+
+        def slow(command, **options):
+            raise subprocess.TimeoutExpired(command, media_tools.FFMPEG_TIMEOUT)
+        with patch.object(helpers, "_fetch_media", fetch), patch.object(media_tools.subprocess, "run", slow):
+            with self.assertRaises(ToolError) as caught:
+                await self.caller.call_tool("reframe_media", {"media": "a", "aspect": "9:16", "how": "pad"})
+        assert "took too long" in str(caught.exception)
 
     async def test_a_tool_error_and_other_tools_keep_their_own_text(self):
         @self.mcp.tool
