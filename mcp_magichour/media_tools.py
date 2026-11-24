@@ -39,7 +39,9 @@ def _ffmpeg(args: list[str], capture: bool = False) -> str:
     if exe is None:
         raise RuntimeError("ffmpeg is not available")
     if capture:
-        return subprocess.run([exe, "-hide_banner", *args], capture_output=True, text=True, stdin=subprocess.DEVNULL).stderr
+        # errors="replace": a tag in another encoding (a Latin-1 title) is read, not raised
+        return subprocess.run([exe, "-hide_banner", *args], capture_output=True, text=True, errors="replace",
+                              stdin=subprocess.DEVNULL).stderr
     subprocess.check_call([exe, "-v", "error", "-y", *args], stdin=subprocess.DEVNULL)
     return ""
 
