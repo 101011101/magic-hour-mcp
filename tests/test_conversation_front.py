@@ -224,6 +224,25 @@ class ConversationFrontTests(unittest.TestCase):
             out = front(family, "a cat")
             assert out["stage"] == "fill_the_sheet" and out["next"].endswith(ANSWER_RULES)
 
+    def test_a_file_case_is_named_by_whole_words_only(self):
+        """'sing' in 'closing', 'into' in a portrait and a race 'track' made a file the request does not need required."""
+        one = [{"name": "me.jpg", "kind": "image"}]
+        talk = {"presenter": "photo", "line": "We're closing early today!", "length": "your_call", "shape": "1:1"}
+        for request in ("make my photo say: we're closing early today", "make this photo of me say hello, using a friendly tone"):
+            out = front("talking", request, talk, questions_asked=True, attachments=one)
+            assert out["stage"] == "plan" and not out["files"]["missing"], request
+        portrait = front("faces", "turn my selfie into a professional portrait for LinkedIn",
+                         {"consent": "none", "headshot_look": "set shape or background"}, questions_asked=True, attachments=one)
+        assert portrait["stage"] == "plan" and not portrait["files"]["missing"]
+        race = front("new_video", "a 5 second clip of a race car speeding down the track",
+                     {"from_picture": "words", "length": "5", "shape": "16:9", "exact_words": "none"}, questions_asked=True)
+        assert race["stage"] == "plan" and not race["files"]["missing"]
+        # the words still name the cases
+        sing = front("talking", "make my photo sing", talk, attachments=one)
+        assert "the sound file to mouth" in sing["files"]["missing"]
+        swap = front("faces", "put my face into the group photo", {"consent": "none", "photo_or_video": "photo"}, attachments=one)
+        assert swap["files"]["missing"]
+
     def test_a_narrator_and_people_on_screen_are_one_answer(self):
         """A narrator plus a presenter had no who_speaks option; in testing, both hosts were refused once."""
         out = front("film", "a narrator, and a beekeeper says a line to the camera", {"kind": "explainer_list", "who_speaks": "narrator + one_on_screen"})

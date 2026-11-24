@@ -132,12 +132,13 @@ def _available(tool: str) -> bool:
 
 
 # A file whose `when` is not "always" is still required when the request's words name its case.
+# Whole words only: 'sing' in 'closing' asked for a sound file; "the track" can be a race track.
 NEEDED_WHEN = {
-    "a swap, clothes, a scene, a character replace": r"swap|onto|\bon (?:the|this|my)\b|put|replace|clothes|outfit|wear|scene|into",
-    "the user asks to animate their picture": r"\b(?:this|my) (?:photo|pic|picture|image)|animate (?:this|my)",
-    "a song, or the user's own recording": r"\bsong|sing|my (?:recording|audio|track)|lip.?sync",
-    "the user's own voice": r"\bmy (?:own )?voice|in my voice|sounds? like me|clone",
-    "a video made for a song or a sound file": r"\b(?:this|my|the) (?:song|track|audio|recording)\b|music video",
+    "a swap, clothes, a scene, a character replace": r"\b(?:swap|onto|on (?:the|this|my)\b|put|replace|clothes|outfit|wear|scene|into)",
+    "the user asks to animate their picture": r"\b(?:this|my) (?:photo|pic|picture|image)|\banimate (?:this|my)",
+    "a song, or the user's own recording": r"\b(?:song|sing(?:s|ing)?\b|my (?:recording|audio|track)|lip.?sync)",
+    "the user's own voice": r"\b(?:my (?:own )?voice|in my voice|sounds? like me|clone)",
+    "a video made for a song or a sound file": r"\b(?:(?:this|my|the) (?:song|audio|recording)|(?:this|my) track)\b|\bmusic video",
 }
 
 
@@ -155,10 +156,17 @@ def _words_only(answers: dict[str, str] | None, attachments: list[dict]) -> bool
             and all(answers.get(r) in (None, NOT_APPLICABLE) for r in TARGET_ROWS))
 
 
+def _headshot(answers: dict[str, str] | None) -> bool:
+    """The host answered the headshot row and no row of a second picture ("turn my selfie into a portrait")."""
+    answers = answers or {}
+    return (answers.get("headshot_look") not in (None, NOT_APPLICABLE)
+            and all(answers.get(r) in (None, NOT_APPLICABLE) for r in (*TARGET_ROWS, *WORDS_ONLY)))
+
+
 def _files(family: str, attachments: list[dict], request: str = "", answers: dict[str, str] | None = None) -> dict:
     need = [{"what": w, "kinds": list(k), "when": ("always" if when == "always" or re.search(NEEDED_WHEN.get(when, r"(?!)"), request, re.I) else when)}
             for w, k, when in FILES.get(family, [])]
-    if family == "faces" and (re.search(r"headshot", request, re.I) or _words_only(answers, attachments)):
+    if family == "faces" and (re.search(r"headshot", request, re.I) or _headshot(answers) or _words_only(answers, attachments)):
         need = need[:1]
     given = [{"name": a["name"], "kind": a["kind"]} for a in attachments]
     kinds = [a["kind"] for a in attachments]
