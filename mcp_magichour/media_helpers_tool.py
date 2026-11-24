@@ -13,14 +13,17 @@ import base64
 import binascii
 import os
 import re
+import subprocess
 import tempfile
 import uuid
 from pathlib import Path
 from typing import Annotated, Literal
 from urllib.parse import urlparse
 
+import httpx
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
+from fastmcp.server.middleware import Middleware
 from mcp.types import ToolAnnotations
 from pydantic import BaseModel, Field
 
@@ -154,7 +157,45 @@ async def _deliver(file: Path, picture: bool) -> dict:
     return out
 
 
+CODE_TOOL_MODULES = {f"mcp_magichour.{m}" for m in ("media_helpers_tool", "tool_media", "video_production_tool",
+                                                     "conversation_front", "tool_plan", "plan_request", "gates")}
+
+
+def _plain(error: BaseException, tool: str) -> str:
+    if isinstance(error, subprocess.CalledProcessError):
+        return ("ffmpeg could not process the file. Check that each input is the kind this tool takes (a picture, a "
+                "video or a sound) and that the colours, times and sizes are valid.")
+    if isinstance(error, subprocess.TimeoutExpired):
+        return "ffmpeg took too long on this file. Use a shorter or smaller file."
+    if isinstance(error, httpx.HTTPStatusError):
+        return f"The link answered HTTP {error.response.status_code}. Give a link that opens the file itself, or upload it with upload_media."
+    if isinstance(error, httpx.RequestError):
+        return "The link's server could not be reached. Give another link, or upload the file with upload_media."
+    return f"{tool} could not use these inputs ({type(error).__name__}). Check them against the tool's description."
+
+
+class PlainCodeToolErrors(Middleware):
+    """A code tool's unexpected failure reaches the host as a plain sentence. Python's own text names the ffmpeg command
+    line, this server's folders and its user name; FastMCP writes it to the server log."""
+
+    def __init__(self, mcp: FastMCP) -> None:
+        self._mcp = mcp
+
+    async def on_call_tool(self, context, call_next):
+        try:
+            return await call_next(context)
+        except ToolError as error:
+            cause = error.__cause__
+            if cause is None or isinstance(cause, ToolError):
+                raise
+            tool = await self._mcp.get_tool(context.message.name)
+            if getattr(getattr(tool, "fn", None), "__module__", None) not in CODE_TOOL_MODULES:
+                raise
+            raise ToolError(_plain(cause, context.message.name)) from None
+
+
 def register_media_helpers(mcp: FastMCP) -> None:
+    mcp.add_middleware(PlainCodeToolErrors(mcp))
     @mcp.tool(
         name="upload_media",
         description=(

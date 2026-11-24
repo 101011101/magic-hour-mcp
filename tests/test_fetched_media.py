@@ -87,5 +87,37 @@ class MixLengthTests(unittest.IsolatedAsyncioTestCase):
         assert "at most 600 s" in str(caught.exception) and not rendered
 
 
+class PlainErrorTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.dir = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        self.mcp = FastMCP("test")
+        helpers.register_media_helpers(self.mcp)
+        self.caller = await self.enterAsyncContext(Client(self.mcp))
+
+    async def test_an_ffmpeg_failure_names_no_command_line_or_folder(self):
+        # In testing, reframe_media with color "notacolour" returned the whole ffmpeg command, with the server's folders.
+        Image.new("RGB", (64, 64), "red").save(self.dir / "logo.png")
+
+        async def fetch(media, folder, kinds=("image", "video")):
+            return self.dir / "logo.png", True
+        with patch.object(helpers, "_fetch_media", fetch):
+            with self.assertRaises(ToolError) as caught:
+                await self.caller.call_tool("reframe_media", {"media": "a", "aspect": "9:16", "how": "pad", "color": "notacolour"})
+        message = str(caught.exception)
+        assert "ffmpeg could not process the file" in message
+        assert str(self.dir) not in message and "-filter" not in message and "Command" not in message
+
+    async def test_a_tool_error_and_other_tools_keep_their_own_text(self):
+        @self.mcp.tool
+        def other() -> int:
+            raise ValueError("left as it is")
+        with self.assertRaises(ToolError) as caught:
+            await self.caller.call_tool("other", {})
+        assert "left as it is" in str(caught.exception)
+        with self.assertRaises(ToolError) as caught:
+            await self.caller.call_tool("mix_audio", {"tracks": []})
+        assert "Give at least one track." in str(caught.exception)
+
+
 if __name__ == "__main__":
     unittest.main()
