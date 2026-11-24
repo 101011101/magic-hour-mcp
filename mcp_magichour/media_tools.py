@@ -229,7 +229,10 @@ def join(files: list[Path], out: Path, audio: bool | list[bool] = True, seconds:
         part = out.with_name(f"{out.stem}-part{i}.mp4")
         info = infos[i]
         silent = ["-i", str(file), "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo", "-map", "0:v:0", "-map", "1:a:0", "-shortest"]
-        sound = ["-i", str(file)] if keep[i] and info["audio"] else silent
+        # a kept sound is padded with silence and ends with the picture: a sound that stopped early left a gap at the
+        # joint, and a later re-encode closed it and moved the next clip's sound early
+        kept = ["-i", str(file), "-af", "apad", "-shortest"]
+        sound = kept if keep[i] and info["audio"] else silent
         cut = ["-t", f"{seconds[i]:.3f}"] if seconds[i] and info["seconds"] > seconds[i] + 0.05 else []
         graph, _ = frame_filter(info["width"], info["height"], width, height)
         _ffmpeg([*sound, *cut, "-vf", f"{graph},fps=24,format=yuv420p",

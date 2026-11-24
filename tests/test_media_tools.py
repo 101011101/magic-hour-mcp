@@ -180,6 +180,18 @@ class LongSoundTests(MediaTest):
                 self.assertAlmostEqual(self.frames(fitted) / 24, 1.5, delta=0.05)
 
 
+class JoinSoundTests(MediaTest):
+    def test_a_clip_whose_sound_stops_early_does_not_pull_the_next_clips_sound_early(self):
+        short, full = self.dir / "short.mp4", self.dir / "full.mp4"
+        self.ff("-f", "lavfi", "-i", "testsrc=s=160x90:r=24:d=2", "-f", "lavfi", "-i", "sine=f=440:d=1", "-pix_fmt", "yuv420p", str(short))
+        self.ff("-f", "lavfi", "-i", "testsrc=s=160x90:r=24:d=2", "-f", "lavfi", "-i", "sine=f=440:d=2", "-pix_fmt", "yuv420p", str(full))
+        film = m.join([short, full], self.dir / "film.mp4")
+        heard = m.speech_spans(film)
+        self.assertEqual(len(heard), 2, heard)
+        self.assertAlmostEqual(heard[0][1], 1.0, delta=0.1)
+        self.assertAlmostEqual(heard[1][0], 2.0, delta=0.1)   # the second clip's sound starts with its picture
+
+
 class LimitTests(MediaTest):
     def test_an_ffmpeg_run_past_the_time_limit_is_stopped_with_a_clear_error(self):
         slow = ["-re", "-f", "lavfi", "-i", "anullsrc=r=8000:cl=mono", "-t", "3", "-f", "null", "-"]   # 3 s at real speed
