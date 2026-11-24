@@ -69,6 +69,7 @@ from .project_result_app import (
 )
 from .gates import MODE as GATES_MODE, register_gates
 from . import kept_files
+from .media_helpers_tool import register_media_helpers
 from .plan_request import register_plan_request
 from .tool_logging import ToolCallLoggingMiddleware
 from .video_production_tool import FILMS_PATH, film_file, register_video_production
@@ -254,6 +255,7 @@ def register_custom_tools(mcp: FastMCP) -> None:
     register_workflow_guidance(mcp)
     register_plan_request(mcp)
     register_video_production(mcp)
+    register_media_helpers(mcp)
     if GATES_MODE in ("warn", "refuse"):
         register_gates(mcp, GATES_MODE)
 
