@@ -206,7 +206,7 @@ def register_media_helpers(mcp: FastMCP) -> None:
                 (Path(folder) / f"p{i}").mkdir()
                 files.append((await _fetch_media(v, Path(folder) / f"p{i}", ("video", "audio")))[0])
             infos = [await asyncio.to_thread(media_tools.probe, f) for f in files]
-            if all(not i["width"] for i in infos):   # F31b, F32b: voice clips
+            if all(not i["width"] for i in infos):   # voice clips
                 if silent:
                     raise ToolError("These are sound files; `silent` would leave nothing.")
                 out = Path(folder) / "joined.m4a"

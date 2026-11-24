@@ -1,4 +1,4 @@
-"""Fixes from the w11 wide-set run (2026-11-18): the W02 jump at a last-frame joint, the W09 music start, the W10 card
+"""Fixes for the jump at a last-frame joint, the music start, the card
 spelling check. On real files made by ffmpeg (skipped without ffmpeg)."""
 
 import subprocess
@@ -14,7 +14,7 @@ def ff(*args):
 
 
 @unittest.skipUnless(m.have_ffmpeg(), "needs ffmpeg")
-class W11FixTests(unittest.TestCase):
+class JointMusicStartAndSpellingTests(unittest.TestCase):
     def setUp(self):
         self.dir = Path(self.enterContext(tempfile.TemporaryDirectory()))
 
@@ -32,7 +32,7 @@ class W11FixTests(unittest.TestCase):
         return sum(abs(x - y) for x, y in zip(a, b)) / max(1, len(a)) < 12
 
     def test_a_long_clip_that_starts_the_next_one_loses_its_head_not_its_last_frame(self):
-        """W02 w11, 28 s: the 6 s clip came back 6.6 s; cutting its end skipped 0.6 s of motion at the joint."""
+        """The 6 s clip came back 6.6 s; cutting its end skipped 0.6 s of motion at the joint."""
         source = self.clip(6.6)
         out = m.fit_length(source, 6.0, "head", self.dir / "head.mp4")
         self.assertAlmostEqual(m.probe(out)["seconds"], 6.0, delta=0.1)
@@ -47,7 +47,7 @@ class W11FixTests(unittest.TestCase):
         self.assertTrue(self.close(self.last_frame_bytes(out), self.last_frame_bytes(source)))
 
     def test_music_with_a_start_time_is_silent_before_it(self):
-        """W09 w11: the music started at 0 s and covered the whoosh the user asked to hear first."""
+        """The music started at 0 s and covered the whoosh the user asked to hear first."""
         film = self.dir / "film.mp4"
         ff("-f", "lavfi", "-i", "testsrc=s=320x240:d=8", "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo", "-t", 8,
            "-c:v", "libx264", "-c:a", "aac", film)
@@ -61,7 +61,7 @@ class W11FixTests(unittest.TestCase):
         self.assertGreater(level(5), -30)
 
     def test_before_a_late_music_start_the_films_own_sound_is_not_lowered(self):
-        """W09 rejoin: the whoosh came first but was mixed 10 dB down, at about -50 dB."""
+        """The whoosh came first but was mixed 10 dB down, at about -50 dB."""
         film = self.dir / "film.mp4"
         ff("-f", "lavfi", "-i", "testsrc=s=320x240:d=8", "-f", "lavfi", "-i", "sine=f=660:d=8", "-t", 8,
            "-c:v", "libx264", "-c:a", "aac", film)
@@ -74,7 +74,7 @@ class W11FixTests(unittest.TestCase):
         self.assertGreater(level(1) - level(6), m.EFFECTS_UNDER_DB - 1.5)
 
     def test_a_quiet_cue_before_a_late_music_start_is_raised_to_the_music(self):
-        """W09 rejoin: the whoosh peaked at -40 dB against music at -15 dB."""
+        """The whoosh peaked at -40 dB against music at -15 dB."""
         film = self.dir / "film.mp4"
         ff("-f", "lavfi", "-i", "testsrc=s=320x240:d=8", "-f", "lavfi", "-i", "sine=f=660:d=8,volume=0.2", "-t", 8,
            "-c:v", "libx264", "-c:a", "aac", film)
@@ -85,13 +85,13 @@ class W11FixTests(unittest.TestCase):
         self.assertAlmostEqual(cue, m.loudness(self.dir / "l" / "music.wav"), delta=3)
 
     def test_a_misspelled_word_is_not_found(self):
-        """W10 w11: "3 tips for better sleen"; tesseract read "better slze"."""
+        """The card said "3 tips for better sleen"; tesseract read "better slze"."""
         self.assertEqual(m.words_found(["3 tips for", "better sleep"], "3 tips for\nbetter slze\n"), (4, 5))
         self.assertEqual(m.words_found(["3 tips for better sleep"], "3 TIPS FOR BETTER SLEEP"), (5, 5))
 
     @unittest.skipUnless(m.have_captions() and __import__("shutil").which("tesseract"), "needs tesseract")
     def test_an_unreadable_card_is_not_called_misspelled(self):
-        """W10 w12: thin letters over a glow read as nothing; 3 stills were made for a card that was right."""
+        """Thin letters over a glow read as nothing; 3 stills were made for a card that was right."""
         from PIL import Image
         blank = self.dir / "glow.png"
         Image.new("RGB", (480, 854), (40, 70, 140)).save(blank)

@@ -1,4 +1,4 @@
-"""The host groups the beats into clips; the planner obeys, tracks the request and advises (user, 2026-11-07)."""
+"""The host groups the beats into clips; the planner obeys, tracks the request and advises."""
 
 import json
 import re
@@ -15,12 +15,12 @@ def risks(story: dict, planned: dict) -> list[dict]:
     return [q for q in vp.questions(story, planned) if q["id"] != "continuity"]
 
 STORIES = Path(__file__).parent / "fixtures" / "stories"
-B2_REQUEST = ('Make a 30-second 16:9 short film called Walk Anyway. Start on a title card for 2 seconds: white text "WALK ANYWAY". '
+WALK_ANYWAY_REQUEST = ('Make a 30-second 16:9 short film called Walk Anyway. Start on a title card for 2 seconds: white text "WALK ANYWAY". '
               '3. Close on both of them. He says out loud: "You came back." She smiles.')
 
 
 def walk_anyway() -> dict:
-    """B2 as the host wrote it in the dry run of 7 November: the line has its own beat, then the walk away."""
+    """The story as a host wrote it in a test run: the line has its own beat, then the walk away."""
     story = json.loads((STORIES / "c4-walk-anyway-30.json").read_text())
     story.pop("variants", None)
     return story
@@ -98,7 +98,7 @@ class SpokenLineTests(unittest.TestCase):
 
     def test_a_spoken_line_with_another_beat_is_a_question_and_split_gives_it_its_own_clip(self):
         story = self.line_story([1, 2, 2, 3, 3, 4])
-        for beat in story["beats"][3:5]:   # 2026-11-20: the question is only for an ltx-2.5 clip
+        for beat in story["beats"][3:5]:   # the question is only for an ltx-2.5 clip
             beat["model"] = "ltx-2.5"
         asked = vp.questions(story, plan_story(story))
         line = next(q for q in asked if q["id"] == "line-4")
@@ -130,7 +130,7 @@ class ChosenReferenceTests(unittest.TestCase):
 class QuestionTests(unittest.TestCase):
     def words_story(self) -> dict:
         story = grouped(walk_anyway(), [1, 2, 2, 3, 4, 5])
-        story["beats"][4]["exact_words"] = ["walk anyway"]      # over the walk away, as in A2
+        story["beats"][4]["exact_words"] = ["walk anyway"]      # over the walk away
         return story
 
     def test_words_over_a_scene_are_a_question_with_five_options(self):
@@ -150,7 +150,7 @@ class QuestionTests(unittest.TestCase):
         self.assertIn("exact: drawn by code", next(l["how"] for l in planned["checklist"] if l["id"] == "words-5"))
 
     def test_card_puts_the_words_on_a_generated_card_after_the_beat(self):
-        # user, 2026-11-17 (MCP-23): the card is generated, its words quoted to the picture model; not drawn by code
+        # the card is generated, its words quoted to the picture model; not drawn by code
         answered, _ = vp.apply_answers(self.words_story(), {"words-5": "card"})
         planned = plan_story(answered)
         self.assertTrue(planned["ok"], planned["problems"])
@@ -160,7 +160,7 @@ class QuestionTests(unittest.TestCase):
         self.assertEqual((card["kind"], card["made_by"], still["tool"], still["model"]), ("card", "api", "generate_image", vp.STILL_MODEL))
         self.assertIn('"walk anyway"', still["prompt"])
         self.assertNotIn("walk anyway", planned["clips"][3]["steps"][-1]["prompt"])  # not asked of the video model
-        # 2026-11-20: the line (beat 4) and the walk away (beat 5) share a person, so the plan asks to join them
+        # the line (beat 4) and the walk away (beat 5) share a person, so the plan asks to join them
         self.assertEqual([q["id"] for q in risks(answered, planned)], ["together-5"])
 
     def test_model_routes_the_clip_to_minimax_and_asks_for_the_words(self):
@@ -184,13 +184,13 @@ class QuestionTests(unittest.TestCase):
         answered, _ = vp.apply_answers(story, {"colour-codes": "words"})
         self.assertNotRegex(answered["setting"], r"#[0-9A-Fa-f]{6}")
         self.assertIn("teal", answered["setting"])
-        self.assertEqual([q["id"] for q in risks(answered, plan_story(answered))], ["together-5"])   # 2026-11-20
+        self.assertEqual([q["id"] for q in risks(answered, plan_story(answered))], ["together-5"])
 
     def test_in_scene_words_are_best_effort_with_no_question(self):
         story = grouped(walk_anyway(), [1, 2, 2, 3, 4, 5])
         story["beats"][1]["in_scene_words"] = ["BUS 12"]
         planned = plan_story(story)
-        self.assertEqual([q["id"] for q in risks(story, planned)], ["together-5"])   # 2026-11-20: same person, one clip
+        self.assertEqual([q["id"] for q in risks(story, planned)], ["together-5"])   # same person, one clip
         self.assertIn('The words "BUS 12" are part of the picture', planned["clips"][1]["steps"][-1]["prompt"])
         self.assertTrue(any("best effort" in l["want"] for l in planned["checklist"]))
 
@@ -199,17 +199,17 @@ class AdviceTests(unittest.TestCase):
 
     def test_what_the_request_asks_for_is_tracked(self):
         story = grouped(walk_anyway(), [1, 2, 2, 3, 4, 5])
-        missing = [a["warning"] for a in vp.advise(story, plan_story(story), B2_REQUEST) if a["note"] == "not-carried"]
+        missing = [a["warning"] for a in vp.advise(story, plan_story(story), WALK_ANYWAY_REQUEST) if a["note"] == "not-carried"]
         self.assertTrue(any("You came back." in m for m in missing))                 # no beat carries the line yet
         story["beats"][3]["spoken"] = ["You came back."]
-        missing = [a["warning"] for a in vp.advise(story, plan_story(story), B2_REQUEST) if a["note"] == "not-carried"]
+        missing = [a["warning"] for a in vp.advise(story, plan_story(story), WALK_ANYWAY_REQUEST) if a["note"] == "not-carried"]
         self.assertEqual(missing, [])
 
     def test_advice_never_changes_the_plan(self):
         story = grouped(walk_anyway(), [1, 2, 2, 3, 3, 4])
         planned = plan_story(story)
         before = json.dumps(planned, sort_keys=True)
-        vp.advise(story, planned, B2_REQUEST)
+        vp.advise(story, planned, WALK_ANYWAY_REQUEST)
         self.assertEqual(json.dumps(planned, sort_keys=True), before)
 
 
@@ -232,14 +232,14 @@ class DrawnCardTests(unittest.TestCase):
             self.assertAlmostEqual(media_tools.probe(video)["seconds"], 4, delta=0.2)
 
     def test_a_card_with_a_colour_is_generated_on_that_colour(self):
-        # user, 2026-11-21: every card is generated; a colour code no longer makes a code card
+        # every card is generated; a colour code no longer makes a code card
         story = grouped(walk_anyway(), [1, 2, 2, 3, 4, 5])
         story["beats"][0]["background"] = "#000000"
         clip = plan_story(story)["clips"][0]
         still = clip["steps"][0]
         self.assertEqual((clip["made_by"], still["tool"], still["model"]), ("api", "generate_image", "qwen-image-2.1"))
         self.assertIn("The background is flat black.", still["prompt"])
-        self.assertNotIn("#000000", still["prompt"])   # a code in a prompt is drawn as text (A4)
+        self.assertNotIn("#000000", still["prompt"])   # a code in a prompt is drawn as text
 
 
 class ToolFlowTests(unittest.TestCase):
@@ -256,8 +256,8 @@ class ToolFlowTests(unittest.TestCase):
 
         async def go():
             async with Client(mcp) as client:
-                first = (await client.call_tool("plan_video_production", {"story": story, "request": B2_REQUEST})).data
-                second = (await client.call_tool("plan_video_production", {"story": story, "request": B2_REQUEST,
+                first = (await client.call_tool("plan_video_production", {"story": story, "request": WALK_ANYWAY_REQUEST})).data
+                second = (await client.call_tool("plan_video_production", {"story": story, "request": WALK_ANYWAY_REQUEST,
                                                                               "answers": {"words-5": "card", "continuity": "ok"}})).data
                 return first, second
         first, second = asyncio.run(go())
@@ -269,13 +269,13 @@ class ToolFlowTests(unittest.TestCase):
 
 
 class FixesFromTheDryRunTests(unittest.TestCase):
-    """The question-flow dry run of 7 November found these."""
+    """A test run of the question flow found these."""
 
     def test_the_answers_model_wins_over_another_beats_model(self):
         story = QuestionTests().words_story()
         story["beats"][4]["clip"] = 4          # the words beat shares clip 4 with the line beat
         story["beats"][5]["clip"] = 5
-        story["beats"][3]["model"] = "ltx-2.5"  # A2: the host had put ltx-2.5 on the first beat of the clip
+        story["beats"][3]["model"] = "ltx-2.5"  # a host had put ltx-2.5 on the first beat of the clip
         answered, _ = vp.apply_answers(story, {"words-5": "model"})
         clip = next(c for c in plan_story(answered)["clips"] if 5 in c["beats"])
         self.assertEqual(clip["steps"][-1]["model"], "minimax-h3")
@@ -283,12 +283,12 @@ class FixesFromTheDryRunTests(unittest.TestCase):
     def test_a_model_that_cannot_take_the_picture_is_a_problem(self):
         story = json.loads((STORIES / "c5-fragrance-30.json").read_text())
         story.pop("variants", None)
-        story["beats"][0]["model"] = "ltx-2.5"   # B1: the bottle's picture on ltx-2.5
+        story["beats"][0]["model"] = "ltx-2.5"   # the bottle's picture on ltx-2.5
         problems = plan_story(story)["problems"]
         self.assertTrue(any("cannot take a picture reference" in p for p in problems), problems)
 
     def test_a_card_with_the_users_picture_is_generated_from_it(self):
-        # user, 2026-11-21: a card with the user's logo is made by the image editor from it, not held by code
+        # a card with the user's logo is made by the image editor from it, not held by code
         story = grouped(walk_anyway(), [1, 2, 2, 3, 4, 5])
         story["beats"][5] = {"seconds": 2, "kind": "card", "clip": 5, "text": "The logo, unchanged.", "picture": "https://example.com/logo.png", "background": "#FFFFFF"}
         planned = plan_story(story)
@@ -335,8 +335,8 @@ class HeldPictureUrlTests(unittest.TestCase):
 
 
 class ProductAndLabelTests(unittest.TestCase):
-    """2026-11-12 happy r1: H40a (the photo's kitchen stayed), H40c (a product with no picture changed), I47c (a stage
-    named by a label was drawn faintly)."""
+    """Found in testing: the photo's kitchen stayed, a product with no picture changed, a stage named by a label was
+    drawn faintly."""
 
     def ad(self, picture=None):
         return {"title": "Ad", "aspect": "9:16", "setting": "A clean white studio, soft light.",
@@ -345,8 +345,8 @@ class ProductAndLabelTests(unittest.TestCase):
                           {"seconds": 5, "text": "A close view of the bottle's label.", "subjects": ["bottle"], "clip": 2, "link": "new"}]}
 
     def test_a_product_with_no_picture_in_two_clips_is_a_picture_question(self):
-        # 2026-11-20 audit: no "make a still with generate_image" advice (user, 2026-11-14, W04: never a picture made
-        # by an image model); the picture question asks for a real photo
+        # no "make a still with generate_image" advice (never a picture made by an image model); the picture
+        # question asks for a real photo
         story = self.ad()
         planned = plan_story(story)
         self.assertNotIn("product-no-picture", [a["note"] for a in vp.advise(story, planned)])
@@ -367,7 +367,7 @@ class ProductAndLabelTests(unittest.TestCase):
 
 
 class ContinuityTests(unittest.TestCase):
-    """Keep what should stay continuous in one clip; split only when needed (user, 2026-11-13, W09 and W03)."""
+    """Keep what should stay continuous in one clip; split only when needed."""
 
     def logo_reveal(self, card_text: str = "The logo, exactly as in the file, held in the centre.") -> dict:
         return {"title": "Logo", "aspect": "16:9", "setting": "A dark navy background.",
@@ -402,7 +402,7 @@ class ContinuityTests(unittest.TestCase):
         return asyncio.run(go())
 
     def test_the_tool_merges_a_held_still_after_its_reveal_with_no_question(self):
-        # W09 (user, 2026-11-21): one generated clip with the logo as reference, never a held card after the reveal
+        # one generated clip with the logo as reference, never a held card after the reveal
         p = self.tool_plan(self.logo_reveal(), {"continuity": "ok", "words-1": "overlay", "colour-codes": "words"})
         self.assertEqual([(c["kind"], c["made_by"]) for c in p["clips"]], [("scene", "api")])
         self.assertEqual(p["clips"][0]["reference"]["kind"], "picture")
@@ -446,7 +446,7 @@ class ContinuityTests(unittest.TestCase):
 
 
 class ProductPictureTests(unittest.TestCase):
-    """A product with no photo is a question: a real photo, never an image-model picture (user, 2026-11-14, W04)."""
+    """A product with no photo is a question: a real photo, never an image-model picture."""
 
     def handhelds(self, picture: str | None = None) -> dict:
         deck = {"id": "deck", "words": "a Steam Deck OLED handheld PC.", "role": "product"}
@@ -480,7 +480,7 @@ class ProductPictureTests(unittest.TestCase):
 
 
 class SpokenFitTests(unittest.TestCase):
-    """2026-11-18: a spoken line is paced at 2.5 words a second, warned when it does not fit, and always gets a clear end."""
+    """A spoken line is paced at 2.5 words a second, warned when it does not fit, and always gets a clear end."""
 
     def story(self, words: int, seconds: int) -> dict:
         story = grouped(walk_anyway(), [1, 2, 2, 3, 4, 5])
@@ -526,7 +526,7 @@ class SpokenFitTests(unittest.TestCase):
 
 
 class ShotAndActionAdviceTests(unittest.TestCase):
-    """One shot and at most three actions in a clip (prompt guides; W05 and W07 w22l, 2026-11-21)."""
+    """One shot and at most three actions in a clip (prompt guides)."""
 
     def story(self, beats: list[dict]) -> dict:
         return {"title": "t", "aspect": "16:9", "setting": "A rainy bus stop at dusk.",
@@ -546,7 +546,7 @@ class ShotAndActionAdviceTests(unittest.TestCase):
         self.assertEqual([a["note"] for a in warned], ["shot-change"])
         self.assertIn("close two shot at 0 s, then from behind wide at 6 s", warned[0]["warning"])
 
-    def test_the_same_shot_named_again_is_not_a_shot_change(self):   # dry run w23d W05
+    def test_the_same_shot_named_again_is_not_a_shot_change(self):
         story = self.story([
             {"clip": 1, "seconds": 4, "text": "Medium two-shot under the shelter: Maya turns to Leo."},
             {"clip": 1, "seconds": 5, "text": "Same two-shot: Leo shrugs and looks back at Maya."}])
@@ -566,13 +566,13 @@ class ShotAndActionAdviceTests(unittest.TestCase):
         self.assertEqual([a["note"] for a in warned], ["actions-per-clip"])
         self.assertIn("about 4 actions in 12 s", warned[0]["warning"])
 
-    def test_three_actions_hold(self):   # w19l W07: lift off, fly, land in 12 s; Wilbur stayed on the sand
+    def test_three_actions_hold(self):   # in testing: lift off, fly, land in 12 s; Wilbur stayed on the sand
         story = self.story([{"clip": 1, "seconds": 12, "text": (
             "Wide side view: the biplane lifts off the rail and flies low over the sand, Wilbur running alongside, then it "
             "lands softly in the sand.")}])
         self.assertEqual(self.notes(story), [])
 
-    def test_one_person_talking_in_one_shot_is_not_warned(self):   # W06 w22l: four beats, two lines, approved
+    def test_one_person_talking_in_one_shot_is_not_warned(self):   # in testing: four beats, two lines, approved
         story = self.story([
             {"clip": 1, "seconds": 3, "text": "Medium close-up of Maya facing the camera; she thinks and smiles."},
             {"clip": 1, "seconds": 3, "text": "Maya looks into the camera, confident.", "spoken": ["I walk everywhere."]},

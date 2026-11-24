@@ -1,9 +1,9 @@
-"""Magic Hour's preset voices for a voice-over, with Magic Hour's own tags (MCP-22).
+"""Magic Hour's preset voices for a voice-over, with Magic Hour's own tags.
 
-Source: the voice table in Magic Hour's web app (magichour.ai voice picker), read 2026-11-16. The public API
-(`GET /v1/voices`) gives only the id, name and preview; MCP-27 asks for the tags there. The preview is the sample the
+Source: the voice table in Magic Hour's web app (magichour.ai voice picker). The public API
+(`GET /v1/voices`) gives only the id, name and preview. The preview is the sample the
 voice cloner copies. Left out: the Characters category, voices that imitate a named character, voices whose
-description or preview (Whisper, 2026-11-16) is another language, and the 3 Neutral voices.
+description or preview (Whisper) is another language, and the 3 Neutral voices.
 Columns: id, name, gender, age, style, description, preview URL.
 """
 

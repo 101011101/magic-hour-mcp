@@ -92,7 +92,7 @@
       "max_seconds": 15
     }
   ],
-  "baseline": "current MCP, one 30 s call, 2026-11-04: 3 yes, 3 partly, 1 no",
+  "baseline": "current MCP, one 30 s call: 3 yes, 3 partly, 1 no",
   "checks": [
     "One file, 30 s, 16:9",
     "Title card for the first 2 s: black, white WALK ANYWAY",

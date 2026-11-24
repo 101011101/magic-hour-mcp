@@ -76,7 +76,7 @@ class ParameterDocumentationTests(unittest.TestCase):
         self.assertNotIn("not v3", updated["description"])
 
     def test_stock_voice_is_picked_to_match_the_speaker(self):
-        # User, 2026-11-23 (K16): pick the voice that matches the character, never the default.
+        # Pick the voice that matches the character, never the default.
         updated = apply_magic_hour_policies(self.spec)["paths"]["/v1/ai-voice-generator"]["post"]
         style = updated["requestBody"]["content"]["application/json"]["schema"]["properties"]["style"]
         said = style["properties"]["voice_name"]["description"]

@@ -38,13 +38,13 @@ STILL_WAIT_SECONDS = 120
 STILL_TRIES = 3   # a still whose words are misspelled is made again, at most this many stills in all
 
 # The split rule the tool applies. Chosen by benchmark, not by the host.
-# 2026-11-05, C4 and C5, one run each: cut at a new idea and at 15 s. A cut at every event did worse on C4
+# Two test films, one run each: cut at a new idea and at 15 s. A cut at every event did worse on one
 # (more last-frame handoffs: the framing locks, the colour drifts).
-# User, 2026-11-05: first keep a pictured person's shots in one call; then cut at key ideas.
+# First keep a pictured person's shots in one call; then cut at key ideas.
 SPLIT_STRATEGY = "person"
 SPLIT_MAX_SECONDS = 15
 SPEECH_MIN_SECONDS = 1.0   # less sound than this in a narration track: no voice was made
-WORDS_MIN_MATCH = 0.8      # the share of the script's words a transcript must have, in order (A4: nonsense was 0.04)
+WORDS_MIN_MATCH = 0.8      # the share of the script's words a transcript must have, in order (in testing: nonsense was 0.04)
 TRANSCRIBE_URL = "https://api.openai.com/v1/audio/transcriptions"
 
 
@@ -74,7 +74,7 @@ class Subject(BaseModel):
         "A real photo of it (file_path from upload_media, or a URL): the video uses it as a likeness guide in every clip "
         "that shows it. Each pictured subject in a clip is its own guide. For a real, named product: the user's photo, or a "
         "free-licence photo from the web (for example Wikimedia Commons; tell the user where it came from and its licence). "
-        "Never a picture made by an image model: it invents the product (W04: a Steam Deck with no trackpads)."))
+        "Never a picture made by an image model: it invents the product (in testing: a Steam Deck with no trackpads)."))
 
 
 class Reference(BaseModel):
@@ -89,7 +89,7 @@ class Reference(BaseModel):
 class Beat(BaseModel):
     seconds: int = Field(ge=1, description=(
         "Length of this beat. An action the user gives a length (it flies for 12 seconds) is a beat of that length; its "
-        "start and its end (the take-off, the landing) are beats of their own (b1 W07: all three in one 12 s beat gave "
+        "start and its end (the take-off, the landing) are beats of their own (in testing: all three in one 12 s beat gave "
         "about 4 s of flight)."))
     text: str = Field(description=(
         "What is seen in this beat: one action, and the framing if it matters (wide, close). Write the action as its "
@@ -102,7 +102,7 @@ class Beat(BaseModel):
         "`picture` (see `picture` on the subject)."))
     kind: Literal["scene", "card"] = Field(default="scene", description=(
         "scene: made by the video model. card: a still with words, made by the picture model. Make a card only when "
-        "the user asks for a card (W10: unasked title cards)."))
+        "the user asks for a card (in testing: unasked title cards)."))
     card_motion: str | None = Field(default=None, description=(
         "On a card, only when the user asks the card to move: the move in the user's words (\"the title slides in from "
         "the left\", \"a slow zoom in\"). Not set: the card holds still."))
@@ -123,9 +123,9 @@ class Beat(BaseModel):
         "can; letters on a moving object may change."))
     background: str | None = Field(default=None, description=(
         "On a card: its background colour as a code, for example #3B1F6B, when the user gives one for the card. The card "
-        "is generated on that colour, with its exact_words spelled by the picture model; every card is generated "
-        "(user, 2026-11-17 and 2026-11-21). A colour for the whole film (a logo reveal on dark navy #0B1D3A) goes in "
-        "`setting`: it does not make a card (W09)."))
+        "is generated on that colour, with its exact_words spelled by the picture model; every card is generated. "
+        "A colour for the whole film (a logo reveal on dark navy #0B1D3A) goes in "
+        "`setting`: it does not make a card."))
     words_look: Literal["bold", "clean", "classic", "marker", "block", "playful", "script"] | None = Field(default=None, description=(
         "How this beat's exact_words look when code draws them (a title over a scene). "
         "Words are drawn exactly as you write them: write capitals only if you want capitals. "
@@ -136,16 +136,15 @@ class Beat(BaseModel):
         default=None, description="A font for this beat's drawn words, if the user names one or you want one other than the look's.")
     picture: str | None = Field(default=None, description=(
         "On a card the user asked for: a picture to show on it (its file_path from upload_media, or a URL). The card is "
-        "generated from it by the image editor, with its exact_words; the picture may change a little (user, 2026-11-21). "
+        "generated from it by the image editor, with its exact_words; the picture may change a little. "
         "Make a card only when the user asks for a card. "
         "You choose how to use a picture of the user's (a screenshot, a photo, a logo), from the user's words: shown as "
-        "it is, held still (a `source` beat; W08: a screenshot \"full and unchanged\"); lightly edited first (edit_image, "
+        "it is, held still (a `source` beat; in testing: a screenshot \"full and unchanged\"); lightly edited first (edit_image, "
         "then its result as the `source` or a `reference.file`); on a card the user asked for (this field); or brought to "
-        "life (a subject's `picture`: the video model moves it, and it may change a little). (User, 2026-11-23.) "
+        "life (a subject's `picture`: the video model moves it, and it may change a little). "
         "A logo reveal, or a logo that forms or moves, is a scene beat with the logo as its subject's `picture`: the video "
         "makes the motion, and the logo may change a little. Do not follow it with this card, also when the user says the "
-        "logo stays exactly as in the file: the reference keeps it close, and the plan merges such a card into the reveal "
-        "(W09; user, 2026-11-21). "
+        "logo stays exactly as in the file: the reference keeps it close, and the plan merges such a card into the reveal. "
         "A reel or slideshow of the user's photos looks static this way: make each photo a scene beat instead, with the "
         "photo as its reference (a subject's `picture`), so it moves, and put its words in exact_words (route overlay)."))
     model: Literal["ltx-2.5", "minimax-h3"] | None = Field(default=None, description=(
@@ -161,8 +160,8 @@ class Beat(BaseModel):
         "clip (a logo forming, a jump and its landing). Start a new clip when: the framing or the camera angle changes "
         "(close to wide, front to behind); the clip would hold more than three actions; the clip would be too long (15 s; "
         "30 s with a person's picture); the next action does not depend on this one (a new step). A new shot inside "
-        "one clip becomes an unclear move, and a third action is merged or lost (W05: an umbrella came from nowhere in a "
-        "close-to-wide clip; W07: a man rose into the air with the plane in a clip of seven actions)."))
+        "one clip becomes an unclear move, and a third action is merged or lost (in testing: an umbrella came from nowhere in a "
+        "close-to-wide clip; a man rose into the air with the plane in a clip of seven actions)."))
     spoken: list[str] = Field(default_factory=list, description=(
         "A line a person on screen says out loud in this beat, word for word. Not the narrator (that is `says`). The "
         "beat's `text` then gives only the look and the action (\"smiles at the camera\"), with no talking verb (talks, speaks, "
@@ -178,7 +177,7 @@ class Beat(BaseModel):
         "Nothing is generated for this beat (0 credits); it is a clip of its own. Use it to add a voice-over (`says`), music "
         "or captions to the user's clip, or to continue the user's clip (the next clip starts from its last frame). "
         "`seconds`: the clip's length. A picture (png, jpg, webp: a screenshot, a photo) is shown unchanged, held still "
-        "for `seconds` (W08)."))
+        "for `seconds`."))
     source_sound: bool = Field(default=True, description="Keep the user's clip's own sound. False makes it silent before the voice-over and music are added.")
     source_speech: bool | None = Field(default=None, description=(
         "Does someone speak in the user's clip? True: their words stay on top, the music goes under them. False: its sound "
@@ -230,7 +229,7 @@ class Story(BaseModel):
     lift_background: bool = Field(default=True, description=(
         "False only when the user wants a clip's own background sound left as it was made under a spoken line (no place "
         "sound, a quiet room, a hushed scene). Otherwise the steady background (a street, a crowd) under a spoken line is raised, so "
-        "the place is still heard while the person speaks (W06)."))
+        "the place is still heard while the person speaks."))
     captions: bool = Field(default=False, description=(
         "Words of what is said on the picture: white letters with a black outline. Words already on screen at that time "
         "are not captioned again."))
@@ -252,8 +251,8 @@ class Story(BaseModel):
     voice_route: str | None = Field(default=None, description="Set by the answer to the `voice` question. Leave empty.")
 
 
-# 2026-11-22 (user): the story rules the conversation front gave are on the video side now, as rules of thumb. Only the
-# ones no field text says: the cf ablation (78 dry chats) showed the other rules repeated field texts or changed nothing.
+# The story rules the conversation front gave are on the video side now, as rules of thumb. Only the ones no field
+# text says: an ablation over 78 test chats showed the other rules repeated field texts or changed nothing.
 RULES_OF_THUMB = (
     "Rules of thumb, when the user's words do not say otherwise: no story from the user: write one, with a hook in the "
     "first 3 s, then the body, then the close. An ad: hook and close aim at its audience; end on call-to-action "
@@ -286,7 +285,7 @@ def register_video_production(mcp: FastMCP) -> None:
     def plan_video_production(story: Story, request: str | None = None, answers: dict[str, str] | None = None) -> dict:
         data = story.model_dump(exclude_none=True)
         answer_problems: list[str] = []
-        # A held still of the picture the scene before forms is merged by code, first, whatever the host answers (W09).
+        # A held still of the picture the scene before forms is merged by code, first, whatever the host answers.
         merged = held_merges(data)
         answers = {**merged, **{k: v for k, v in (answers or {}).items() if k not in merged}} or None
         if answers:
@@ -307,7 +306,7 @@ def register_video_production(mcp: FastMCP) -> None:
                             f"{n - 1}: one generated clip with the picture as its reference, the words drawn over it. A held still "
                             "after a reveal reads as a pasted picture. Only an end card the user asked for stays a card "
                             "(generated): write 'end card' in that beat's text."),
-                "evidence": "W09: one clip, logo as reference, approved 2026-11-13; held card after it rejected (user, 2026-11-21)."})
+                "evidence": "One clip, logo as reference, approved; held card after it rejected."})
         if answer_problems:
             planned["problems"] = planned.get("problems", []) + answer_problems
             planned["ok"] = False
@@ -425,7 +424,7 @@ async def _api(method: str, path: str, body: dict | None = None) -> dict:
     return response.json()
 
 
-# Wikimedia refuses the default httpx User-Agent with 403 (w4 run, 2026-11-14: W04 and W07 got no real photo).
+# Wikimedia refuses the default httpx User-Agent with 403 (in testing: two films got no real photo).
 CUT_OVERLAP = 0.08   # seconds of sound overlap at each cut
 USER_AGENT = "magic-hour-mcp/1.0 (https://github.com/magichourhq/magic-hour-mcp)"
 
@@ -439,7 +438,7 @@ async def _download(url: str, out: Path) -> Path:
 
 
 def _with_sources(planned: dict, made: dict[str, str]) -> dict[str, str]:
-    """`made`, plus the user's own clips (MCP-14): the plan knows where they are, the host does not pass them."""
+    """`made`, plus the user's own clips: the plan knows where they are, the host does not pass them."""
     return {**{str(c["n"]): c["steps"][0]["source"] for c in planned["clips"] if c.get("made_by") == "user"}, **made}
 
 
@@ -489,11 +488,11 @@ async def _finished_video(made: dict[str, str], n: int, folder: Path) -> Path:
 
 
 async def _clip_file(planned: dict, made: dict[str, str], n: int, folder: Path) -> Path:
-    """A finished clip's file; the user's own clip cut to its source_start and source_end (J50b)."""
+    """A finished clip's file; the user's own clip cut to its source_start and source_end."""
     file = await _finished_video(made, n, folder)
     clip = next((c for c in planned["clips"] if c["n"] == n), {})
     step = clip.get("steps", [{}])[0] if clip.get("made_by") == "user" else {}
-    if clip.get("made_by") == "user":   # W08 (user, 2026-11-22): the user's picture is shown unchanged, held for its seconds
+    if clip.get("made_by") == "user":   # the user's picture is shown unchanged, held for its seconds
         picture = await asyncio.to_thread(media_tools.picture_copy, file)
         if picture:
             return await asyncio.to_thread(media_tools.still_video, picture, float(clip["seconds"]), folder / f"clip-{n}-held.mp4")
@@ -539,12 +538,12 @@ async def make_clip(story: dict, n: int, made: dict[str, str]) -> dict:
         still = clip["steps"][0]
         wanted = reference.get("exact_words") or []
         best, checks = None, []
-        # W10 w11: the card read "3 tips for better sleen". The still's words are read before the video is made; a
+        # In testing, a card read "3 tips for better sleen". The still's words are read before the video is made; a
         # misspelled still is made again, up to STILL_TRIES, and the best one is used.
         for _ in range(STILL_TRIES if wanted else 1):
             request = {"name": f"{name} · still", "image_count": 1, "model": still["model"], "aspect_ratio": story["aspect"],
                        "resolution": "640px", "style": {"prompt": still["prompt"]}}
-            if still["tool"] == "edit_image":   # a card made from the user's picture (user, 2026-11-21)
+            if still["tool"] == "edit_image":   # a card made from the user's picture
                 request["assets"] = {"image_file_paths": [still["picture"]]}
             created = await _api("POST", "/v1/ai-image-editor" if still["tool"] == "edit_image" else "/v1/ai-image-generator", request)
             credits += int(created.get("credits_charged", 0))
@@ -658,7 +657,7 @@ def _add_sound(sound_plan: dict, film: Path, narration: Path | None, music: Path
         done["narration"] = bool(parts)
         fit = media_tools.fit_parts(parts, media_tools.probe_seconds(film))
         parts = fit["parts"]
-        if fit["moved"]:   # I46a, E28c: the narration was longer than its beats; no word is cut now
+        if fit["moved"]:   # the narration was longer than its beats; no word is cut now
             done["voice_fit"] = {"tempo": fit["tempo"], "held_end_seconds": fit["hold"]}
         if fit["hold"] > 0:
             film = media_tools.hold_end(film, fit["hold"], out.with_name(out.stem + "-held.mp4"))
@@ -708,11 +707,11 @@ async def join_clips(story: dict, made: dict[str, str], sound: dict[str, str] | 
         by_n = {c["n"]: c for c in planned["clips"]}
         made = _with_sources(planned, made)
         files = []
-        for n in planned["join"]:   # every card is a generated clip (user, 2026-11-21): no card is drawn at the join
+        for n in planned["join"]:   # every card is a generated clip: no card is drawn at the join
             files.append(await _clip_file(planned, made, n, Path(folder)))
         probes = [await asyncio.to_thread(media_tools.probe, file) for file in files]
-        # W02 w11 (28 s jump): a generated clip that ran long and whose last frame starts a later clip keeps that last
-        # frame. Its extra time is cut from the start, or, when its start is a joint too, it is played a little faster.
+        # A generated clip that ran long (in testing: a 28 s jump) and whose last frame starts a later clip keeps that
+        # last frame. Its extra time is cut from the start, or, when its start is a joint too, it is played a little faster.
         starts_from = {c["reference"].get("of_clip") for c in planned["clips"] if c.get("reference", {}).get("kind") == "last_frame"}
         for i, n in enumerate(planned["join"]):
             clip = by_n[n]
@@ -726,7 +725,7 @@ async def join_clips(story: dict, made: dict[str, str], sound: dict[str, str] | 
         cut = [None if by_n[n].get("made_by") == "user" else float(by_n[n]["seconds"]) for n in planned["join"]]
         lengths = {n: min(p["seconds"], c) if c else p["seconds"] for n, p, c in zip(planned["join"], probes, cut)}
         size = media_tools.size_for(story["aspect"], probes[0])
-        # a line that runs to its clip's end stays on to the next cut (H42b: the words left a moment before the end)
+        # a line that runs to its clip's end stays on to the next cut (in testing: the words left a moment before the end)
         overlays = [dict(line, start=line["start"] + at, end=(lengths[n] + 0.1 if line["end"] >= lengths[n] - 0.05 else line["end"]) + at)
                     for n, at in zip(planned["join"], [sum(lengths[m] for m in planned["join"][:k]) for k in range(len(files))])
                     for line in by_n[n].get("overlay", [])]
@@ -744,20 +743,20 @@ async def join_clips(story: dict, made: dict[str, str], sound: dict[str, str] | 
                     if by_n[n].get("made_by") != "user" and (starts[n], starts[n] + lengths[n]) not in talking:
                         talking.append((starts[n], starts[n] + lengths[n]))
                 inside += beat["seconds"]
-        if story.get("lift_background") is False:   # the user wants the background as it was made (user, 2026-11-23)
+        if story.get("lift_background") is False:   # the user wants the background as it was made
             talking = []
         joined = Path(folder) / "joined.mp4" if (sound_plan or overlays or talking) else FILMS_DIR / name
         # a clip keeps its own sound when it was made with sound (the story's audio, or a spoken line in it)
-        # 2026-11-20 audit: the video step's `audio`, not the first step's: a clip that starts from a still has
+        # the video step's `audio`, not the first step's: a clip that starts from a still has
         # generate_image first, so its spoken line was muted when the story's audio was off.
         keep = [by_n[n]["steps"][0]["sound"] if by_n[n].get("made_by") == "user"
                 else bool(next((x["audio"] for x in reversed(by_n[n]["steps"]) if "audio" in x), story.get("audio")))
                 for n in planned["join"]]
-        # user, 2026-11-14 (W05): no sound jump at a cut. The sound overlaps the cut, and a background much louder
+        # No sound jump at a cut. The sound overlaps the cut, and a background much louder
         # than the other clips' is turned down.
         await asyncio.to_thread(media_tools.join, files, joined, keep, cut, size, CUT_OVERLAP, True)
         said: list[dict] = []
-        if captions_on:   # 2026-11-23 (user: two caption sources): the spoken lines, timed from the clips' own sound
+        if captions_on:   # two caption sources: the spoken lines, timed from the clips' own sound
             lines = []
             for n in planned["join"]:
                 window = (starts[n], starts[n] + lengths[n])
@@ -784,7 +783,7 @@ async def join_clips(story: dict, made: dict[str, str], sound: dict[str, str] | 
                                                                             look=o.get("look") or media_tools.TITLE_LOOK) for o in overlays], worded)
             joined = worded
             result["words_drawn"] = len(overlays)
-        if talking:   # W06 (user, 2026-11-22): the street under a spoken line is lifted (version A)
+        if talking:   # the street under a spoken line is lifted
             lifted = Path(folder) / "lifted.mp4" if sound_plan else FILMS_DIR / name
             bed = await asyncio.to_thread(media_tools.lift_bed, joined, spoken, talking, lifted)
             if bed:
@@ -808,13 +807,13 @@ async def join_clips(story: dict, made: dict[str, str], sound: dict[str, str] | 
                 speech_seconds = round(sum(end - start for start, end in spans), 1)
                 heard_words = await _transcribe(narration)
             music = await _finished("audio", sound["music"], Path(folder) / "music") if "music" in sound_plan else None
-            # words on a card (drawn, held or generated): its caption is left out too (W02: the end card's line twice)
+            # words on a card (drawn, held or generated): its caption is left out too (in testing: the end card's line twice)
             on_cards = [{"text": " ".join(w for b in by_n[n].get("beats", []) for w in story["beats"][b - 1].get("exact_words") or []),
                          "start": starts[n], "end": starts[n] + lengths[n]} for n in planned["join"] if by_n[n].get("kind") == "card"]
             # the user's clip with its sound kept: someone may speak in it. Unless the host says it is only background
             # (source_speech false), its sound is speech: never lowered, the music sits under it.
             music_at = 0.0
-            if story.get("music_from_beat"):   # W09: the whoosh first, then the music
+            if story.get("music_from_beat"):   # for example a whoosh first, then the music
                 for n in planned["join"]:
                     inside = 0.0
                     for b in by_n[n].get("beats", []):
@@ -867,17 +866,17 @@ def _check_film(planned: dict, story: dict, measured: dict, loud: float | None, 
             if not done.get("narration"):
                 checked.append({"want": want, "got": "no narration was placed", "result": "no"})
             elif heard is not None and heard < SPEECH_MIN_SECONDS:
-                # B1, 7 November: a narration call came back silent and was counted as placed. Speech is measured now.
+                # In testing, a narration call came back silent and was counted as placed. Speech is measured now.
                 checked.append({"want": want, "got": f"the narration track has {heard:.1f} s of sound in it: no voice was made; make the sound again", "result": "no"})
             elif done.get("words_match") is not None and done["words_match"] < WORDS_MIN_MATCH:
-                # A4, 8 November: a narration said made-up words and passed the speech check. The words are compared now.
+                # In testing, a narration said made-up words and passed the speech check. The words are compared now.
                 checked.append({"want": want, "got": f"the narration says other words ({round(done['words_match'] * 100)}% of the script): "
                                 f"\"{done['heard'][:200]}\"; make the sound again or tell the user", "result": "no"})
             elif done.get("words_match") is not None:
                 checked.append({"want": want, "got": f"narration placed on its beats; a transcript has {round(done['words_match'] * 100)}% of the script's words, in order", "result": "yes"})
             else:
                 checked.append({"want": want, "got": f"narration placed on its beats, {heard or 0:.1f} s of speech; the words are checked by ear", "result": "yes"})
-            if fit := done.get("voice_fit"):   # I46a: the narration was longer than its beats
+            if fit := done.get("voice_fit"):   # the narration was longer than its beats
                 checked[-1]["got"] += (f"; the voice-over was longer than its beats: moved earlier"
                                        + (f", read {round((fit['tempo'] - 1) * 100)}% faster" if fit["tempo"] > 1 else "")
                                        + (f", the last frame held {fit['held_end_seconds']} s longer; tell the user" if fit["held_end_seconds"] else ""))

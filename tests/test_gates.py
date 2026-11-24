@@ -7,9 +7,9 @@ from fastmcp.exceptions import ToolError
 
 from mcp_magichour import gates
 
-B2 = ('Make a 30-second 16:9 short film called Walk Anyway. Start on a title card for 2 seconds: white text "WALK ANYWAY".\n'
-      '1. Night, rain. The woman waits.\n2. The man walks up.\n3. He says out loud: "You came back."\n'
-      'Sound: rain, and his one line. No music.')
+WALK_ANYWAY = ('Make a 30-second 16:9 short film called Walk Anyway. Start on a title card for 2 seconds: white text "WALK ANYWAY".\n'
+               '1. Night, rain. The woman waits.\n2. The man walks up.\n3. He says out loud: "You came back."\n'
+               'Sound: rain, and his one line. No music.')
 ROBOT = "Make a 6-second video of a tiny robot watering a sunflower. Everything else is your call."
 
 
@@ -55,25 +55,25 @@ def good_plan(request: str) -> dict:
 
 class BackstopTests(unittest.TestCase):
     def test_hard_signals(self):
-        signals = gates.hard_signals(B2, [])
+        signals = gates.hard_signals(WALK_ANYWAY, [])
         self.assertTrue(any("30 seconds" in s for s in signals))
         self.assertTrue(any("quotes" in s for s in signals))
         self.assertTrue(any("shots" in s for s in signals))
         self.assertEqual(gates.hard_signals(ROBOT, []), [])
 
-    def test_a3_is_square_twelve_seconds_not_a_tall_six(self):
-        a3 = ("The attached clip is 6 seconds long. It was made from the attached portrait. Continue the clip for 6 more seconds. "
-              "Give me one 12-second video file.")
-        values = {(i["kind"], i["value"]) for i in gates.brief_items(a3, [])}
+    def test_continue_request_is_square_twelve_seconds_not_a_tall_six(self):
+        request = ("The attached clip is 6 seconds long. It was made from the attached portrait. Continue the clip for 6 more seconds. "
+                   "Give me one 12-second video file.")
+        values = {(i["kind"], i["value"]) for i in gates.brief_items(request, [])}
         self.assertIn(("seconds", "12"), values)
         self.assertNotIn("aspect", {k for k, _ in values})
 
     def test_continue_a_clip_is_hard(self):
-        a3 = "The attached clip is 6 seconds long. Continue the clip for 6 more seconds."
-        self.assertIn("continues an attached video", gates.hard_signals(a3, ["clip.mp4"]))
+        request = "The attached clip is 6 seconds long. Continue the clip for 6 more seconds."
+        self.assertIn("continues an attached video", gates.hard_signals(request, ["clip.mp4"]))
 
     def test_brief_items(self):
-        kinds = {(i["kind"], i["value"]) for i in gates.brief_items(B2, ["a.png"])}
+        kinds = {(i["kind"], i["value"]) for i in gates.brief_items(WALK_ANYWAY, ["a.png"])}
         self.assertIn(("words", "WALK ANYWAY"), kinds)
         self.assertIn(("words", "You came back."), kinds)
         self.assertIn(("seconds", "30"), kinds)
@@ -97,7 +97,7 @@ class FlowTests(unittest.TestCase):
     def setUp(self):
         self.mcp = server("refuse")
 
-    def request(self, text: str = B2) -> str:
+    def request(self, text: str = WALK_ANYWAY) -> str:
         err, data, _ = call(self.mcp, "start_request", {"original": text})
         self.assertFalse(err)
         self.assertIn("SIMPLE", data["comparison"])
@@ -159,7 +159,7 @@ class FlowTests(unittest.TestCase):
 
 
 class ArgumentCheckTests(unittest.TestCase):
-    """The server's own argument check runs before the gate. It must let plan_token through (the paid run of 2026-11-07
+    """The server's own argument check runs before the gate. It must let plan_token through (a paid run
     lost its whole refuse side to this: every create call was rejected as having an unexpected argument)."""
 
     def test_plan_token_passes_the_argument_check(self):

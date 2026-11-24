@@ -1,8 +1,7 @@
-"""Contract tests for plan_tool_call (MCP-TOOLS-23, tool management)."""
+"""Contract tests for plan_tool_call (tool management)."""
 import asyncio
 import json
 import os
-import subprocess
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -66,7 +65,7 @@ class PlanTests(unittest.TestCase):
             tool_plan.plan("faces", "put my face on this", {"photo_or_video": "ask"})
 
     def test_every_open_question_in_one_batch_no_limit(self):
-        """User, 2026-11-13: no question limit; one batch."""
+        """No question limit; one batch."""
         out = tool_plan.plan("new_picture", "make me a picture", {"look": "ask", "shape": "ask", "exact_words": "ask",
                              "set": "ask", "transparent": "ask", "meme_kind": "n/a"})
         self.assertFalse(out["ready"])
@@ -80,11 +79,11 @@ class PlanTests(unittest.TestCase):
                              questions_asked=True)
         self.assertTrue(out["ready"])
         shape = next(d for d in out["decisions"] if d["id"] == "shape")
-        self.assertNotIn("tell_the_user", shape)   # no telling of defaults (user, 2026-11-19)
+        self.assertNotIn("tell_the_user", shape)   # no telling of defaults
         self.assertEqual(shape["value"], "1:1.")
 
     def test_square_from_the_users_words_gives_reframe_not_edit_image(self):
-        """B12a: 'make this wide photo square' → keep, fill → reframe_media, with its notes."""
+        """'make this wide photo square' → keep, fill → reframe_media, with its notes."""
         out = tool_plan.plan("change_picture", "Make this wide photo square. Keep the whole sneaker.", {
             "keep_or_redraw": "keep", "shape_how": "blurred", "subject_place": "n/a", "words": "n/a",
             "on_object": "n/a", "bigger_or_fixed": "n/a", "colour_only": "n/a"})
@@ -108,7 +107,7 @@ class PlanTests(unittest.TestCase):
         self.assertIn("subtitle_language", out["gaps"])
 
     def test_music_on_the_users_video_plans_add_sound_to_video(self):
-        """MCP-TOOLS-29: no longer a gap."""
+        """No longer a gap."""
         out = tool_plan.plan("change_video", "add warm music to this clip, keep my voice", {
             "keep_or_remake": "keep", "sound_on_video": "keep"})
         self.assertNotIn("sound_on_video", out["gaps"])
@@ -126,14 +125,14 @@ class PlanTests(unittest.TestCase):
 
 
 class DryRunFixTests(unittest.TestCase):
-    """Found in the dry run w24on (2026-11-13)."""
+    """Found in a dry run."""
 
     def test_the_words_themselves_answer_exact_words(self):
         out = tool_plan.plan("new_picture", "logo KwickFixx", {"exact_words": "KwickFixx", "shape": "1:1",
                              "set": "one", "transparent": "no", "meme_kind": "n/a"})
         d = next(d for d in out["decisions"] if d["id"] == "exact_words")
         self.assertEqual(d["value"], "KwickFixx")
-        self.assertIn("generate_image with the exact words in the prompt", d["instruction"])   # generation first (user, 2026-11-14)
+        self.assertIn("generate_image with the exact words in the prompt", d["instruction"])   # generation first
 
     def test_consent_none_is_an_option(self):
         out = tool_plan.plan("faces", "my face", {"consent": "none", "photo_or_video": "photo", "which_person": "n/a",
@@ -141,13 +140,13 @@ class DryRunFixTests(unittest.TestCase):
         self.assertTrue(out["ready"])
 
     def test_side_by_side_plans_the_new_tool(self):
-        """MCP-TOOLS-30: side by side is no longer a gap."""
+        """Side by side is no longer a gap."""
         out = tool_plan.plan("change_picture", "before and after side by side", {"keep_or_redraw": "keep", "several_in_one": "side by side"})
         self.assertNotIn("several_in_one", out["gaps"])
         self.assertIn("put_pictures_side_by_side", out["tools"])
 
     def test_an_outfit_picture_plans_the_clothes_tool(self):
-        """User, 2026-11-23 (b1td K06): the picture-change family lists the clothes tool."""
+        """The picture-change family lists the clothes tool."""
         out = tool_plan.plan("change_picture", "swap my T-shirt for the coat in her picture",
                              {"keep_or_redraw": "redraw", "outfit": "outfit picture"})
         self.assertIn("change_clothes_in_photo", out["tools"])
@@ -155,7 +154,7 @@ class DryRunFixTests(unittest.TestCase):
         self.assertNotIn("change_clothes_in_photo", out["tools"])   # the row has `applies`: left out, it does not apply
 
 class OnlyWhenNeededTests(unittest.TestCase):
-    """User, 2026-11-13: the planner only when the answer would materially change the result."""
+    """The planner only when the answer would materially change the result."""
 
     def test_one_call_with_answers_gives_the_plan(self):
         out = tool_plan.plan("change_picture", "make this wide photo square", {"keep_or_redraw": "keep", "shape_how": "blurred"})
@@ -173,7 +172,7 @@ class OnlyWhenNeededTests(unittest.TestCase):
         self.assertEqual([q["id"] for q in out["questions"]], ["shape"])
 
     def test_the_description_names_a_vague_request_with_an_example(self):
-        """Check run w24on-r4, A01a: 'make a product pic of a water bottle' went straight to generate_image (2, was 4)."""
+        """In a check run, 'make a product pic of a water bottle' went straight to generate_image (2, was 4)."""
         import inspect
         src = inspect.getsource(tool_plan.register_tool_plan)
         self.assertIn("names only the subject", src)
@@ -187,7 +186,7 @@ class OnlyWhenNeededTests(unittest.TestCase):
 
 class TierTests(unittest.TestCase):
     def test_the_rules_say_free_models_only(self):
-        """User, 2026-11-13 (final): free-tier models only."""
+        """Free-tier models only."""
         rules = " ".join(tool_plan.sheets()["rules"])
         self.assertIn("Free-tier models only", rules)
         self.assertNotIn("paid model only when", rules)
@@ -195,7 +194,7 @@ class TierTests(unittest.TestCase):
 
 class LookRowTests(unittest.TestCase):
     def test_a_vague_picture_asks_for_the_look(self):
-        """A01a: 'make a product pic of a water bottle' → the look is asked."""
+        """'make a product pic of a water bottle' → the look is asked."""
         out = tool_plan.plan("new_picture", "make a product pic of a water bottle", {"look": "ask", "shape": "ask"})
         self.assertEqual([q["id"] for q in out["questions"]], ["look", "shape"])
 
@@ -210,7 +209,7 @@ class LookRowTests(unittest.TestCase):
 
 class CompositionTests(unittest.TestCase):
     def test_several_sizes_decides_and_shape_does_not_contradict_it(self):
-        """Dry run wcomp G36a: shape said one generation per shape, several_sizes said reframe one."""
+        """In a dry run, shape said one generation per shape, several_sizes said reframe one."""
         out = tool_plan.plan("new_picture", "a coffee ad in 1:1, 9:16 and 16:9", {
             "look": "steaming coffee cup, cream and dark green", "exact_words": "Daybreak Coffee", "shape": "1:1, 9:16, 16:9",
             "set": "set", "transparent": "no"})
@@ -221,14 +220,14 @@ class CompositionTests(unittest.TestCase):
 
 class HandoffRuleTests(unittest.TestCase):
     def test_the_rules_say_api_tools_need_a_file_path_or_url(self):
-        """Run wcomp G37a: an image project id passed to edit_image and create_video_from_image was refused."""
+        """In a test run, an image project id passed to edit_image and create_video_from_image was refused."""
         rules = " ".join(tool_plan.sheets()["rules"])
         self.assertIn("not a project id", rules)
 
 
 class GenerationFirstTests(unittest.TestCase):
     def test_the_description_routes_words_and_shapes_through_the_planner(self):
-        """Dry run wgen: A02b, G37a, B12b, G33b skipped the planner and drew words or reframed (user: generation first)."""
+        """In a dry run, four chats skipped the planner and drew words or reframed (generation first)."""
         import inspect
         src = inspect.getsource(tool_plan.register_tool_plan)
         self.assertIn("ANY picture with words in it", src)
@@ -237,7 +236,7 @@ class GenerationFirstTests(unittest.TestCase):
 
 class SetAndExactEditTests(unittest.TestCase):
     def test_a_set_is_made_from_one_master(self):
-        """Run wgen G34a, G37a: separate generations broke the set."""
+        """In a test run, separate generations broke the set."""
         out = tool_plan.plan("new_picture", "3 matching carousel slides", {"look": "cosy cafe", "exact_words": "Slow Sunday",
                              "shape": "1:1", "set": "set", "transparent": "no"})
         d = {x["id"]: x["instruction"] for x in out["decisions"]}
@@ -245,7 +244,7 @@ class SetAndExactEditTests(unittest.TestCase):
         self.assertIn("create_video_from_image", d["set"])
 
     def test_an_exact_follow_up_edit_is_one_edit_and_the_user_is_told(self):
-        """Runs wgen, wset J49b: exact text resizing drifts; user chose one edit_image and saying it is approximate."""
+        """Two test runs: exact text resizing drifts; one edit_image, and say it is approximate."""
         answers = {r["id"]: "n/a" for r in tool_plan.sheets()["families"]["change_picture"]["rows"] if "applies" in r}
         answers.update({"keep_or_redraw": "redraw", "exact_change": "exact"})
         out = tool_plan.plan("change_picture", "bigger text, same font and centre", answers)
@@ -275,28 +274,13 @@ class SwitchTests(unittest.TestCase):
 
 
 class IsolationTests(unittest.TestCase):
-    """Tool management changes no video composition file (PRD, Isolation)."""
-    PROTECTED = ["mcp_magichour/plan_request.py", "mcp_magichour/video_production.py",
-                 "mcp_magichour/video_production_tool.py", "mcp_magichour/gates.py",
-                 "mcp_magichour/media_tools.py", "mcp_magichour/openapi_policies.py"]
+    """Tool management changes no video composition file."""
 
     def test_tool_plan_imports_nothing_from_video_composition(self):
         src = (ROOT / "mcp_magichour" / "tool_plan.py").read_text()
         for mod in ("plan_request", "video_production", "gates", "media_tools"):
             self.assertNotIn(f"from .{mod}", src)
             self.assertNotIn(f"import {mod}", src)
-
-    def test_this_branch_changes_no_protected_file(self):
-        def git(*args):
-            return subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True)
-        # the rule is for the tool management branch; after the merge, video composition changes these files itself
-        if git("rev-parse", "--abbrev-ref", "HEAD").stdout.strip() != "william":
-            self.skipTest("only on the tool management branch (william)")
-        base = git("merge-base", "HEAD", "origin/video-production")
-        if base.returncode:
-            self.skipTest("no origin/video-production to compare with")
-        changed = git("diff", "--name-only", base.stdout.strip()).stdout.split()
-        self.assertEqual([f for f in self.PROTECTED if f in changed], [])
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 """Release gates: a feature that waits for upstream approval cannot ship on before it is approved.
 
-Run before every push (MCP-11):
+Run before every push:
     git fetch upstream && git rebase upstream/main
     .venv/bin/python -m pytest -q tests/test_release_gates.py
 
@@ -32,7 +32,7 @@ class VoiceClonerGate(unittest.TestCase):
     def test_voice_cloner_ships_off_until_upstream_approves(self):
         if vp.VOICE_OVER_DEFAULT == "cloner":
             self.assertTrue(voice_cloner_approved_upstream(), (
-                "MCP-11: the voice-over ships with the voice cloner on, but upstream still hides /v1/ai-voice-cloner "
+                "The voice-over ships with the voice cloner on, but upstream still hides /v1/ai-voice-cloner "
                 "(openapi_policies.py). Set VOICE_OVER_DEFAULT back to \"video\", or wait for upstream."))
 
     def test_no_shipped_config_turns_the_cloner_on_before_approval(self):
@@ -40,12 +40,12 @@ class VoiceClonerGate(unittest.TestCase):
             return
         for config in SHIPPED_CONFIG:
             text = config.read_text().replace(" ", "")
-            self.assertNotIn("MAGIC_HOUR_VOICE_OVER=cloner", text, f"MCP-11: {config.name} turns the voice cloner on before upstream approves it")
-            self.assertNotIn('"MAGIC_HOUR_VOICE_OVER":"cloner"', text, f"MCP-11: {config.name} turns the voice cloner on before upstream approves it")
+            self.assertNotIn("MAGIC_HOUR_VOICE_OVER=cloner", text, f"{config.name} turns the voice cloner on before upstream approves it")
+            self.assertNotIn('"MAGIC_HOUR_VOICE_OVER":"cloner"', text, f"{config.name} turns the voice cloner on before upstream approves it")
 
     def test_upstream_status_is_reported(self):
         # Not a failure either way: says where approval stands, so a push can be planned.
-        print(f"\nMCP-11 voice cloner approved upstream: {voice_cloner_approved_upstream()}; shipped default: {vp.VOICE_OVER_DEFAULT}")
+        print(f"\nVoice cloner approved upstream: {voice_cloner_approved_upstream()}; shipped default: {vp.VOICE_OVER_DEFAULT}")
 
 
 STORY = {
@@ -61,7 +61,7 @@ class VoiceOverSwitch(unittest.TestCase):
         return planned, vp.questions(story, planned)
 
     def test_the_cloner_is_on_by_default_and_the_video_model_stays_available(self):
-        # User, 2026-11-11: the cloner is on by default; production waits for upstream approval (MCP-11).
+        # The cloner is on by default; production waits for upstream approval.
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("MAGIC_HOUR_VOICE_OVER", None)
             self.assertEqual(vp.voice_over_mode(), "cloner")
@@ -73,7 +73,7 @@ class VoiceOverSwitch(unittest.TestCase):
         self.assertEqual(planned["sound"]["narration"]["tool"], "video")
 
     def test_without_a_sample_the_cloner_reads_in_a_default_voice(self):
-        # User, 2026-11-11 (proof of concept): no question; a preset voice, a man's when the narrator is one.
+        # Proof of concept: no question; a preset voice, a man's when the narrator is one.
         with patch.dict(os.environ, {"MAGIC_HOUR_VOICE_OVER": "cloner"}):
             planned, asked = self.plan(STORY)
             self.assertNotIn("voice", [q["id"] for q in asked])
@@ -99,7 +99,7 @@ class VoiceOverSwitch(unittest.TestCase):
         self.assertFalse(vp.check_plan(story, planned))
 
     def test_the_cloner_keeps_the_music(self):
-        # Found by the dry sweep of 2026-11-10: B1 with a sample lost its music track.
+        # Found in testing: a story with a sample lost its music track.
         story = {**STORY, "voice_sample": "https://example.com/my-voice.mp3", "music": "soft piano"}
         for mode in ("video", "cloner"):
             with patch.dict(os.environ, {"MAGIC_HOUR_VOICE_OVER": mode}):

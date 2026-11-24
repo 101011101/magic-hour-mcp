@@ -1,4 +1,4 @@
-"""Broad gates (user, 2026-11-07): the host model does the reasoning; the server only makes it take each step.
+"""Broad gates: the host model does the reasoning; the server only makes it take each step.
 
     start_request    save the user's words; return the simple / hard comparison and the question sheet
     classify_request the host says simple or hard, with reasons; a code backstop refuses "simple" for an obvious hard request
@@ -47,7 +47,7 @@ SAID = "From the user's words: copy the words that answer it."
 
 # ---- tokens ----------------------------------------------------------------------------------------------------------
 # A token is a short id; what it stands for is kept on this server. (The first build put the whole state in the token:
-# the host mis-copied the long tokens about 15 times in the dry run of 2026-11-07.) A deployed server with more than one
+# the host mis-copied the long tokens about 15 times in a dry run.) A deployed server with more than one
 # process would keep this in shared storage.
 _STORE: dict[str, dict] = {}
 

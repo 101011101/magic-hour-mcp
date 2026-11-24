@@ -1,4 +1,4 @@
-"""New media tools for tool management (MCP-TOOLS-29 to MCP-TOOLS-35): jobs no existing tool does.
+"""New media tools for tool management: jobs no existing tool does.
 
 Tool management is kept separate from video composition: this module
 changes no shared file. It reuses, unchanged, the shared media code: media_tools (ffmpeg work) and media_helpers_tool
@@ -26,7 +26,7 @@ from . import tool_plan
 Original = Literal["keep", "under", "replace"]
 
 
-# ---- MCP-TOOLS-29: sound on the user's video
+# ---- sound on the user's video
 
 def mix_onto_video(film: Path, out: Path, music: Path | None = None, voice: Path | None = None, voice_at: float = 0.0,
                    original: Original = "under", music_swell: bool = False) -> dict:
@@ -60,7 +60,7 @@ def mix_onto_video(film: Path, out: Path, music: Path | None = None, voice: Path
             "kept_spoken_spans": len(spoken), "voice_tempo": round(fit["tempo"], 3), "held_end_seconds": round(fit["hold"], 2)}
 
 
-# ---- MCP-TOOLS-35: colour change by code
+# ---- colour change by code
 
 def recolour(source: Path, out: Path, warmth: float = 0.0, saturation: float = 1.0, brightness: float = 0.0,
              contrast: float = 1.0) -> Path:
@@ -69,7 +69,7 @@ def recolour(source: Path, out: Path, warmth: float = 0.0, saturation: float = 1
     w = max(-1.0, min(1.0, warmth))
     picture = source.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp")
     sat = max(0.0, min(2.0, saturation))
-    steps = [f"colorchannelmixer=rr={1 + 0.4 * w:.3f}:gg={1 + 0.08 * w:.3f}:bb={1 - 0.4 * w:.3f}"]   # warmer: more red, less blue (0.15 was too weak: B07c, run wnew)
+    steps = [f"colorchannelmixer=rr={1 + 0.4 * w:.3f}:gg={1 + 0.08 * w:.3f}:bb={1 - 0.4 * w:.3f}"]   # warmer: more red, less blue (0.15 was too weak)
     steps.append(f"eq=saturation={sat:.3f}:brightness={max(-0.5, min(0.5, brightness)):.3f}:contrast={max(0.5, min(2.0, contrast)):.3f}")
     if sat == 0:
         steps.append("format=gray")   # black and white exactly, no tint left by the colour conversion
@@ -81,7 +81,7 @@ def recolour(source: Path, out: Path, warmth: float = 0.0, saturation: float = 1
     return out
 
 
-# ---- MCP-TOOLS-30: pictures side by side
+# ---- pictures side by side
 
 SHEET_SIZES = {"16:9": (1280, 720), "1:1": (1080, 1080), "9:16": (720, 1280), "4:5": (1080, 1350)}
 
@@ -90,7 +90,7 @@ def side_by_side(pictures: list[Path], out: Path, layout: str = "row", aspect: s
                  background: str = "blur", labels: list[str] | None = None) -> Path:
     """2 to 4 pictures in one, each whole: scaled to fit its cell, never cropped or stretched. layout: row, column or
     grid (2x2). background: blur (the default: each cell filled with a blurred, darkened copy of its own picture, so no
-    empty space shows; G35a, run wnew, had white bands) or a colour. labels: one per picture, exact, in a bold band
+    empty space shows; in testing there were white bands) or a colour. labels: one per picture, exact, in a bold band
     across the top of its cell."""
     from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
@@ -129,7 +129,7 @@ def side_by_side(pictures: list[Path], out: Path, layout: str = "row", aspect: s
     return out
 
 
-# ---- MCP-TOOLS-31: a picture on a video
+# ---- a picture on a video
 
 PLACES = {"top_left": ("{m}", "{m}"), "top_right": ("W-w-{m}", "{m}"), "bottom_left": ("{m}", "H-h-{m}"),
           "bottom_right": ("W-w-{m}", "H-h-{m}"), "center": ("(W-w)/2", "(H-h)/2")}
@@ -158,7 +158,7 @@ def overlay_picture(base: Path, picture: Path, out: Path, place: str = "top_righ
     return out
 
 
-# ---- MCP-TOOLS-32: a still card as a clip
+# ---- a still card as a clip
 
 def attach_card(video: Path, card: Path, out: Path, position: str = "after") -> Path:
     """The user's clip with the card before or after it, one file, the clip's size; the clip's sound kept, the card
@@ -188,9 +188,9 @@ def card_clip(out: Path, seconds: float, words: list[str] | None = None, backgro
     return media_tools.still_video(still, max(0.5, seconds), out)
 
 
-# ---- Head swap for several people in one photo (user, 2026-11-23, b5 Y01: "should be a head swap, not just a face swap")
-# The head swap API has no person choice: on a photo of two people it changes one, and a second call changes both
-# (test hs, 2026-11-23). So each person is cut out, head swapped alone, and only the new head is put back.
+# ---- Head swap for several people in one photo
+# The head swap API has no person choice: on a photo of two people it changes one, and a second call changes both.
+# So each person is cut out, head swapped alone, and only the new head is put back.
 
 HEAD_SWAP_WAIT_SECONDS = 180
 
@@ -204,7 +204,7 @@ def _diff_score(big, small, x: int, y: int) -> float:
 
 def locate_face(photo, crop) -> tuple[int, int, int, int]:
     """Where a face crop from face detection sits in the photo: (x, y, width, height). The crops are cut from the
-    photo at its own size (test hs2); other sizes are tried when the match is poor."""
+    photo at its own size; other sizes are tried when the match is poor."""
     from PIL import Image
 
     best = None
@@ -233,7 +233,7 @@ def cut_box(face: tuple[int, int, int, int], size: tuple[int, int]) -> tuple[int
     x, y, w, h = face
     ex, ey = round(w * 0.25), round(h * 0.3)
     x0, y0, x1, y1 = max(0, x - ex), max(0, y - ey), min(size[0], x + w + ex), min(size[1], y + h + ey)
-    # an edge near the photo's edge goes to it: a faded edge there kept old hair (test hs3, 2026-11-23)
+    # an edge near the photo's edge goes to it: a faded edge there kept old hair
     snap = 24
     return (0 if x0 < snap else x0, 0 if y0 < snap else y0,
             size[0] if size[0] - x1 < snap else x1, size[1] if size[1] - y1 < snap else y1)
@@ -244,7 +244,7 @@ PAD = 16
 
 def padded(cut, box: tuple, size: tuple[int, int]):
     """The cut-out with a mirrored margin on each side that is the photo's edge: the head swap can draw stray
-    colour along its border (test hs3, 2026-11-23); the margin takes it and is cut off after. Returns (picture, margins)."""
+    colour along its border; the margin takes it and is cut off after. Returns (picture, margins)."""
     from PIL import Image, ImageOps
 
     x0, y0, x1, y1 = box
@@ -306,7 +306,7 @@ def put_head_back(base, new, box: tuple, i: int, faces: list, keep=None, rivals:
     """Paste only what the head swap changed (grown and softened), faded at the cut-out's edges unless the edge is
     the photo's edge, and never over `keep` (a photo-size mask: the heads pasted before, and the people not swapped).
     `base` is changed in place. Returns the pasted mask at photo size, to add to `keep`.
-    Test hs3 (2026-11-23): a mask of 'pixels nearer this face' kept the old hair between two people in 2 of 5 runs."""
+    In testing, a mask of 'pixels nearer this face' kept the old hair between two people in 2 of 5 runs."""
     from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
     x0, y0, x1, y1 = box
@@ -314,7 +314,7 @@ def put_head_back(base, new, box: tuple, i: int, faces: list, keep=None, rivals:
     new = new.convert("RGB").resize(cut.size, Image.LANCZOS)
     changed = ImageChops.difference(new, cut).convert("L").point(lambda v: 255 if v > 28 else 0)
     changed = changed.filter(ImageFilter.MinFilter(5))
-    # the face area is pasted whole: skin on skin changes little, and holes there let the old fringe show (test hs3)
+    # the face area is pasted whole: skin on skin changes little, and holes there let the old fringe show
     changed = ImageChops.lighter(changed, _oval(faces[i], base.size).crop(box))
     changed = changed.filter(ImageFilter.MaxFilter(15)).filter(ImageFilter.GaussianBlur(6))
     e = 12
@@ -358,7 +358,7 @@ async def _face_crop(face: str, out: Path) -> Path:
 
 
 async def _detected_faces(target: str, folder: Path) -> list[Path]:
-    """Run face detection on an uploaded picture and wait for it (it can stay queued for minutes: dry run hsd, 2026-11-23)."""
+    """Run face detection on an uploaded picture and wait for it (it can stay queued for minutes)."""
     job = await _api("POST", "/v1/face-detection", {"assets": {"target_file_path": target}})
     for _ in range(HEAD_SWAP_WAIT_SECONDS // 3):
         result = await _api("GET", f"/v1/face-detection/{job['id']}")
@@ -383,7 +383,7 @@ def _need() -> None:
 
 
 def enabled() -> bool:
-    conversation = os.getenv("MAGIC_HOUR_CONVERSATION", "on").strip().lower() not in ("off", "0", "false")   # on by default (2026-11-21)
+    conversation = os.getenv("MAGIC_HOUR_CONVERSATION", "on").strip().lower() not in ("off", "0", "false")   # on by default
     return tool_plan.enabled() or conversation
 
 
@@ -578,10 +578,10 @@ def register_tool_media(mcp: FastMCP) -> None:
         name="make_card_clip",
         title="Make a still card clip",
         description=(
-            "Make a still card as a short video clip, by code, 0 credits. A card is generated first (user, 2026-11-21): "
+            "Make a still card as a short video clip, by code, 0 credits. A card is generated first: "
             "generate_image with qwen-image-2.1, the exact words quoted, the colour named, the user's clip's shape "
             "(edit_image with the user's logo when it goes on the card); check the spelling, make a misspelled card again "
-            "(at most 3 in all) and keep the best one: a small misspelling beats words drawn by code (user, 2026-11-21). "
+            "(at most 3 in all) and keep the best one: a small misspelling beats words drawn by code. "
             "Then pass that picture here as `picture` with background none: it fills the frame. Words drawn on a flat "
             "colour (`words`, no picture) only when the user asks for a plain drawn card. "
             "It has a silent sound track, so join_videos "
@@ -590,7 +590,7 @@ def register_tool_media(mcp: FastMCP) -> None:
             "its size (else `aspect`). `picture`: optional, a file_path, URL or finished image project id. `attach`: "
             "after (an end card) or before (a title card) returns the user's clip and the card as ONE file, the clip's "
             "sound kept; no = the card alone. Returns download_url and video_file_path. In a film from "
-            "plan_video_production, a card is a beat of the plan: do not make it here (W09)."
+            "plan_video_production, a card is a beat of the plan: do not make it here."
         ),
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True),
     )

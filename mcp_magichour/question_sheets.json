@@ -1,13 +1,13 @@
 {
-  "_about": "Question sheets for tool management (MCP-TOOLS-22). Read by plan_tool_call (MCP-TOOLS-23, not built yet) with tool_notes.json. One sheet per request family: what the user asks for, not how the tool works. Each row: kind (deciding = picks the tool; required = the result fails if it is wrong), ask (plain words for the user), read_from (how to answer it from the user's words or files first), answers (what each answer means for the tool and settings), default (used on 'your call' or when the user does not answer), why (the tool note and benchmark cases behind it). A row is asked only when it applies and the user's words and files do not answer it. Drafted 2026-11-13; not yet confirmed by the user.",
+  "_about": "Question sheets for tool management. Read by plan_tool_call with tool_notes.json. One sheet per request family: what the user asks for, not how the tool works. Each row: kind (deciding = picks the tool; required = the result fails if it is wrong), ask (plain words for the user), read_from (how to answer it from the user's words or files first), answers (what each answer means for the tool and settings), default (used on 'your call' or when the user does not answer), why (the tool note and benchmark cases behind it). A row is asked only when it applies and the user's words and files do not answer it.",
   "rules": [
     "Answer every row from the user's words and attached files first. Ask only the deciding and required rows that are still open.",
-    "Use as few tool calls as possible: one call that does the whole job beats a chain. Add a step only when the result needs it (user, 2026-11-14).",
-    "Tool priority (user, 2026-11-14): generation tools first (generate_image, edit_image, the video and audio generators), because they cover more cases. Deterministic code tools (reframe_media, add_words_to_media, trim_media, adjust_colours, put_pictures_side_by_side, put_picture_on_video, make_card_clip, mix_audio, add_sound_to_video, join_videos) last: only when generation cannot do the job, or the user asks for their media to stay exactly as it is.",
+    "Use as few tool calls as possible: one call that does the whole job beats a chain. Add a step only when the result needs it.",
+    "Tool priority: generation tools first (generate_image, edit_image, the video and audio generators), because they cover more cases. Deterministic code tools (reframe_media, add_words_to_media, trim_media, adjust_colours, put_pictures_side_by_side, put_picture_on_video, make_card_clip, mix_audio, add_sound_to_video, join_videos) last: only when generation cannot do the job, or the user asks for their media to stay exactly as it is.",
     "Words: text that is part of a designed picture (a headline, a poster, a flyer, a logo, a thumbnail, a carousel slide, a card) goes in the generation prompt, quoted exactly, with where it goes. add_words_to_media is only for captions or overlays on top of existing media (a caption on the user's photo, a watermark, subtitles-style lines on a video). After generating words, check the spelling in the result; if it is wrong, fix it with edit_image.",
     "Ask as few questions as possible: only those whose answer would change the result and that the user's words and files do not answer. Ask them all together in one message, once, in plain words, each with what happens if the user skips it. Never ask a second round: anything still open after the user answers takes its default.",
     "'Your call', 'you pick', or no answer: use the row's default. A row with `your_call` (words the result shows) uses that instead when the user hands it over.",
-    "Keep every concrete detail the user gave (counts, colours, materials, names, exact words) in the tool's prompt word for word. A01a: 'matte black on marble' became a silver bottle on white when the details were dropped.",
+    "Keep every concrete detail the user gave (counts, colours, materials, names, exact words) in the tool's prompt word for word. 'matte black on marble' became a silver bottle on white when the details were dropped.",
     "Free-tier models only (tool_notes.json, free_models). Never name a paid model.",
     "Keep the user's media unless the user asked for it to be redrawn or re-made.",
     "When no tool does the job (a GAP row), say so plainly and offer the nearest real option. Do not send the user's media through a tool that redraws it instead.",
@@ -47,7 +47,7 @@
             "any": "Put every detail in the prompt word for word."
           },
           "default": "A clean product look: the subject centred on a plain light background, soft light.",
-          "why": "A01a: the user had 'matte black on marble' in mind; without the question the bottle came out steel on grey (2). With the planner asking: 4, 4, 4. generate_image limit: a vague user's details get lost (A01a)."
+          "why": "The user had 'matte black on marble' in mind; without the question the bottle came out steel on grey (2). With the planner asking: 4, 4, 4. generate_image limit: a vague user's details get lost."
         },
         {
           "id": "exact_words",
@@ -63,7 +63,7 @@
             "exact words": "generate_image with the exact words in the prompt, quoted, and where they go (qwen-image-2.1). Check the spelling in the result; if wrong, edit_image to fix the words."
           },
           "default": "No words.",
-          "why": "User, 2026-11-14: words in a designed picture are generated, not drawn on top. Spelling risk: flux-2-klein misspelt headlines in the bench (A02b 'CEAN UP YOUR BACH'); qwen-image-2.1 is the model to use; check and fix with edit_image.",
+          "why": "Words in a designed picture are generated, not drawn on top. Spelling risk: flux-2-klein misspelt headlines in the bench ('CEAN UP YOUR BACH'); qwen-image-2.1 is the model to use; check and fix with edit_image.",
           "your_call": "Words that fit the request, written by you (a short headline or call to action), quoted in the prompt. Never invent a price, a date or a web address."
         },
         {
@@ -78,10 +78,10 @@
           ],
           "answers": {
             "1:1, 16:9, 9:16": "generate_image aspect_ratio (one shape; for several shapes, `set` decides).",
-            "4:5": "generate_image 1:1, then edit_image (qwen-image-2.1, aspect_ratio 4:5); reframe_media has no 4:5 (MCP-TOOLS-34)."
+            "4:5": "generate_image 1:1, then edit_image (qwen-image-2.1, aspect_ratio 4:5); reframe_media has no 4:5."
           },
           "default": "1:1.",
-          "why": "generate_image limit: aspect setting is 1:1, 16:9, 9:16 only. A03 4:5 flyers made by edit_image with qwen: 3.6."
+          "why": "generate_image limit: aspect setting is 1:1, 16:9, 9:16 only. 4:5 flyers made by edit_image with qwen: 3.6."
         },
         {
           "id": "set",
@@ -96,7 +96,7 @@
             "set": "Make ONE master picture first (generate_image, qwen-image-2.1, the first size or slide, words in the prompt). Then make every other piece FROM the master with edit_image (qwen-image-2.1, the master as the input image): same style, palette, typography and layout, changing only what that piece needs (its aspect_ratio, its words). A video in the set: create_video_from_image from the master or the matching piece, not create_video_from_text, so it keeps the look. This replaces `shape`'s one-shape instruction."
           },
           "default": "set when the user names several sizes or pieces.",
-          "why": "Run wgen: separate generations broke the set (G34a 'look like a set' not done: borders differ; G37a 'matching event pack' not done: the reel was photoreal, the poster illustrated; G36a earlier: the green shapes differ). A master plus edits from it keeps one design."
+          "why": "Separate generations broke the set ('look like a set' not done: borders differ; 'matching event pack' not done: the reel was photoreal, the poster illustrated; earlier: the green shapes differ). A master plus edits from it keeps one design."
         },
         {
           "id": "transparent",
@@ -110,7 +110,7 @@
             "yes": "generate_image with the words in the prompt, then remove_image_background; check the letters after the cut-out."
           },
           "default": "No.",
-          "why": "remove_image_background antitype: thin letters fade or smear (A06c 2.7)."
+          "why": "remove_image_background antitype: thin letters fade or smear (2.7)."
         },
         {
           "id": "meme_kind",
@@ -126,7 +126,7 @@
             "template": "create_meme."
           },
           "default": "Template when no picture is attached, else own.",
-          "why": "create_meme antitype: it uses its templates and writes its own caption, which can drift off the topic (G39b)."
+          "why": "create_meme antitype: it uses its templates and writes its own caption, which can drift off the topic."
         }
       ]
     },
@@ -166,7 +166,7 @@
             "redraw": "edit_image with qwen-image-2.1."
           },
           "default": "Keep.",
-          "why": "edit_image antitype: a new shape came back 640x384 (B12a-d: 1.0 to 1.3); words misspelt (B11a). Test wlive1: B12a 1 → 4, B11a 2 → 4 with the code tools. User, 2026-11-14: extend the image with generation before reframing (B12b)."
+          "why": "edit_image antitype: a new shape came back 640x384 (1.0 to 1.3); words misspelt. Test: 1 → 4, 2 → 4 with the code tools. Extend the image with generation before reframing."
         },
         {
           "id": "shape_how",
@@ -186,7 +186,7 @@
             "blurred": "reframe_media how=fill."
           },
           "default": "extend (edit_image); reframe_media only if the user wants nothing added.",
-          "why": "reframe_media type and limits (B12a fill 4, B12d pad 3)."
+          "why": "reframe_media type and limits (fill 4, pad 3)."
         },
         {
           "id": "subject_place",
@@ -203,7 +203,7 @@
             "right/bottom": "focus 0.7 to 1."
           },
           "default": "Look at the picture; else 0.5.",
-          "why": "B12d: 'don't just crop the middle'."
+          "why": "'don't just crop the middle'."
         },
         {
           "id": "words",
@@ -218,7 +218,7 @@
             "any": "add_words_to_media with text, place, size, style."
           },
           "default": "Place bottom, size large, style shadow.",
-          "why": "add_words_to_media (B11a 4, E29c 4 in wlive1)."
+          "why": "add_words_to_media (4, 4 in a test run)."
         },
         {
           "id": "on_object",
@@ -230,11 +230,11 @@
             "'Caption', 'over the photo', 'text on top' → on top."
           ],
           "answers": {
-            "on top": "add_words_to_media (a caption on top of the user's photo, B11a).",
+            "on top": "add_words_to_media (a caption on top of the user's photo).",
             "part of the picture": "edit_image with the exact words in the prompt (a sign, a label, a headline that belongs to the design)."
           },
           "default": "On top.",
-          "why": "add_words_to_media antitype: drawn words do not follow an object (B11b)."
+          "why": "add_words_to_media antitype: drawn words do not follow an object."
         },
         {
           "id": "bigger_or_fixed",
@@ -250,7 +250,7 @@
             "fixed": "upscale_image, scale 2, and tell the user faces may be redrawn slightly."
           },
           "default": "Bigger.",
-          "why": "upscale_image antitype and limits: faces regenerated (B13a 2.0); preserve 3 in wlive1, faces still smoothed. Mode undecided: preserve scored 2 and balanced 3 on B13a (one run each)."
+          "why": "upscale_image antitype and limits: faces regenerated (2.0); preserve 3 in a test run, faces still smoothed. Mode undecided: preserve scored 2 and balanced 3 (one run each)."
         },
         {
           "id": "colour_only",
@@ -271,7 +271,7 @@
             "more contrast": "adjust_colours contrast 1.2 (a lot: 1.4)."
           },
           "default": "A little (warmth 0.3).",
-          "why": "MCP-TOOLS-35, adjust_colours (2026-11-14): changes only the colours, nothing redrawn. Before: edit_image redrew the picture (B07c, J49a). Not benchmarked yet."
+          "why": "adjust_colours: changes only the colours, nothing redrawn. Before: edit_image redrew the picture. Not benchmarked yet."
         },
         {
           "id": "several_in_one",
@@ -287,7 +287,7 @@
             "redraw": "edit_image (qwen-image-2.1) with both pictures; tell the user the photos will be redrawn."
           },
           "default": "Side by side.",
-          "why": "MCP-TOOLS-30, put_pictures_side_by_side (2026-11-14). Before: edit_image redrew and cropped both photos (G35a 2.0, G35b 1.7). Not benchmarked yet."
+          "why": "put_pictures_side_by_side. Before: edit_image redrew and cropped both photos (2.0, 1.7). Not benchmarked yet."
         },
         {
           "id": "exact_change",
@@ -303,7 +303,7 @@
             "exact": "edit_image on the delivered picture with the exact instruction (the scale factor, 'same font', 'same centre point', 'change nothing else'), one call. Tell the user plainly that resizing or moving words in a generated picture is close but not exact (the size can drift and nearby parts can be redrawn), and offer another try."
           },
           "default": "not exact.",
-          "why": "Run wgen J49b: regeneration drifted (1.28x). Run wset J49b: edit_image with the exact instruction drifted (1.78x, the cup redrawn) and the host skipped a compare-and-fall-back step. User, 2026-11-14 (option C): one edit_image, and say it is approximate. A deterministic redraw would change the font."
+          "why": "One run: regeneration drifted (1.28x). Another run: edit_image with the exact instruction drifted (1.78x, the cup redrawn) and the host skipped a compare-and-fall-back step. One edit_image, and say it is approximate. A deterministic redraw would change the font."
         },
         {
           "id": "outfit",
@@ -319,7 +319,7 @@
             "outfit in words": "edit_image: change only the clothes to the user's words; keep the face, hair, pose and background."
           },
           "default": "An outfit picture when one is attached, else outfit in words.",
-          "why": "Copied from the faces sheet (user, 2026-11-23: add the clothes tool to this list). Run b1td K06: this family listed no clothes tool and the host used edit_image for an outfit picture."
+          "why": "Copied from the faces sheet. In a test run, this family listed no clothes tool and the host used edit_image for an outfit picture."
         }
       ]
     },
@@ -357,7 +357,7 @@
             "any of these": "Refuse plainly. Offer an invented or illustrated person instead (for a child: a generic illustrated child). Do not ask for another photo of the person."
           },
           "default": "none",
-          "why": "C14c, J54a, J54b. w24on J54b: declined, but kept asking for the boy's photo and offered no illustrated alternative."
+          "why": "Dry run: declined, but kept asking for the boy's photo and offered no illustrated alternative."
         },
         {
           "id": "photo_or_video",
@@ -367,11 +367,11 @@
             "The attached files."
           ],
           "answers": {
-            "photo": "swap_head_in_photo (face, hair and head shape). Also when the user says 'just the face' or 'keep their hair': do not offer a face-only swap, a face swap is a blend that does not look like the person (user, 2026-11-23, b5 Y01: 'should be a head swap, not just a face swap', though that request said 'keep their hair'). Tell the user the hair comes from their photo. Several people, each a new head: swap_heads_in_photo.",
+            "photo": "swap_head_in_photo (face, hair and head shape). Also when the user says 'just the face' or 'keep their hair': do not offer a face-only swap, a face swap is a blend that does not look like the person ('should be a head swap, not just a face swap', though that request said 'keep their hair'). Tell the user the hair comes from their photo. Several people, each a new head: swap_heads_in_photo.",
             "video": "Head swap for video, one person: get_first_frame of the video; swap_head_in_photo with that frame as body_file_path and the user's photo as head_file_path (wait_for_image_project); then replace_character_in_video with model wan-animate (free plan: minimax-h3), style.mode animate, the original video as video_file_path, the head-swapped frame's download URL as image_file_path, the resolution nearest the video's, start 0 and end the video length (or the chosen part). The video's motion, mouth, room, clothes and sound stay. About 48 credits per second at 480p. Several people in a video: swap_face_in_video individual-faces."
           },
           "default": "—",
-          "why": "User, 2026-11-13: head swap for faces. Test: C14b 1.5 → 4; C14a head swap clearly the person, face swap a blend. swap_face_in_video limit (C15a 2.7). User, 2026-11-23 (b5 Y01, Y04): 'should be a head swap, not just a face swap'. Test hs2: head-swapped first frame + wan-animate animate kept the kitchen, clothes, hand pose and sound; the mouth moves with the speech.",
+          "why": "Head swap for faces. Test: 1.5 → 4; head swap clearly the person, face swap a blend. swap_face_in_video limit (2.7). Test: head-swapped first frame + wan-animate animate kept the kitchen, clothes, hand pose and sound; the mouth moves with the speech.",
           "applies": "a face or head swap"
         },
         {
@@ -388,7 +388,7 @@
             "each a different face": "Photo: swap_heads_in_photo with one {person, head} per person (person 1 = the leftmost face); it finds the faces itself. Video: detect_faces, then swap_face_in_video individual-faces."
           },
           "default": "Ask; do not guess. Still open after the user was asked: make nothing and say why.",
-          "why": "C14b: asked which person, then head swap: 4. b5 Y01 (2026-11-23): swap_face_in_photo individual-faces was a blend ('didn't work out'). Test hs2: swap_heads_in_photo changed each person to their portrait and kept the beach; a second plain head swap on the whole photo changed both people. Dry run hsd (2026-11-23): face detection stayed queued about 2 minutes and the host stopped polling after 40 s, so the tool waits for detection itself.",
+          "why": "Asked which person, then head swap: 4. swap_face_in_photo individual-faces was a blend ('didn't work out'). Test: swap_heads_in_photo changed each person to their portrait and kept the beach; a second plain head swap on the whole photo changed both people. Dry run: face detection stayed queued about 2 minutes and the host stopped polling after 40 s, so the tool waits for detection itself.",
           "no_default": "Which person in the picture gets the new face: with several people, a guess can change the wrong person."
         },
         {
@@ -401,10 +401,10 @@
           ],
           "answers": {
             "whole": "The whole clip: end = the video length.",
-            "part": "trim_media first (MCP-TOOLS-27), then the video route of photo_or_video."
+            "part": "trim_media first, then the video route of photo_or_video."
           },
           "default": "The whole clip.",
-          "why": "swap_face_in_video antitype: asked for 5 s, delivered all 10 s (C15a)."
+          "why": "swap_face_in_video antitype: asked for 5 s, delivered all 10 s."
         },
         {
           "id": "headshot_look",
@@ -419,7 +419,7 @@
             "no preference": "edit_image, or generate_headshot."
           },
           "default": "Square, plain light background.",
-          "why": "generate_headshot antitype: 928x1152 and an office background for 'square, plain grey' (A05a 3.0). Test wlive1: A05a 5 with edit_image."
+          "why": "generate_headshot antitype: 928x1152 and an office background for 'square, plain grey' (3.0). Test: 5 with edit_image."
         },
         {
           "id": "outfit",
@@ -435,7 +435,7 @@
             "outfit in words": "edit_image: change only the clothes to the user's words; keep the face, hair, pose and background."
           },
           "default": "An outfit picture when one is attached, else outfit in words.",
-          "why": "Draft 2026-11-20 from the tool's inputs (user: 'just have something for now'); not tested yet."
+          "why": "Draft from the tool's inputs; not tested yet."
         },
         {
           "id": "scene",
@@ -451,7 +451,7 @@
             "scene in words": "generate_image the scene with no people in it first, then place_person_in_scene with it, resolution 1k."
           },
           "default": "A scene picture when one is attached, else scene in words.",
-          "why": "Draft 2026-11-20 from the tool's inputs (user: 'just have something for now'); not tested yet."
+          "why": "Draft from the tool's inputs; not tested yet."
         },
         {
           "id": "character",
@@ -467,7 +467,7 @@
             "animate": "replace_character_in_video, style.mode animate: the picture moves like the person in the video."
           },
           "default": "Replace.",
-          "why": "Draft 2026-11-20 from the tool's inputs (user: 'just have something for now'); not tested yet."
+          "why": "Draft from the tool's inputs; not tested yet."
         }
       ]
     },
@@ -507,7 +507,7 @@
             "re-make": "edit_video; tell the user nothing of the original is kept."
           },
           "default": "Keep.",
-          "why": "edit_video antitype: never the right tool in 36 runs (1.7). Test wlive1: E25a 1 → 4, E29c 1 → 4, J49c 2.5 → 5 with the code tools."
+          "why": "edit_video antitype: never the right tool in 36 runs (1.7). Test: 1 → 4, 1 → 4, 2.5 → 5 with the code tools."
         },
         {
           "id": "shape_how",
@@ -521,11 +521,11 @@
           ],
           "answers": {
             "one subject": "reframe_media crop with focus on the subject (get_last_frame to see where).",
-            "follow the speaker": "trim_media at each change of speaker, reframe_media each part with its own focus, join_videos (MCP-TOOLS-27).",
+            "follow the speaker": "trim_media at each change of speaker, reframe_media each part with its own focus, join_videos.",
             "whole picture": "reframe_media pad (color from the user)."
           },
           "default": "Crop on the middle; pad when the user says keep everything.",
-          "why": "reframe_media (E25a 4 in wlive1); E25b two speakers."
+          "why": "reframe_media (4 in a test run); a case with two speakers."
         },
         {
           "id": "range",
@@ -541,7 +541,7 @@
             "several parts": "trim_media each part, join_videos."
           },
           "default": "From the start, the length asked; say the part was picked without watching.",
-          "why": "trim_media limit: 'the best part' picked blind (E26b 3 in wlive1; MCP-07)."
+          "why": "trim_media limit: 'the best part' picked blind (3 in a test run)."
         },
         {
           "id": "new_ending",
@@ -552,10 +552,10 @@
             "'Change only the ending', 'keep the first five seconds'."
           ],
           "answers": {
-            "yes": "trim_media the start, get_last_frame, create_video_from_image for the new part, join_videos (MCP-TOOLS-27)."
+            "yes": "trim_media the start, get_last_frame, create_video_from_image for the new part, join_videos."
           },
           "default": "Yes when the user says 'only the ending'.",
-          "why": "J50b."
+          "why": "One benchmark case."
         },
         {
           "id": "words",
@@ -570,7 +570,7 @@
             "title or caption": "add_words_to_media with place and start/end (text on top of the user's video)."
           },
           "default": "Whole clip.",
-          "why": "E29c 1 → 4 in wlive1 with the watermark settings."
+          "why": "1 → 4 in a test run with the watermark settings."
         },
         {
           "id": "subtitle_language",
@@ -583,10 +583,10 @@
           ],
           "answers": {
             "spoken language": "add_subtitles_to_video, style.template highlight.",
-            "translated": "GAP (MCP-TOOLS-33): tell the user; translate_video changes the voice, not only the subtitles."
+            "translated": "GAP: tell the user; translate_video changes the voice, not only the subtitles."
           },
           "default": "Spoken language.",
-          "why": "add_subtitles_to_video antitype (E24b 2.0); best_settings highlight (weak)."
+          "why": "add_subtitles_to_video antitype (2.0); best_settings highlight (weak)."
         },
         {
           "id": "has_speech",
@@ -600,7 +600,7 @@
             "no speech": "No call; tell the user."
           },
           "default": "—",
-          "why": "add_subtitles_to_video antitype (E24c)."
+          "why": "add_subtitles_to_video antitype."
         },
         {
           "id": "sound_on_video",
@@ -618,7 +618,7 @@
             "replace": "Make the sound, then add_sound_to_video original=replace."
           },
           "default": "keep when the video has speech, else under.",
-          "why": "MCP-TOOLS-29, add_sound_to_video (2026-11-13): E27a-c 2.0 and E28a-c 1.3 to 2.0 had no tool. Not benchmarked yet."
+          "why": "add_sound_to_video: six benchmark cases (2.0 and 1.3 to 2.0) had no tool. Not benchmarked yet."
         },
         {
           "id": "logo_or_card",
@@ -631,11 +631,11 @@
           ],
           "answers": {
             "logo": "remove_image_background first if the logo has a background, then put_picture_on_video (place, size 0.15, opacity).",
-            "card": "A generated card (user, 2026-11-21): generate_image with qwen-image-2.1, the exact words quoted, the colour named, the user's clip's shape (edit_image with the logo when the card shows it); check the spelling, make a misspelled card again (at most 3 in all) and keep the best one: a small misspelling beats words drawn by code. Then make_card_clip with that picture, background none, seconds, like_video = the user's clip and attach=after (an end card) or before (a title card): one file, the clip's sound kept. A drawn card (make_card_clip with words on a colour) only when the user asks for a plain drawn card.",
+            "card": "A generated card: generate_image with qwen-image-2.1, the exact words quoted, the colour named, the user's clip's shape (edit_image with the logo when the card shows it); check the spelling, make a misspelled card again (at most 3 in all) and keep the best one: a small misspelling beats words drawn by code. Then make_card_clip with that picture, background none, seconds, like_video = the user's clip and attach=after (an end card) or before (a title card): one file, the clip's sound kept. A drawn card (make_card_clip with words on a colour) only when the user asks for a plain drawn card.",
             "words only": "add_words_to_media."
           },
           "default": "Logo: top_right, size 0.15, the whole clip. Card: 2 s, generated, black with white words, after the clip.",
-          "why": "MCP-TOOLS-31 put_picture_on_video, MCP-TOOLS-32 make_card_clip (2026-11-14). Before: no tool (E29a 1.3, E29b 2.0). Not benchmarked yet. Run wnew E29b: join_videos failed (media_tools.join calls ffmpeg by name), so the card tool attaches the card itself. User, 2026-11-21: every card is generated; a drawn card only when the user asks for one; a small misspelling on a generated card is kept."
+          "why": "put_picture_on_video, make_card_clip. Before: no tool (1.3, 2.0). Not benchmarked yet. In a test run, join_videos failed (media_tools.join calls ffmpeg by name), so the card tool attaches the card itself. Every card is generated; a drawn card only when the user asks for one; a small misspelling on a generated card is kept."
         },
         {
           "id": "speech_language",
@@ -649,7 +649,7 @@
             "a language": "translate_video with target_language. The translator picks the voice and it may not sound like the speaker: do not promise their own voice; if the user asks for it, say so before the call. One call takes 1 to 30 s: for a longer video, translate 30 s parts in order and join_videos."
           },
           "default": "The language the user writes in (the request's own language).",
-          "why": "Draft 2026-11-20 from the tool's inputs (user: 'just have something for now'); not tested yet."
+          "why": "Draft from the tool's inputs; not tested yet."
         },
         {
           "id": "longer",
@@ -664,7 +664,7 @@
             "not stated": "Add 5 s where the same action goes on: get_last_frame, create_video_from_image, join_videos with the original first."
           },
           "default": "5 s more; the same action goes on.",
-          "why": "Draft 2026-11-20 from the tool's inputs (user: 'just have something for now'); not tested yet."
+          "why": "Draft from the tool's inputs; not tested yet."
         }
       ]
     },
@@ -711,10 +711,10 @@
             "'8-second', 'a short clip' (ask), '10 s'."
           ],
           "answers": {
-            "1 to 60 s": "end_seconds. Over 30 s: model ltx-2.5 (minimax-h3 makes at most 30 s; user, 2026-11-14 and 2026-11-20)."
+            "1 to 60 s": "end_seconds. Over 30 s: model ltx-2.5 (minimax-h3 makes at most 30 s)."
           },
           "default": "5 s.",
-          "why": "plan_request asked 'a short clip' as 8 s when the user wanted 6 s (2026-11-05 benchmark)."
+          "why": "plan_request asked 'a short clip' as 8 s when the user wanted 6 s (benchmark)."
         },
         {
           "id": "shape",
@@ -727,7 +727,7 @@
             "any": "aspect_ratio (text to video); reframe_media after (picture to video)."
           },
           "default": "16:9.",
-          "why": "J51a 9:16 asked, 16:9 delivered."
+          "why": "9:16 asked, 16:9 delivered."
         },
         {
           "id": "sound",
@@ -741,7 +741,7 @@
             "sound": "audio on."
           },
           "default": "Natural sound on.",
-          "why": "D23b: sound came back when silence was asked. User, 2026-11-19: every video has natural sound unless the user asks for silence."
+          "why": "Sound came back when silence was asked. Every video has natural sound unless the user asks for silence."
         },
         {
           "id": "exact_words",
@@ -752,10 +752,10 @@
           ],
           "answers": {
             "none": "No words in the prompt.",
-            "exact words": "Make the clip without words, then add_words_to_media (MCP-TOOLS-25)."
+            "exact words": "Make the clip without words, then add_words_to_media."
           },
           "default": "None.",
-          "why": "create_video_from_text antitype: labels missing (I46b).",
+          "why": "create_video_from_text antitype: labels missing.",
           "your_call": "Words that fit the request, written by you (a short title), made the way the 'exact words' answer says. Never invent a price, a date or a web address."
         },
         {
@@ -772,7 +772,7 @@
             "a part": "create_video_from_audio with start_seconds and end_seconds from the user's words."
           },
           "default": "The whole track.",
-          "why": "Draft 2026-11-20 from the tool's inputs (user: 'just have something for now'); not tested yet."
+          "why": "Draft from the tool's inputs; not tested yet."
         }
       ]
     },
@@ -809,7 +809,7 @@
             "no presenter": "Voice-over on the video: make the voice, then add_sound_to_video (change_video sound_on_video)."
           },
           "default": "—",
-          "why": "Ray's finding: narration with a presenter uses lip sync, without one the voice cloner. create_lip_sync_video antitype (E28a, E28c)."
+          "why": "Narration with a presenter uses lip sync, without one the voice cloner. create_lip_sync_video antitype."
         },
         {
           "id": "line",
@@ -823,7 +823,7 @@
             "line": "The script, word for word."
           },
           "default": "Write a short line from the request, no invented facts.",
-          "why": "C17a, C17b."
+          "why": "Two benchmark cases."
         },
         {
           "id": "length",
@@ -836,7 +836,7 @@
             "—": "end_seconds from the line; if the user asked a longer clip, say the end will be silent, or trim_media after."
           },
           "default": "—",
-          "why": "create_talking_photo limit: 8 s clip, 4.5 s of speech, 3 s silent (wlive2 C17a)."
+          "why": "create_talking_photo limit: 8 s clip, 4.5 s of speech, 3 s silent."
         },
         {
           "id": "shape",
@@ -849,7 +849,7 @@
             "any": "reframe_media after: create_talking_photo keeps the photo's shape."
           },
           "default": "The photo's shape.",
-          "why": "create_talking_photo antitype: 1024x1536 for 'square' (C17a/b)."
+          "why": "create_talking_photo antitype: 1024x1536 for 'square'."
         },
         {
           "id": "own_sound",
@@ -864,7 +864,7 @@
             "photo": "create_talking_photo with the photo and the sound file. The line row takes 'your_call' and is not used."
           },
           "default": "Video when the person is in a video, else photo.",
-          "why": "Draft 2026-11-20 from the tool's inputs (user: 'just have something for now'); not tested yet."
+          "why": "Draft from the tool's inputs; not tested yet."
         }
       ]
     },
@@ -897,7 +897,7 @@
             "on the video": "Make the sound, then add_sound_to_video (change_video sound_on_video)."
           },
           "default": "—",
-          "why": "E27a-c."
+          "why": "Three benchmark cases."
         },
         {
           "id": "length",
@@ -908,10 +908,10 @@
           ],
           "answers": {
             "15 s or more": "generate_music duration.",
-            "under 15 s": "generate_music 15 s, then trim_media or mix_audio to the length, with a short fade-out (MCP-TOOLS-28)."
+            "under 15 s": "generate_music 15 s, then trim_media or mix_audio to the length, with a short fade-out."
           },
           "default": "15 s.",
-          "why": "generate_music antitype: API minimum 15 s (F30a). Test wlive1: F30a 2.5 → 4 with the cut."
+          "why": "generate_music antitype: API minimum 15 s. Test: 2.5 → 4 with the cut."
         },
         {
           "id": "mood",
@@ -924,7 +924,7 @@
             "any": "style prompt; instrumental when no vocals."
           },
           "default": "Warm and upbeat, no vocals.",
-          "why": "F30b/c 4.0 with the tool's own choice."
+          "why": "4.0 with the tool's own choice."
         },
         {
           "id": "voices",
@@ -940,7 +940,7 @@
             "over music": "Then mix_audio: music first, voice from a few seconds in, music at about 0.25."
           },
           "default": "One voice, no music.",
-          "why": "F31b, F32a, F32b (MCP-TOOLS-28). The voice generator is listed again (upstream, 2026-11-09)."
+          "why": "The voice generator is listed again (upstream)."
         },
         {
           "id": "own_voice",
@@ -956,7 +956,7 @@
             "another real person": "Refuse plainly; offer a stock voice (ai_voice_generator_create_audio)."
           },
           "default": "Own or permitted.",
-          "why": "Draft 2026-11-20 from the tool's inputs (user: 'just have something for now'); not tested yet."
+          "why": "Draft from the tool's inputs; not tested yet."
         }
       ]
     }

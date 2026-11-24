@@ -257,11 +257,11 @@ def create_mcp() -> FastMCP:
 def register_custom_tools(mcp: FastMCP) -> None:
     register_workflow_guidance(mcp)
     if conversation_front_on():
-        register_conversation_front(mcp)   # MCP-28: replaces plan_request; on by default, MAGIC_HOUR_CONVERSATION=off for the old one
+        register_conversation_front(mcp)   # replaces plan_request; on by default, MAGIC_HOUR_CONVERSATION=off for the old one
     else:
         register_plan_request(mcp)
     register_tool_plan(mcp)   # tool management, off unless MAGIC_HOUR_TOOL_PLAN=on
-    register_tool_media(mcp)   # tool management's new tools: MAGIC_HOUR_TOOL_PLAN or MAGIC_HOUR_CONVERSATION (2026-11-20)
+    register_tool_media(mcp)   # tool management's new tools: MAGIC_HOUR_TOOL_PLAN or MAGIC_HOUR_CONVERSATION
     register_video_production(mcp)
     register_media_helpers(mcp)
     if GATES_MODE in ("warn", "refuse"):

@@ -75,8 +75,8 @@ class FrameTests(unittest.TestCase):
 
 @unittest.skipUnless(m.have_ffmpeg(), "needs ffmpeg")
 class TicketTests(unittest.TestCase):
-    """2026-11-12 happy r1 tickets: trim (E26b, J49c), sound joins and mixes (F31b, F32a, F32b), pad (J51b),
-    focus (E25b), corner words (E29c), left-aligned words (D23b)."""
+    """Trim, sound joins and mixes, pad,
+    focus, corner words, left-aligned words."""
 
     def setUp(self):
         self.dir = Path(self.enterContext(tempfile.TemporaryDirectory()))
@@ -112,7 +112,7 @@ class TicketTests(unittest.TestCase):
         self.assertAlmostEqual(m.probe(out)["seconds"], 20, delta=0.2)
 
     def test_a_mix_longer_than_its_track_ends_in_silence(self):
-        """b1 C17a: a 4.8 s line padded to the 8 s a talking photo asks, so the photo does not repeat the line."""
+        """A 4.8 s line padded to the 8 s a talking photo asks, so the photo does not repeat the line."""
         out = m.mix_audio([{"file": self.tone("line.wav", 4.8, 660)}], self.dir / "padded.wav", 8)
         self.assertAlmostEqual(m.probe(out)["seconds"], 8, delta=0.1)
         self.assertLess(self.mean_db(out, 5.5, 2), -80)
@@ -129,7 +129,7 @@ class TicketTests(unittest.TestCase):
         return film
 
     def test_music_alone_is_the_top_layer_and_the_film_is_at_the_target_loudness(self):
-        """A1, 2026-11-12: music with no voice-over was mixed at 0.16, so the ad sounded silent (-32 LUFS)."""
+        """Music with no voice-over was mixed at 0.16, so the ad sounded silent (-32 LUFS)."""
         done = m.add_sound(self.silent_film(), self.dir / "out.mp4", music=self.tone("music.wav", 8), layers=self.dir / "l")
         self.assertAlmostEqual(done["lufs"], m.TARGET_LUFS, delta=1)
         music = self.dir / "l" / "music.wav"
@@ -162,7 +162,7 @@ class TicketTests(unittest.TestCase):
         return film
 
     def test_a_street_far_under_a_spoken_line_is_lifted_and_the_voice_is_not(self):
-        """W06 w22l (user, 2026-11-22, version A): the street was 53 dB under her voice, heard only at full volume."""
+        """The street was 53 dB under her voice, heard only at full volume."""
         film = self.talking_film(0.002)
         done = m.lift_bed(film, [(3, 6)], [(0, 8)], self.dir / "lifted.mp4")
         self.assertGreater(done["raised_db"], 10)
@@ -191,7 +191,7 @@ class TicketTests(unittest.TestCase):
         self.assertAlmostEqual(self.mean_db(speech, 3.5, 1) - self.mean_db(music, 3.5, 1), m.MUSIC_UNDER_SPEECH_DB, delta=1.5)
 
     def test_by_default_the_music_is_one_quiet_level_under_the_voice_for_the_whole_film(self):
-        """F32a, 2026-11-13: the music went from gone (under the voice) to loud (between lines). The user wants a steady bed."""
+        """The music went from gone (under the voice) to loud (between lines). A steady bed is wanted."""
         m.add_sound(self.silent_film(), self.dir / "out.mp4", self.tone("voice.wav", 2, 660), [{"start": 0, "end": 2, "at": 3}],
                     self.tone("music.wav", 8), layers=self.dir / "l")
         speech, music = self.dir / "l" / "speech.wav", self.dir / "l" / "music.wav"
@@ -202,7 +202,7 @@ class TicketTests(unittest.TestCase):
         self.assertEqual(m.merge_spans([(1, 2), (2.5, 3), (5, 6)]), [(1, 3), (5, 6)])
 
     def test_a_voice_over_longer_than_its_beats_is_fitted_and_no_word_is_cut(self):
-        """I46a, 2026-11-13: part 2 (3.9 s) started at 4.5 s in an 8.1 s film; its last words were cut."""
+        """Part 2 (3.9 s) started at 4.5 s in an 8.1 s film; its last words were cut."""
         parts = [{"start": 0.0, "end": 3.3, "at": 0.5}, {"start": 3.5, "end": 7.4, "at": 4.5}]
         fit = m.fit_parts(parts, 8.3)   # moved 0.4 s earlier: fits, no speed-up, no hold
         self.assertEqual((fit["tempo"], fit["hold"]), (1.0, 0.0))
@@ -217,7 +217,7 @@ class TicketTests(unittest.TestCase):
         self.assertGreaterEqual(fit["parts"][1]["at"], 0.1 + 3.3 / fit["tempo"] + m.VOICE_GAP - 0.001)   # no overlap
 
     def test_a_sentence_with_numbers_is_cut_at_its_real_pause_not_a_breath(self):
-        """I46a, 2026-11-13: the cut fell on a breath at 2.8 s; the first sentence ends at the pause 4.18-4.78 s."""
+        """The cut fell on a breath at 2.8 s; the first sentence ends at the pause 4.18-4.78 s."""
         spans = [(0.0, 1.2), (1.54, 4.18), (4.78, 6.99), (7.4, 8.62)]
         fine = [(0.0, 1.2), (1.54, 2.75), (2.85, 4.18), (4.78, 6.99), (7.4, 8.62)]
         got = m.align_parts(spans, ["The F-35A Lightning II is powered by a single engine.",
@@ -260,7 +260,7 @@ class TicketTests(unittest.TestCase):
 
 class FfmpegByPathTest(unittest.TestCase):
     def test_no_step_starts_ffmpeg_by_name_alone(self):
-        # 2026-11-14: join() started "ffmpeg" from the PATH and failed on a server without it
+        # join() started "ffmpeg" from the PATH and failed on a server without it
         import inspect
         from mcp_magichour import media_tools
         source = inspect.getsource(media_tools)

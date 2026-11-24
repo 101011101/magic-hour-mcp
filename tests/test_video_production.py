@@ -113,7 +113,7 @@ class PersonFirstTests(unittest.TestCase):
         s["beats"][1]["link"] = "event"
         clips = plan(s, "person", 15)["clips"]
         self.assertEqual(shape(clips), [([1], 8), ([2, 3], 18), ([4], 4)])
-        self.assertEqual(clips[1]["reference"]["subject"], "presenter")   # the person leads; the bottle is a second guide (W04)
+        self.assertEqual(clips[1]["reference"]["subject"], "presenter")   # the person leads; the bottle is a second guide
         self.assertEqual(clips[1]["reference"]["pictures"], [{"subject": "presenter", "file": "bench-presenter.png"},
                                                              {"subject": "bottle", "file": "bench-mockup-fragrance.png"}])
         s["beats"][0]["seconds"], s["seconds"] = 4, 26   # a short bottle shot: the presenter still gets her own call
@@ -144,7 +144,7 @@ class PersonFirstTests(unittest.TestCase):
         self.assertTrue(all("End with everyone" not in c["steps"][-1]["prompt"] for c in p["clips"]))
 
     def test_a_clip_with_sound_never_makes_its_own_music(self):
-        # user, 2026-11-13: music is one separate track, added at the join; a clip makes only the scene's own sound
+        # music is one separate track, added at the join; a clip makes only the scene's own sound
         s = story("c5")
         silent = [c["steps"][-1]["prompt"] for c in plan(s, "person", 15)["clips"] if c["kind"] != "card"]
         self.assertTrue(silent and all("No music." not in x for x in silent))
@@ -153,7 +153,7 @@ class PersonFirstTests(unittest.TestCase):
         self.assertTrue(all(x.endswith("No music.") for x in loud))
 
     def test_a_sound_effect_is_made_by_its_clip(self):
-        # user, 2026-11-13 (W09): the whoosh is a clip thing; the clip with it is made with sound, the others stay silent
+        # the whoosh is a clip thing; the clip with it is made with sound, the others stay silent
         s = story("c5")
         first = next(b for b in s["beats"] if b.get("kind", "scene") == "scene")
         first["sounds"] = ["a short whoosh as the lines meet"]
@@ -314,8 +314,8 @@ class ReferenceTests(unittest.TestCase):
                         video = clip["steps"][-1]
                         self.assertIn(clip["reference"]["kind"], ("none", "last_frame", "picture", "still"))
                         self.assertEqual(video["tool"] == "create_video_from_image", clip["reference"]["kind"] in ("last_frame", "still"))
-                        # minimax-h3 makes every scene clip up to 30 s (user, 2026-11-14); a still with words stays on ltx-2.5;
-                        # a card goes on minimax-h3, which holds it still (user, 2026-11-23)
+                        # minimax-h3 makes every scene clip up to 30 s; a still with words stays on ltx-2.5;
+                        # a card goes on minimax-h3, which holds it still
                         still = clip["reference"]["kind"] == "still" and clip["kind"] != "card"
                         want = "ltx-2.5" if still or (clip["seconds"] > 30 and clip["reference"]["kind"] != "picture") else "minimax-h3"
                         self.assertEqual(video["model"], want)

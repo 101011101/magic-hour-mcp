@@ -1,4 +1,4 @@
-"""MCP-22: the narrator's preset voice comes from the host's profile, matched to Magic Hour's tags."""
+"""The narrator's preset voice comes from the host's profile, matched to Magic Hour's tags."""
 
 import unittest
 
@@ -26,7 +26,7 @@ class VoicePickTest(unittest.TestCase):
                 self.assertTrue(got.endswith(style), got)
 
     def test_a_named_accent_beats_another_accent(self):
-        # vpick V3, 2026-11-17: "neutral American accent" got a West African voice
+        # In testing, "neutral American accent" got a West African voice
         story = {"narrator": "soft, warm and soothing; slow, gentle pace; neutral American accent",
                  "narrator_voice": {"gender": "Female", "age": "Middle-aged", "style": "Narration"}}
         self.assertNotEqual(pick_voice(story)["id"], "cv-0053")

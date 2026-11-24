@@ -1,14 +1,6 @@
-"""Contract tests for `plan_request` (MCP-01), written before the code.
+"""Contract tests for `plan_request`.
 
 In-memory API, no network, 0 credits.
-Until `plan_request` is built, each test fails in setup with "tool not found".
-
-Where each expected value comes from (agent repo, folder V4):
-- briefs, answers, strange scripts, direction change: tests/items/S01..S11, V01, V02
-- question texts: agent/questions.js
-- parameters and required parameters for each tool: agent/catalogue.js
-- shape of each attached file: runs/dry-<item>/run.json
-- missing parameters for each vague brief: runs/dry-<item>/run.json, first turn
 """
 
 import json
@@ -24,7 +16,7 @@ from mcp_magichour.openapi_server import create_mcp
 TOOL = "plan_request"
 ASYNC_CLIENT = httpx.AsyncClient
 
-# --- Table 1: the question set. Word for word from V4/agent/questions.js. --------------------
+# --- Table 1: the question set. Word for word from the question set. --------------------
 QUESTIONS = {
     "aspect": "Where will this be shown or posted (Instagram, TikTok, YouTube, a website, print, somewhere else)?",
     "seconds": "How long should it be?",
@@ -42,7 +34,7 @@ QUESTIONS = {
     "range": "Which part should be kept (from when to when, or 'the best 10 seconds')?",
 }
 
-# --- Table 2: the attached files. Kind, shape, role as V4 recorded them. ---------------------
+# --- Table 2: the attached files. Kind, shape and role of each file. ---------------------
 FILES = {
     "perfume": {"name": "v4-perfume.jpg", "kind": "image", "aspect": "16:9", "role": "product"},
     "woman": {"name": "portrait-woman.jpg", "kind": "image", "aspect": "1:1", "role": "person"},
@@ -131,7 +123,7 @@ ITEMS = [
       "keep": ("the car and everything else stay exactly as they are", "user")},
      [], {"aspect": "16:9"}),
 
-    # trim_media cuts by code. These two rows depend on an open question in the PRD.
+    # trim_media cuts by code.
     ("S07", "vague", "trim_media", "cut this down", ["clip"],
      {"range": ("the first 5 seconds", GUESS)},
      ["range"], {}),
@@ -148,12 +140,12 @@ ITEMS = [
      {"which_face": ("the face of the man in the grey long-sleeve shirt onto the man with braids", "user")},
      [], {}),
 
-    # "short" gives 8 s (V4 parseSeconds). The answer sheet says 6 s. Open question in the PRD.
+    # "short" gives 8 s. The answer sheet says 6 s.
     ("S09", "vague", "create_video_from_image", "make a short clip of her", ["woman"],
      {"motion": ("she smiles", GUESS), "seconds": (5, "default"), "aspect": ("1:1", GUESS),
       "sound": ("none", GUESS), "keep": ("her face", "default")},
      ["motion", "aspect", "sound"], {"seconds": 8}),
-    # The full brief gives no shape. "this portrait" is the photo, not a shape (2026-11-07: reading it as 9:16 made A3 tall
+    # The full brief gives no shape. "this portrait" is the photo, not a shape (reading it as 9:16 made a video tall
     # when its clip is square), so the shape is asked, as for any animated picture.
     ("S09", "full", "create_video_from_image",
      "Animate this portrait for 6 seconds: she smiles and looks around a little, nothing dramatic; keep her face exactly like her; silent.",
@@ -162,7 +154,7 @@ ITEMS = [
       "sound": ("none", "user"), "keep": ("her face exactly like her", "user")},
      ["aspect"], {"seconds": 6, "sound": "none"}),
 
-    # The item file says create_video_from_image. V4 chose create_video_from_text (intent.js RULES, line 39).
+    # The item file says create_video_from_image; the expected tool is create_video_from_text.
     ("S10", "vague", "create_video_from_text", "a video of this car driving across this bridge", ["car", "bridge"],
      {"subject": ("this car driving across this bridge", "user"), "seconds": (5, GUESS), "aspect": ("16:9", GUESS),
       "sound": ("none", GUESS), "look": ("realistic", "default")},
@@ -185,7 +177,7 @@ ITEMS = [
       "keep": ("the poster must stay exactly as designed, readable", "user"), "aspect": ("16:9", "user")},
      [], {"aspect": "16:9"}),
 
-    # Guesses = the attempted call of the current MCP on 2026-11-03: 16:9, 5 s, audio on.
+    # Guesses = the attempted call of the current MCP: 16:9, 5 s, audio on.
     ("V01", "vague", "create_video_from_text", "a clip of waves at sunset for my meditation app", [],
      {"subject": ("waves at sunset for a meditation app", "user"), "seconds": (5, GUESS), "aspect": ("16:9", GUESS),
       "sound": ("ambient", GUESS), "look": ("calm, natural", "default")},
@@ -225,18 +217,18 @@ GUESS_SOURCES = {
 OTHER_GUESS_SOURCES = ["default", "missing"]
 GUESS_ROUNDS = ["default", "missing", "derived", "user"]
 
-# --- Table 4: scripts for the ticket cases. --------------------------------------------------
+# --- Table 4: scripts for the contract cases. --------------------------------------------------
 S02_VAGUE = "a product shot of a matte black water bottle"
 S03_VAGUE = "make a poster for our open mic night"
-S03_STRANGE = ["the vibe is like jazz you know", "friday", "put the usual stuff on it"]  # V4 item S03
+S03_STRANGE = ["the vibe is like jazz you know", "friday", "put the usual stuff on it"]
 S04_VAGUE = "a social post announcing 20% off"
-S04_TURN = [  # V4 item S04, `turn.script`; expect_tool = create_video_from_text
+S04_TURN = [  # expect_tool = create_video_from_text
     "Instagram feed, the words are '20% OFF · This weekend only', bold red and white",
     "actually make it a 10 second video for Instagram reels instead, same words, no sound",
 ]
 S04_TURN_WORDS = ["20% OFF · This weekend only"]
-FIVE_MISSING = "make me a video ad"  # written for the ticket case; no V4 item has 5 missing parameters
-YOUR_CALL_DEFAULTS = {"aspect": "16:9", "seconds": 10, "sound": "ambient"}  # intent.js, line 59; sound on (user, 2026-11-19)
+FIVE_MISSING = "make me a video ad"  # a brief with 5 missing parameters
+YOUR_CALL_DEFAULTS = {"aspect": "16:9", "seconds": 10, "sound": "ambient"}  # intent.js, line 59; sound on
 
 
 def data(result):
@@ -282,12 +274,12 @@ class PlanRequestTests(unittest.IsolatedAsyncioTestCase):
         for p in self.patches:
             p.start()
             self.addCleanup(p.stop)
-        with patch.dict("os.environ", {"MAGIC_HOUR_CONVERSATION": "off"}):   # plan_conversation is the default (2026-11-21)
+        with patch.dict("os.environ", {"MAGIC_HOUR_CONVERSATION": "off"}):   # plan_conversation is the default
             self.mcp = create_mcp()
         self.caller = await self.enterAsyncContext(Client(self.mcp))
         self.tools = {tool.name: tool for tool in await self.caller.list_tools()}
         if TOOL not in self.tools:
-            self.fail(f"tool not found: `{TOOL}` is not registered on the MCP server (MCP-01 is not built)")
+            self.fail(f"tool not found: `{TOOL}` is not registered on the MCP server")
 
     async def plan(self, messages, tool, sheet, files=()):
         result = data(await self.caller.call_tool(TOOL, {
@@ -340,7 +332,7 @@ class PlanRequestTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse([request for request in self.requests if request[0] == "POST"])
         self.assertEqual(self.requests, [])
 
-    # --- the eight cases of the ticket ---
+    # --- the eight contract cases ---
 
     async def test_instagram_story_and_9_16_both_give_aspect_9_16(self):
         for answer in ["Instagram story", "9:16"]:
@@ -388,7 +380,7 @@ class PlanRequestTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result["ready"])
         self.assertEqual(result["questions"], [])
 
-    # --- the loop the dry persona sweep found (2026-11-09): plain delegation words, a give-up, a question asked twice ---
+    # --- the loop found in testing: plain delegation words, a give-up, a question asked twice ---
 
     async def test_you_pick_hands_the_shape_over_and_a_video_from_one_picture_takes_the_pictures_shape(self):
         for answer in ["wherever you pick", "idk", "you choose", "doesn't matter"]:
@@ -453,7 +445,7 @@ class PlanRequestTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["tool"], "create_video_from_text")
         self.check(result, sheet, [], {"aspect": "9:16", "seconds": 10, "sound": "none", "exact_words": S04_TURN_WORDS})
 
-    # --- more behaviour from the ticket ---
+    # --- more contract behaviour ---
 
     async def test_you_write_them_is_permission_to_write_the_words(self):
         words = ["Open Mic Night", "Every voice is welcome"]
@@ -484,7 +476,7 @@ class PlanRequestTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["questions"], [])
 
 
-    # --- the words and "your call" bugs the dry persona sweep p2 found (2026-11-10), recorded plan_request calls replayed ---
+    # --- the words and "your call" bugs found in testing, recorded plan_request calls replayed ---
     # The host sent "No text" as a string. The code read it letter by letter, found an "N" the user never typed, and asked about words.
 
     async def test_no_text_as_a_string_is_no_words_not_a_missing_value(self):
@@ -498,7 +490,7 @@ class PlanRequestTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual((sheet["exact_words"]["value"], sheet["exact_words"]["source"]), ([], "user"))
                 self.assertTrue(result["ready"])
 
-    async def test_words_sent_as_text_slots_are_read_from_the_slots(self):   # {"top": ..., "bottom": ...}, seen in the meme case B11c
+    async def test_words_sent_as_text_slots_are_read_from_the_slots(self):   # {"top": ..., "bottom": ...}, seen in a meme case
         brief = "Turn this cat pic into a meme, square. Top text: WHEN YOU THINK IT'S FRIDAY. Bottom text: BUT IT'S ONLY MONDAY."
         result, sheet = await self.plan([brief], "edit_image", {
             "edit": ("make it a meme", "user"), "exact_words": ({"top": "WHEN YOU THINK IT'S FRIDAY", "bottom": "BUT IT'S ONLY MONDAY"}, "user")}, ["woman"])
@@ -596,8 +588,8 @@ class PlanRequestTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("exact_words is a list of strings", self.tools[TOOL].description)
         self.assertIn("send [] when the user wants no text", self.tools[TOOL].description)
 
-    # --- a "your call" said to an earlier question still holds (dry sweep p2, 2026-11-10: the lost user was asked again
-    #     in 13 calls of 8 conversations, e.g. D20b: "you pick" to length and sound, then to the shape, then length and sound again) ---
+    # --- a "your call" said to an earlier question still holds (in testing, a lost user was asked again
+    #     in 13 calls of 8 conversations, e.g. "you pick" to length and sound, then to the shape, then length and sound again) ---
 
     async def test_your_call_said_to_an_earlier_question_still_holds_after_a_later_question(self):
         history = ["make a video about a kind gesture at a park bench", assistant(QUESTIONS["seconds"] + " " + QUESTIONS["sound"]), "you pick",
@@ -627,7 +619,7 @@ class PlanRequestTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result["ready"])
 
     async def test_your_call_after_no_question_hands_nothing_over(self):
-        # the host left its own questions out of the list: the tool cannot tell what "you pick" answers, so it asks (as the PRD says)
+        # the host left its own questions out of the list: the tool cannot tell what "you pick" answers, so it asks
         result, sheet = await self.plan(
             ["make a video about a kind gesture at a park bench", "you pick"], "create_video_from_text",
             {"subject": ("a kind gesture at a park bench", "user"), "seconds": (None, "missing"), "sound": (None, "missing"), "aspect": (None, "missing")})
@@ -663,7 +655,7 @@ from mcp_magichour.plan_request import plan_sheet  # noqa: E402
 
 
 class QuestionRoundsTrial(unittest.TestCase):
-    """MCP-15 (trial): one batch of every open question; MAGIC_HOUR_QUESTION_ROUNDS limits the batches."""
+    """Trial: one batch of every open question; MAGIC_HOUR_QUESTION_ROUNDS limits the batches."""
 
     PARAMS = [{"name": "subject", "value": "a dog running on a beach", "source": "user"},
               {"name": "seconds", "value": None, "source": "missing"}, {"name": "aspect", "value": None, "source": "missing"},
@@ -722,7 +714,7 @@ class QuestionRoundsTrial(unittest.TestCase):
 
 
 class CompositionPathOnlyTests(unittest.TestCase):
-    """2026-11-12 (user, MCP-18): plan_request is in the video composition path only; a single call is as before."""
+    """plan_request is in the video composition path only; a single call is as before."""
 
     def test_the_sheet_for_a_production_asks_like_a_text_to_video_sheet(self):
         messages = [{"role": "user", "text": "Make a 30-second ad for my candle shop, three shots."}]

@@ -3,8 +3,6 @@
 The host model fills a sheet (one row per parameter: value and source). This code keeps a value
 only when the user gave it or it follows from the user's words, and returns a question from a
 fixed set for each value that is still missing. No model, no network, no credits.
-
-Ported from the V4 reference agent (agent/intent.js, agent/questions.js, agent/catalogue.js).
 """
 
 from __future__ import annotations
@@ -52,9 +50,9 @@ TOOLS: dict[str, tuple[list[str], list[str]]] = {
     "swap_face_in_photo": (["which_face"], []),
     "swap_head_in_photo": (["which_face"], []),
     "create_talking_photo": (["script", "language"], ["script"]),
-    # 2026-11-12 (user): plan_request is in the video composition path only (MCP-18)
+    # plan_request is in the video composition path only
     "plan_video_production": (["subject", "seconds", "aspect", "sound", "exact_words", "look"], ["subject", "seconds", "aspect", "sound"]),
-    "trim_media": (["range"], ["range"]),  # cut by code (2026-11-12, E26b, J49c: the tool was missing)
+    "trim_media": (["range"], ["range"]),  # cut by code (the tool was missing)
 }
 ToolName = Literal[
     "generate_image", "edit_image", "create_video_from_text", "create_video_from_image", "generate_music",
@@ -70,12 +68,12 @@ PROMPT_PARAM = {"generate_image": "subject", "create_video_from_text": "subject"
                 "create_video_from_image": "motion", "generate_music": "mood"}
 DEFAULT_ALLOWED = {"look", "position", "transition", "voice", "language", "keep"}
 VIDEO_FROM_PICTURE = {"create_video_from_image", "create_talking_photo"}
-YOUR_CALL_VALUES = {"aspect": "16:9", "seconds": 10, "sound": "ambient"}  # sound on (user, 2026-11-19)
+YOUR_CALL_VALUES = {"aspect": "16:9", "seconds": 10, "sound": "ambient"}  # sound on
 MAX_QUESTIONS = 3
 
 
 def question_rounds() -> int | None:
-    """MCP-15 (trial, 2026-11-11): MAGIC_HOUR_QUESTION_ROUNDS = how many batches of questions the user is asked at most.
+    """Trial: MAGIC_HOUR_QUESTION_ROUNDS = how many batches of questions the user is asked at most.
     Unset: the old behaviour (three questions a call, no limit on rounds)."""
     raw = os.getenv("MAGIC_HOUR_QUESTION_ROUNDS", "").strip()
     return int(raw) if raw.isdigit() and int(raw) >= 1 else None
@@ -86,8 +84,8 @@ def question_rounds_used(asked: list[str]) -> int:
     return sum(1 for text in asked if any(asked_about(name, text) for name in QUESTIONS))
 
 _I = re.ASCII | re.IGNORECASE
-# The plain ways a person hands the choice over. The dry persona sweep of 2026-11-09 found "you pick", "wherever you pick"
-# and "idk just make it" unrecognised, so the shape question was asked again and again (57 of 163 cases under the casual user).
+# The plain ways a person hands the choice over. In testing, "you pick", "wherever you pick"
+# and "idk just make it" were unrecognised, so the shape question was asked again and again (57 of 163 cases with a casual user).
 YOUR_CALL = re.compile(r"your call|you (decide|pick|choose)|pick (one|something|anything|whatever)|whatever|wherever|whichever"
                        r"|up to you|don'?t care|doesn'?t matter|no preference|anything|surprise me|dealer'?s choice"
                        r"|i don'?t know|idk|dunno|just (make|do) it|you know best|i trust you", _I)
@@ -215,7 +213,7 @@ def asked_about(name: str, message: str) -> bool:
 
 def handed_over(messages: list[dict]) -> set[str]:
     """The parameters the user answered with "your call", at any point in the conversation. Said once, it holds to the end:
-    asking again after "you pick" is the loop the dry sweep found. A "your call" that follows no question hands over nothing."""
+    asking again after "you pick" is the loop found in testing. A "your call" that follows no question hands over nothing."""
     names: set[str] = set()
     last_asked = ""
     for message in messages:
@@ -340,7 +338,7 @@ def plan_sheet(messages: list[dict], tool: str, params: list[dict], attachments:
                 missing("aspect", ask=True)
 
     # 7. "Your call" answers a question that was asked. It is not a default for a question that was not. A question asked
-    #    twice without a usable answer takes the default too: asking a third time is the loop the dry sweep found.
+    #    twice without a usable answer takes the default too: asking a third time is the loop found in testing.
     #    For a video made from one picture, the shape handed to us is the picture's own.
     picture_shape = next((a["aspect"] for a in attachments if a["kind"] in ("image", "video") and a.get("aspect")), None)
     gave_up = bool(GIVE_UP.search(newest))
@@ -365,7 +363,7 @@ def plan_sheet(messages: list[dict], tool: str, params: list[dict], attachments:
         questions = [{"param": name, "question": QUESTIONS[name]} for name in to_ask][:MAX_QUESTIONS]
         return {"tool": tool, "ready": not questions, "params": [sheet[name] for name in uses if name in sheet], "questions": questions}
 
-    # 9. MCP-15 (trial): one batch with every open question, each with what happens if the user skips it. The batch covers
+    # 9. Trial: one batch with every open question, each with what happens if the user skips it. The batch covers
     #    every gap, so "your call" after a batch hands over all that is still open. When the rounds are used up, nothing
     #    more is asked: the open rows are left to the host to infer.
     used = question_rounds_used(asked)

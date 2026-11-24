@@ -1,17 +1,17 @@
-"""plan_conversation: the conversation front (MCP-28). One call for every request to make or change media.
+"""plan_conversation: the conversation front. One call for every request to make or change media.
 
-Flow (user, 2026-11-19): guess the intent, pick the family, fill the family's sheet from the user's words and files,
+Flow: guess the intent, pick the family, fill the family's sheet from the user's words and files,
 apply the implied defaults, ask what is still open in ONE batch, then hand back the refined plan.
 
-- The seven tool families come from question_sheets.json and tool_notes.json (William's data). The sheet check is
-  tool_plan.plan(); plan_tool_call itself stays unregistered (MCP-TOOLS-23, William, later).
+- The seven tool families come from question_sheets.json and tool_notes.json. The sheet check is
+  tool_plan.plan(); plan_tool_call itself stays unregistered.
 - The film family (several clips, a story, an ad, a reel) is this module's own sheet. A ready film plan goes to
   plan_video_production.
 - Required files: each family names the files it needs. A missing file is asked in the same batch.
 - Media facts: each attached file with a file_path is read by code (length, size, sound), so a trim or a "whole clip"
-  uses exact seconds (user, 2026-11-19, fix 2).
+  uses exact seconds.
 
-Switch: on by default (user, 2026-11-21): plan_conversation is registered and plan_request is left out.
+Switch: on by default: plan_conversation is registered and plan_request is left out.
 MAGIC_HOUR_CONVERSATION=off brings back plan_request. Read-only, no credits.
 """
 from __future__ import annotations
@@ -36,26 +36,26 @@ Family = Literal["new_picture", "change_picture", "faces", "change_video", "new_
 
 
 def enabled() -> bool:
-    # On by default (user, 2026-11-21): with no switch set the server shipped the old plan_request.
+    # On by default: with no switch set the server shipped the old plan_request.
     return os.getenv("MAGIC_HOUR_CONVERSATION", "on").strip().lower() not in ("off", "0", "false")
 
 
-# Rules every family follows (user, 2026-11-19).
+# Rules every family follows.
 IMPLIED = [
     "Every video has sound unless the user asks for silence: the plan picks where it comes from (a voice-over, spoken lines, "
-    "the scene's own sound, music). This is sound in the video, not sound in every clip (user, 2026-11-22). Do not ask about it.",
+    "the scene's own sound, music). This is sound in the video, not sound in every clip. Do not ask about it.",
     "Captions on a video, when there are captions: white letters with a black outline. Do not ask about the style.",
     "Derive what the words imply (TikTok, Reels, Shorts, a story = 9:16; YouTube, a website = 16:9; Instagram post = 1:1). "
     "Do not ask what the words already answer.",
-    "Ask all open questions in ONE message, once. Anything still open after the answer takes its default.",   # 2026-11-20 audit: no telling of defaults (user, 2026-11-19)
+    "Ask all open questions in ONE message, once. Anything still open after the answer takes its default.",   # no telling of defaults
 ]
 
-# tool_media.py's tools: registered with MAGIC_HOUR_TOOL_PLAN or MAGIC_HOUR_CONVERSATION (2026-11-20 audit: the
-# sheets route to them, and the conversation bench ran without them).
+# tool_media.py's tools: registered with MAGIC_HOUR_TOOL_PLAN or MAGIC_HOUR_CONVERSATION (the sheets route to
+# them).
 TOOL_MEDIA = {"add_sound_to_video", "adjust_colours", "put_pictures_side_by_side", "put_picture_on_video", "make_card_clip",
               "swap_heads_in_photo"}
 
-# Tools no family sheet lists yet: they go here with the files they need. Empty since 2026-11-20 (all moved into the sheets).
+# Tools no family sheet lists yet: they go here with the files they need. Empty (all moved into the sheets).
 EXTRA_TOOLS: dict[str, dict[str, str]] = {}
 
 # The files each family needs: (what, kinds, when). `when` names the case; the host decides if it applies.
@@ -74,7 +74,7 @@ FILES = {
 
 FILM_ROWS = [
     {"id": "kind", "kind": "deciding", "ask": "(Read from the words.) What kind of film?",
-     # 2026-11-23 (user): the conversation only asks and records answers; how to build each kind is in the video
+     # The conversation only asks and records answers; how to build each kind is in the video
      # tool's RULES_OF_THUMB (hook, call to action, one point per beat, one spoken line per beat, fill the length).
      "answers": {"ad": "An ad or a promo for a product, a service or a brand.",
                  "someone_speaks": "An interview, a talking head, a demo, people talking.",
@@ -109,21 +109,21 @@ FILM_ROWS = [
      "default": "Yes when someone speaks in a social video (TikTok, Reels, Shorts, an ad); else no."},
     {"id": "exact_words", "kind": "deciding", "ask": "Any words that must appear on screen (a title, a price, a website), spelled exactly?",
      "answers": {"none": "No words on screen.", "exact words": "Exactly as the user wrote them."},
-     # 2026-11-22 (K21: a skipped question gave "none", so the ad had no call to action). 2026-11-23: not "none" but
-     # not set, so the video tool's rule of thumb (an ad ends on call-to-action words) decides.
+     # In testing, a skipped question gave "none", so the ad had no call to action. Now not "none" but not set, so
+     # the video tool's rule of thumb (an ad ends on call-to-action words) decides.
      "default": "Not set: the video plan's rules of thumb decide (an ad ends on call-to-action words).",
      "ask_when": "an ad or a promo with no call-to-action words",
-     # 2026-11-20 audit: the user's 'your call' means write words that fit (user, 2026-11-19), not "none"
+     # the user's 'your call' means write words that fit, not "none"
      "your_call": "Write short words that fit the request (a title or a call to action), exactly as they will show. Never invent a price, a date or a web address."},
     {"id": "product_picture", "kind": "deciding", "ask": "Do you have a photo of the product? A film made from words only looks like it.",
      "answers": {"photo": "The product looks like the user's photo.",
                  "web": "No photo from the user: a free-licence photo of the real product from the web.",
                  "words": "The user chose a look-alike made from words: answer none to the plan's picture question."},
-     # 2026-11-23 (user): no user wants a worse version; "words" only when the user chooses it or the product is made up
+     # no user wants a worse version; "words" only when the user chooses it or the product is made up
      "default": "web for a real, sold product; words for a made-up one.", "ask_when": "a real product or brand is shown and no photo is attached"},
 ]
 
-# 2026-11-22: the story rules moved to the video tool (RULES_OF_THUMB in video_production_tool.py) or were dropped:
+# The story rules moved to the video tool (RULES_OF_THUMB in video_production_tool.py) or were dropped:
 # 6 repeated the video tool's field texts, "no time skip" changed no clip, "avoid colour codes" contradicted the tool.
 
 
@@ -141,7 +141,7 @@ NEEDED_WHEN = {
 }
 
 
-# 2026-11-20 audit: these faces answers need only the person's photo ("outfit" and "beach" made the words ask for a second file).
+# These faces answers need only the person's photo ("outfit" and "beach" made the words ask for a second file).
 WORDS_ONLY = {"outfit": "outfit in words", "scene": "scene in words"}
 TARGET_ROWS = ("photo_or_video", "character")
 
@@ -175,10 +175,10 @@ def _files(family: str, attachments: list[dict], request: str = "", answers: dic
     return {"needed": need, "given": given, "missing": missing, "checks": checks}
 
 
-# 2026-11-20 audit: case-insensitive ("Silent clip of rain" stayed loud)
+# case-insensitive ("Silent clip of rain" stayed loud)
 SILENCE = re.compile(r"\b(?:silent|silence|no sound|no audio|mute[d]?|without sound|sound off)\b", re.I)
 OPTION_ROWS = ("kind", "who_speaks", "sound", "music", "captions", "product_picture")
-# 2026-11-23 (b2d X01, X04): a narrator and people on screen in one film had no option; both hosts were refused once
+# a narrator and people on screen in one film had no option; in testing, both hosts were refused once
 SEVERAL = {"who_speaks"}
 
 
@@ -186,7 +186,7 @@ def _parts(row: str, value: str) -> list[str]:
     return [p.strip() for p in value.split("+")] if row in SEVERAL else [value]
 
 
-ONLY_THESE = tool_plan.ONLY_THESE   # K26 lb1l stupid (2026-11-20): the host offered 5-10 s, the plan made 15 s
+ONLY_THESE = tool_plan.ONLY_THESE   # in testing: the host offered 5-10 s, the plan made 15 s
 
 
 def _film(request: str, answers: dict[str, str] | None, questions_asked: bool, files: dict) -> dict:
@@ -201,9 +201,9 @@ def _film(request: str, answers: dict[str, str] | None, questions_asked: bool, f
         raise ToolError(f"Unknown film rows: {', '.join(unknown)}. Rows: {', '.join(rows)}.")
     implied = [i for i, r in rows.items() if r["ask"].startswith("(Implied") and answers.get(i) == ASK]
     if implied:
-        raise ToolError(f"Do not ask about {', '.join(implied)}: implied (user, 2026-11-19). Use the default unless the user's words say otherwise.")
+        raise ToolError(f"Do not ask about {', '.join(implied)}: implied. Use the default unless the user's words say otherwise.")
     host_rows = [i for i, r in rows.items() if r["ask"].startswith("(") and i not in implied and answers.get(i) == ASK]
-    if host_rows:   # 2026-11-20 audit: "(Read from the words.)" rows were put to the user word for word
+    if host_rows:   # "(Read from the words.)" rows were put to the user word for word
         raise ToolError(f"Answer {', '.join(host_rows)} yourself from the user's words; do not ask the user.")
     open_rows = [r for i, r in rows.items() if answers.get(i) == ASK]
     file_qs = [{"id": "file", "ask": f"Please attach {m}.", "if_skipped": "I cannot make it without this file."} for m in files["missing"]]
@@ -213,18 +213,18 @@ def _film(request: str, answers: dict[str, str] | None, questions_asked: bool, f
                 "next": ("Ask the user ALL these questions in ONE message, numbered, in plain words, each with what happens if "
                          "they skip it. This is the only time the user is asked. Then call again with their answers and "
                          "questions_asked=true." + ONLY_THESE)}
-    # Sound is on unless the user's own words ask for silence (user, 2026-11-19). "No talking" or "music only" is not silence.
-    # 2026-11-23 audit: the host's sound answer stands (no answer rewrites, user 2026-11-22); the words decide only when it is open
+    # Sound is on unless the user's own words ask for silence. "No talking" or "music only" is not silence.
+    # The host's sound answer stands (no answer rewrites); the words decide only when it is open
     sound = answers.get("sound")
     silent = sound == "silent" or (sound not in ("on", "silent") and bool(re.search(SILENCE, request)))
     notes = []
-    # 2026-11-22 ablation (cf, 78 dry chats): no answer rewrites; the front guides the refined prompt only (user)
+    # No answer rewrites (an ablation over 78 test chats); the front guides the refined prompt only
     bad = [f"{i}={v!r}" for i, v in answers.items() if i in OPTION_ROWS and v not in (ASK, YOUR_CALL, NOT_APPLICABLE)
            and (any(p not in rows[i]["answers"] for p in _parts(i, v)) or (len(_parts(i, v)) > 1 and "nobody" in _parts(i, v)))]
     if bad:
         raise ToolError(f"Not an option: {', '.join(bad)}. " + "; ".join(f"{i}: {', '.join(rows[i]['answers'])}" for i in OPTION_ROWS)
                         + ". who_speaks takes several joined with ' + ' (narrator + people_talking).")
-    # 2026-11-20 audit: 'n/a' on a row that always applies (no ask_when) takes its default, as in the families;
+    # 'n/a' on a row that always applies (no ask_when) takes its default, as in the families;
     # before, the row was dropped and the plan had no shape or length.
     always_na = [i for i, r in rows.items() if answers.get(i) == NOT_APPLICABLE and "ask_when" not in r and i != "sound"]
     if always_na:
@@ -242,13 +242,13 @@ def _film(request: str, answers: dict[str, str] | None, questions_asked: bool, f
     return {"ready": True, "stage": "plan", "family": "film", "request": request, "decisions": decisions,
             "implied": IMPLIED, "files": files, **({"changed": notes} if notes else {}),
             "next": ("Write the story from the decisions, then call plan_video_production with it. `narrator`, "
-                     "`narrator_voice`, `music` and `captions` are fields inside `story`, not arguments of their own (w19d, 2026-11-20). "
-                     # user, 2026-11-22: "sound" is sound in the video, not the story's `audio` (the scenes' own sound in every clip)
+                     "`narrator_voice`, `music` and `captions` are fields inside `story`, not arguments of their own. "
+                     # "sound" is sound in the video, not the story's `audio` (the scenes' own sound in every clip)
                      + ("The video has sound, not sound in every clip: the who_speaks and music decisions say where it comes from."
                         if not silent else "The story's `audio` is false (the user asked for silence)."))}
 
 
-# A video request that states no length and no single action may want a longer film (user, 2026-11-19, fix 6): check once.
+# A video request that states no length and no single action may want a longer film: check once.
 LENGTH_OR_ONE_ACTION = (r"\b\d+(?:[.,]\d+)?\s*(?:-\s*)?(?:s|sec|secs|seconds?|minutes?|mins?)\b|\bclip\b|\bgif\b|\bloop|\banimate|\bbring .* to life"
                         r"|\bas long as\b|\bsame length\b|\b(?:whole|full|entire) (?:song|track|clip|video)\b"
                         r"|\b(?:pic|photo|picture|image)s?\b.{0,20}\bmove|\banimation\b")
@@ -319,17 +319,17 @@ def front(family: str, request: str, answers: dict[str, str] | None = None, ques
     if short_or_film is not None:   # the user's answer to the "short or longer?" check, not a sheet row
         answers = {k: v for k, v in answers.items() if k != SHORT_OR_FILM["id"]}
         said = re.sub(r"\b(?:not|no|never|without|n't \w+)\s+(?:(?:a|an|the)\s+)?(?:long|longer|film|story|ad|several)\b", "",
-                      str(short_or_film), flags=re.I)   # "short, not an ad" stays short (2026-11-23 audit)
+                      str(short_or_film), flags=re.I)   # "short, not an ad" stays short
         if re.search(r"\b(?:long|longer|film|story|ad|several)\b", said, re.I):
             return {"ready": False, "stage": "switch_family", "family": family,
                     "next": "The user wants a longer film: call plan_conversation again with family film and the same request."}
-    if family == "new_video" and answers and answers.get("sound") == ASK:   # 2026-11-20 audit: sound is implied, never asked
+    if family == "new_video" and answers and answers.get("sound") == ASK:   # sound is implied, never asked
         answers = {**answers, "sound": YOUR_CALL}
-        changed.append("sound 'ask' became 'your_call': sound is implied (on unless the user asks for silence), not asked (user, 2026-11-19).")
-    # 2026-11-23: no "silent" -> "sound" rewrite here either (user, 2026-11-22: no answer rewrites); the host's answer stands.
+        changed.append("sound 'ask' became 'your_call': sound is implied (on unless the user asks for silence), not asked.")
+    # No "silent" -> "sound" rewrite here either (no answer rewrites); the host's answer stands.
     tools = set(tool_plan.notes()["tools"]) | {t for f in tool_plan.sheets()["families"].values() for t in f["tools"]}
     named = sorted(k for k in (answers or {}) if k in tools)
-    if named:   # hosts sent tool names as rows (c3/c4: 44 of 60 faces chats)
+    if named:   # hosts sent tool names as rows (in testing: 44 of 60 faces chats)
         answers = {k: v for k, v in answers.items() if k not in tools}
         changed.append(f"Left out {', '.join(named)}: tool names, not rows. Answer only the rows.")
     sheet_rows = {r["id"]: r for r in tool_plan.sheets()["families"].get(family, {}).get("rows", [])}
@@ -374,8 +374,8 @@ def front(family: str, request: str, answers: dict[str, str] | None = None, ques
     return out
 
 
-# How to answer the rows (user, 2026-11-19). Sent with the rows (stage fill_the_sheet), not in the tool description:
-# Claude Code keeps only the first 2,048 bytes of a description (2026-11-21).
+# How to answer the rows. Sent with the rows (stage fill_the_sheet), not in the tool description:
+# Claude Code keeps only the first 2,048 bytes of a description.
 ANSWER_RULES = (
     " Answer a row with an option, the user's own words, 'your_call' (you pick the conventional value for this kind of "
     "request) or 'n/a'. Mark 'ask' ONLY when the answer would change the result and the user's words and files do not "
@@ -413,7 +413,7 @@ def register_conversation_front(mcp: FastMCP) -> None:
             "Call this FIRST for every request to make or change a picture, a video or a sound, before any create or edit "
             "call. Guess what the user wants and pick ONE family. Families: " + families + "; film: several clips, a story, "
             "an ad, a reel, an explainer, an interview, a video with a purpose. " + ROUTING_RULE + " "
-            # 2026-11-21: the row index (about 2,000 bytes) left the description: Claude Code keeps only the first
+            # The row index (about 2,000 bytes) left the description: Claude Code keeps only the first
             # 2,048 bytes of a tool description (upstream test_metadata_fits_claude_code_utf8_budget). The first call
             # returns the rows instead.
             "First call: the family, the user's request word for word and the attachments (name, kind and file_path), "

@@ -1,6 +1,6 @@
 """The two file steps a multi-clip video needs: the last frame of a clip, and the join. They need ffmpeg.
 
-The hosted server has no ffmpeg at this time (ticket MCP-06). A build on a machine that has ffmpeg can run them.
+The hosted server has no ffmpeg at this time. A build on a machine that has ffmpeg can run them.
 """
 
 from __future__ import annotations
@@ -99,7 +99,7 @@ def last_frame(video: Path, out: Path) -> Path:
 
 
 def first_frame(video: Path, out: Path) -> Path:
-    """MCP-21: the end frame of a clip made to fit before this one."""
+    """The end frame of a clip made to fit before this one."""
     _ffmpeg(["-i", str(video), "-frames:v", "1", "-q:v", "2", str(out)])
     return out
 
@@ -117,8 +117,8 @@ def frame_filter(width: int, height: int, target_w: int, target_h: int, how: str
                  color: str = "black") -> tuple[str, str]:
     """An ffmpeg -vf graph that puts a picture of one shape into a frame of another. Returns (graph, way).
     crop: scale to cover and crop the edges. fill: the whole picture over a blurred, cropped copy of itself.
-    pad: the whole picture on bars of one colour (J51b). focus: where the crop is centred, 0 = left or top, 1 = right or
-    bottom (E25b: keep the speaker in the frame)."""
+    pad: the whole picture on bars of one colour. focus: where the crop is centred, 0 = left or top, 1 = right or
+    bottom (keep the speaker in the frame)."""
     if how == "auto":
         how = "crop" if crop_share(width, height, target_w, target_h) <= CROP_LIMIT else "fill"
     focus = min(1.0, max(0.0, focus))
@@ -152,7 +152,7 @@ def join(files: list[Path], out: Path, audio: bool | list[bool] = True, seconds:
     keep = list(audio) if isinstance(audio, list) else [audio] * len(files)
     seconds = list(seconds) if seconds else [None] * len(files)
     infos = [probe(f) for f in files]
-    if all(not i["width"] for i in infos):   # F31b, F32b: voice clips have no picture; join the sound only
+    if all(not i["width"] for i in infos):   # voice clips have no picture; join the sound only
         return join_audio(files, out)
     if any(not i["width"] for i in infos):
         raise ValueError("Some files have no picture. Join sound files apart from video files, or use mix_audio.")
@@ -191,7 +191,7 @@ FIT_MAX_SPEED = 1.15   # a clip whose two ends are both joints is played at most
 
 
 def fit_length(file: Path, seconds: float, how: str, out: Path) -> Path:
-    """Make a clip that ran long exactly `seconds` long, keeping its last frame (W02 w11, 28 s: the next clip starts
+    """Make a clip that ran long exactly `seconds` long, keeping its last frame (the next clip starts
     from that frame, so cutting the end skipped 0.6 s of motion at the joint).
     how="head": cut the extra time from the start. how="speed": play it faster (both ends are joints), at most FIT_MAX_SPEED;
     a longer clip is cut at the head after that."""
@@ -220,8 +220,8 @@ def read_words(image: Path) -> str | None:
 
 def check_words(image: Path, wanted: list[str]) -> dict | None:
     """Read a card's words, as drawn and on a 3x grey copy; the better read counts. None: no reader on this server.
-    verdict: "right" (every word found), "misspelled" (most found, one or more not: W10 w11 "slze"), "unread" (the reader
-    could not read the letters, as on thin words over a glow in W10 w12; the card is not made again, the eye checks it)."""
+    verdict: "right" (every word found), "misspelled" (most found, one or more not: "slze"), "unread" (the reader
+    could not read the letters, as on thin words over a glow; the card is not made again, the eye checks it)."""
     reads = [read_words(image)]
     if reads[0] is None:
         return None
@@ -238,13 +238,13 @@ def check_words(image: Path, wanted: list[str]) -> dict | None:
 
 
 def words_found(wanted: list[str], read: str) -> tuple[int, int]:
-    """How many of the wanted words are in the read text, letter for letter (W10 w11: "sleep" drawn as "sleen")."""
+    """How many of the wanted words are in the read text, letter for letter ("sleep" drawn as "sleen")."""
     tokens = set(re.findall(r"[a-z0-9]+", read.lower()))
     want = [t for w in wanted for t in re.findall(r"[a-z0-9]+", w.lower())]
     return sum(t in tokens for t in want), len(want)
 
 
-FLOOR_GAP_DB = 6.0   # a clip whose background is this much louder than the others is turned down (W05)
+FLOOR_GAP_DB = 6.0   # a clip whose background is this much louder than the others is turned down
 FLOOR_MAX_CUT_DB = 12.0
 
 
@@ -263,7 +263,7 @@ def floor_db(file: Path, seconds: float | None = None) -> float | None:
 
 def smooth_cuts(film: Path, files: list[Path], keep: list[bool], lengths: list[float], out: Path,
                 overlap: float = 0.08, even: bool = True) -> Path:
-    """Rebuild the film's sound so no cut jumps (W05: the rain jumped up at the last cut).
+    """Rebuild the film's sound so no cut jumps (in testing, the rain jumped up at the last cut).
     Each clip's sound runs `overlap` seconds past its cut and fades out while the next fades in (a clip that ran long,
     like minimax-h3, has real sound there). even=True: a clip whose background is FLOOR_GAP_DB louder than the
     middle of the others is turned down to it, at most FLOOR_MAX_CUT_DB."""
@@ -308,7 +308,7 @@ def join_audio(files: list[Path], out: Path, gap: float = 0.0) -> Path:
 
 
 def mix_audio(tracks: list[dict], out: Path, seconds: float | None = None, fade_out: float = 0.0) -> Path:
-    """Sound files laid over each other into one sound file (F32a: a voice over music, no picture).
+    """Sound files laid over each other into one sound file (a voice over music, no picture).
     tracks: [{file, at (seconds into the mix), volume (1 = as it is), fade_in (seconds)}]. seconds: the mix length
     (default: to the end of the longest track). fade_out: seconds of fade at the end of the mix."""
     inputs, chain = [], []
@@ -321,7 +321,7 @@ def mix_audio(tracks: list[dict], out: Path, seconds: float | None = None, fade_
         chain.append(f"[{i}:a]{','.join(steps)}[t{i}]")
     total = seconds or max(float(t.get("at", 0)) + probe(Path(t["file"]))["seconds"] for t in tracks)
     end = f",afade=t=out:st={max(0, total - fade_out):.2f}:d={fade_out:.2f}" if fade_out else ""
-    # apad: a `seconds` longer than the tracks ends in silence (b1 C17a: a line padded to the video's length)
+    # apad: a `seconds` longer than the tracks ends in silence (a line padded to the video's length)
     chain.append("".join(f"[t{i}]" for i in range(len(tracks))) + f"amix=inputs={len(tracks)}:duration=longest:normalize=0,apad,atrim=0:{total:.2f}{end}[a]")
     codec = {".wav": ["-c:a", "pcm_s16le"], ".mp3": ["-c:a", "libmp3lame", "-q:a", "2"]}.get(out.suffix.lower(), ["-c:a", "aac", "-b:a", "192k"])
     _ffmpeg([*inputs, "-filter_complex", ";".join(chain), "-map", "[a]", "-vn", *codec, "-t", f"{total:.2f}", str(out)])
@@ -382,7 +382,7 @@ def speech_spans(audio: Path, noise_db: int = -35, min_gap: float = 0.12) -> lis
     return spans
 
 
-SAID_LEAD, SAID_TAIL = 0.6, 1.2   # how far before and after its slot a spoken line is looked for (2026-11-23)
+SAID_LEAD, SAID_TAIL = 0.6, 1.2   # how far before and after its slot a spoken line is looked for
 
 
 def _heard_in(film: Path, start: float, end: float) -> list[tuple[float, float]]:
@@ -400,7 +400,7 @@ def _heard_in(film: Path, start: float, end: float) -> list[tuple[float, float]]
 
 
 def time_spoken(film: Path, lines: list[dict]) -> list[dict]:
-    """Caption times for the lines people on screen say (2026-11-23, user: a voice-over and a presenter in one film).
+    """Caption times for the lines people on screen say (a voice-over and a presenter in one film).
     lines: [{"text", "start", "end", "clip": (start, end)}] in film seconds, in film order; start and end are the
     line's slot (the time the prompt gave it). The speech heard near the slot, in the film's own sound, sets the
     times; when nothing is heard there, the slot is used. A line with no slot (start None: the user's own clip) is
@@ -524,7 +524,7 @@ def align_parts(spans: list[tuple[float, float]], parts: list[str], fine: list[t
         guess = at_spoken(spoken * used / total_letters)
         after = cuts[-1] if cuts else spans[0][0]
         # a sentence ends on a real pause; a breath inside a sentence is used only when no real pause is near
-        # (I46a, 2026-11-13: "F-35A" is short in letters, long when read; the cut fell on a breath 1.4 s early)
+        # ("F-35A" is short in letters, long when read; the cut fell on a breath 1.4 s early)
         best = (pick(pauses(spans), guess, 0.6, after) or pick(pauses(spans), guess, 1.5, after)
                 or pick(pauses(fine or []), guess, 0.9, after))
         cuts.append((best[0] + best[1]) / 2 if best else guess)
@@ -532,9 +532,9 @@ def align_parts(spans: list[tuple[float, float]], parts: list[str], fine: list[t
     return [(edges[i], edges[i + 1]) for i in range(len(parts))]
 
 
-# Sound layers (user, 2026-11-12). Priority: 1 speech (narration and spoken lines), 2 music, 3 effects (the clips' own
+# Sound layers. Priority: 1 speech (narration and spoken lines), 2 music, 3 effects (the clips' own
 # sound). A layer is lowered only where a higher layer plays, and only there. With no speech, music is the top layer.
-MUSIC_UNDER_SPEECH_DB = 9    # music under speech (18, then 12: the user wanted more music under the voice, 2026-11-13)
+MUSIC_UNDER_SPEECH_DB = 9    # music under speech (18, then 12: more music under the voice)
 SWELL_DB = 8                 # music_swell: how far the music rises between the lines
 EFFECTS_UNDER_DB = 10        # effects under narration or music
 CUE_MAX_RAISE_DB = 15        # a sound before a late music start is raised at most this much to the music's loudness
@@ -552,7 +552,7 @@ HOLD_TAIL = 0.3              # the picture holds this long after the last word
 
 
 def fit_parts(parts: list[dict], seconds: float) -> dict:
-    """Fit a narration's parts into a film of `seconds` without cutting a word (I46a, E28c: the last words ran past the
+    """Fit a narration's parts into a film of `seconds` without cutting a word (the last words ran past the
     end and were cut). parts: [{"start", "end"} in the narration, "at" in the film, with VOICE_LEAD]. In order:
     1 no part starts before the one before it ends; 2 the parts start VOICE_LEAD_MIN into their beat, not VOICE_LEAD;
     3 the narration is read up to VOICE_TEMPO_MAX faster; 4 the film holds its last frame. Returns
@@ -637,12 +637,12 @@ def loudness_between(file: Path, spans: list[tuple[float, float]], gain_db: floa
     return None if value is None or value <= -69 else round(value - gain_db, 1)
 
 
-# W06 (user, 2026-11-22, version A over B): the street under a spoken line was 53 dB under the voice and heard only at
+# In testing, the street under a spoken line was 53 dB under the voice and heard only at
 # full volume. The steady background of a clip's own sound is lifted, the voice is not touched. The background is what
 # afftdn takes out as noise; the lowpass removes the speech traces left in its top.
 BED_FILTER = "afftdn=nr=30:nf=-75:tn=1:om=n,lowpass=f=7000"
-BED_UNDER_VOICE_DB = 23      # the background is lifted to this far under the spoken line (version A on W06: +30 dB, 23 LU)
-BED_MAX_RAISE_DB = 30        # at most this much (version A)
+BED_UNDER_VOICE_DB = 23      # the background is lifted to this far under the spoken line (in testing: +30 dB, 23 LU)
+BED_MAX_RAISE_DB = 30        # at most this much
 BED_MIN_RAISE_DB = 3         # a smaller lift is not done
 BED_MEASURE_GAIN_DB = 40     # a quiet background is measured this much louder (loudness_between)
 BED_PAUSE_MARGIN = 0.2       # a pause starts this far after a heard sound and ends this far before the next
@@ -695,7 +695,7 @@ def add_sound(film: Path, out: Path, narration: Path | None = None, parts: list[
     """Mix the film's sound from three layers and normalize it to TARGET_LUFS.
     parts: [{"start", "end"} in the narration, "at" in the film]. spoken: where a person on screen speaks (inside the
     film's own sound). music_first: the music is never lowered (a music video). layers: a folder that keeps each layer
-    as its own file, so a later mix can use them again. music_at: the second the music starts (W09: the whoosh first,
+    as its own file, so a later mix can use them again. music_at: the second the music starts (the whoosh first,
     then the music). Returns what was done and measured."""
     seconds = probe_seconds(film)
     folder = layers or Path(tempfile.mkdtemp())
@@ -748,14 +748,14 @@ def add_sound(film: Path, out: Path, narration: Path | None = None, parts: list[
     # 3 effects: the film's own sound, lowered under narration and music; a spoken line in it is never lowered
     files["effects"] = folder / "effects.wav"
     if probe(film)["audio"]:
-        # W09: before a late music start the film's own sound (the whoosh) is not lowered
+        # before a late music start the film's own sound (the whoosh) is not lowered
         heard = _inside([(music_at, seconds)]) if music and music_at > 0 else "1"
         above = heard if music else _inside(narrated)
         if music and narrated and music_at > 0:
             above = f"max({heard},{_inside(narrated)})"
         level = _gain(above, EFFECTS_UNDER_DB, _inside(talk)) if (music or narrated) else "1"
         if music and music_at > 0 and not narrated:
-            # W09 rejoin: a cue before the music (the whoosh) came out 25 dB under it; it is raised to the music's
+            # a cue before the music (the whoosh) came out 25 dB under it; it is raised to the music's
             # loudness, at most CUE_MAX_RAISE_DB
             cue, track = loudness_between(film, [(0, music_at)]), loudness(files["music"])
             raise_db = 0.0 if cue is None or track is None else max(0.0, min(CUE_MAX_RAISE_DB, track - cue))
@@ -793,7 +793,7 @@ def have_captions() -> bool:
 
 FONTS = ("/System/Library/Fonts/Supplemental/Arial.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
          "/usr/share/fonts/dejavu/DejaVuSans.ttf", "C:/Windows/Fonts/arial.ttf")
-# Fonts shipped with the MCP (Google Fonts, open licences in fonts/; user, 2026-11-17, MCP-23)
+# Fonts shipped with the MCP (Google Fonts, open licences in fonts/)
 FONT_DIR = Path(__file__).with_name("fonts")
 FONT_FILES = {
     "Anton": "Anton-Regular.ttf", "Bebas Neue": "BebasNeue-Regular.ttf", "Archivo Black": "ArchivoBlack-Regular.ttf",
@@ -801,7 +801,7 @@ FONT_FILES = {
     "Bungee": "Bungee-Regular.ttf", "Lilita One": "LilitaOne-Regular.ttf", "Pacifico": "Pacifico-Regular.ttf",
 }
 # Named looks for words in a film or picture. A look never changes the letters: the words are drawn as the host
-# wrote them, capitals included (user, 2026-11-17). scale: tall narrow fonts are drawn larger, so a title stays larger than a caption. caption: the default for captions (Runbo, 2026-11-16: white letters,
+# wrote them, capitals included. scale: tall narrow fonts are drawn larger, so a title stays larger than a caption. caption: the default for captions (white letters,
 # black outline, as in memes). The others are for titles and on-screen words, so they never look like a caption.
 LOOKS = {
     "caption": {"font": "Archivo Black", "style": "outline"},
@@ -852,7 +852,7 @@ def fit_picture(source: Path, background: str | None, size: tuple[int, int], out
                 font: str | None = None) -> Path:
     """The picture unchanged, never cropped. With `background` (a logo, a screenshot): 80% of the frame, centred on that
     colour. Without it (a photo): as large as fits, over a blurred copy of itself that fills the frame.
-    words: drawn exactly over the lower part of the picture, one line each, in the title look (MCP-23; was a dark band)."""
+    words: drawn exactly over the lower part of the picture, one line each, in the title look."""
     from PIL import Image, ImageFilter
 
     picture = Image.open(source).convert("RGBA")
@@ -904,8 +904,8 @@ def _caption_png(text: str, size: tuple[int, int], out: Path, at: float = 0.80, 
                  style: str = "band", opacity: float = 1.0, font: str | None = None) -> Path:
     """Words on a clear picture of `size`, white on a dark band. at: where the band's middle is (share of the height).
     share: letter height as a share of the short side. A line break in `text` starts a new line.
-    align: left, center or right, with a 5% margin (D23b: a lower third). style: band (a dark band), shadow (no band,
-    a soft shadow under the letters; E29c: a watermark) or outline (white letters with a black outline, no band).
+    align: left, center or right, with a 5% margin (a lower third). style: band (a dark band), shadow (no band,
+    a soft shadow under the letters; a watermark) or outline (white letters with a black outline, no band).
     opacity: 0 to 1 for the whole drawing. font: a FONT_FILES name. The words are drawn as given."""
     from PIL import Image, ImageDraw
 
@@ -991,7 +991,7 @@ def word_style(line: dict) -> dict:
 
 def stack_lines(lines: list[dict]) -> list[dict]:
     """Lines at the same place that are on screen at the same time become one band, one line under the other
-    (2026-11-12, D23b and H44c: two bottom lines were drawn over each other)."""
+    (two bottom lines were drawn over each other)."""
     out: list[dict] = []
     for line in lines:
         start, end = line.get("start") or 0, line.get("end") if line.get("end") is not None else 1e9
@@ -1014,7 +1014,7 @@ def draw_captions(film: Path, timed: list[dict], out: Path) -> Path:
         pngs.append(_caption_png(line["text"], (info["width"], info["height"]), out.with_name(f"{out.stem}-caption{i}.png"),
                                  **word_style(line)))
         # -loop 1 and shortest=1: a single-frame picture was dropped when the film's video started a moment after 0 s
-        # (2026-11-13, W10: the join's file starts at 0.021 s; words_drawn 3, none on screen)
+        # (the join's file starts at 0.021 s; words_drawn 3, none on screen)
         inputs += ["-loop", "1", "-i", str(pngs[-1])]
         chain.append(f"[{last}][{i + 1}:v]overlay=shortest=1:enable='between(t,{line['start']:.2f},{line['end']:.2f})'[v{i}]")
         last = f"v{i}"

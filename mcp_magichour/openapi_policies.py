@@ -91,7 +91,7 @@ API_TOOL_METADATA = {
         "A written script needs audio first. For a prepared ad image and written script, use "
         "create_spoken_ad_video. For existing video and replacement audio, use "
         "create_lip_sync_video. The video is at most as long as the recording: a longer one repeats "
-        "the recording's start (b1 C17a: 8 s asked, 4.8 s line, \"Hi ev\" again at 4.9 s). When the user "
+        "the recording's start (8 s asked, 4.8 s line, \"Hi ev\" again at 4.9 s). When the user "
         "wants a longer video than the line, first pad the recording with silence to that length "
         "(mix_audio: the voice as the one track, `seconds` the length). Starts a background job that "
         "costs credits; returns a project id for wait_for_video_project.",
@@ -153,11 +153,11 @@ API_TOOL_METADATA = {
         "a face swap keeps the video person's hair and skin. The whole person is replaced, so the "
         "clothes may change to the photo's; tell the user. For one of several people, use point "
         "selection (selection_mode points) at that person's position in the first frame, not auto: "
-        "with auto the model chooses the person (benchmark C15c). One person per call: run it again on "
+        "with auto the model chooses the person. One person per call: run it again on "
         "the result for a second person, with that person's points. Starts a background job that costs credits (about 48 per second at 480p); "
         "returns a project id for wait_for_video_project. Head swap in a video (the user's face and hair, everything else "
         "kept): get_first_frame, swap_head_in_photo on that frame, then this tool with model wan-animate (free plan: minimax-h3), style.mode animate "
-        "and the head-swapped frame as the picture: the clothes, room, motion and sound stay (test hs2, 2026-11-23).",
+        "and the head-swapped frame as the picture: the clothes, room, motion and sound stay.",
     ),
     ("POST", "/v1/face-swap"): (
         "swap_face_in_video",
@@ -166,10 +166,10 @@ API_TOOL_METADATA = {
         "using detect_faces results. It changes the face only: hair, skin tone and build stay those "
         "of the person in the video. Before you use it, look at the photo and a frame of the video. "
         "If the hair (colour, length, curl) or skin tone differ, the result does not look like the "
-        "photo's person (benchmark C15a: dark curly hair onto a blonde woman was not recognisable): "
+        "photo's person (in testing, dark curly hair onto a blonde woman was not recognisable): "
         "use the head swap route instead, even when the user says 'face': get_first_frame, swap_head_in_photo on "
         "that frame, then replace_character_in_video (wan-animate or, on the free plan, minimax-h3; style.mode animate) with the head-swapped frame. In individual-faces mode, map every face crop of the "
-        "chosen person: detection lists one person more than once when the head turns (b1 K13: the man "
+        "chosen person: detection lists one person more than once when the head turns (the man "
         "facing the camera was 0-0, the same man turned away was 0-3; only 0-0 was mapped, so his own "
         "face came back each time he turned). Starts a background job that costs credits; returns a "
         "project id for wait_for_video_project.",
@@ -403,7 +403,7 @@ GENERATION_PARAMETER_DESCRIPTIONS = {
     "/v1/ai-voice-cloner": {
         ("style",): "Text to speak in the supplied voice, with language and speech-speed options.",
     },
-    # User, 2026-11-23 (K16): always pick the voice that matches the character, never the default. Hosts mostly took
+    # Always pick the voice that matches the character, never the default. Hosts mostly took
     # cv-0001 (the first voice listed) for every speaker.
     "/v1/ai-voice-generator": {
         ("style", "voice_name"): "The `id` of a stock voice from voices_list. Pick the voice that best matches the "

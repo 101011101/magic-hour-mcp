@@ -77,7 +77,7 @@
       "max_seconds": 15
     }
   ],
-  "baseline": "current MCP, one 30 s call, 2026-11-04: 2 yes, 6 partly, 2 no",
+  "baseline": "current MCP, one 30 s call: 2 yes, 6 partly, 2 no",
   "not_tested_here": [
     "voice-over",
     "captions",

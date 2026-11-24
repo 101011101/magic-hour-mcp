@@ -1,4 +1,4 @@
-"""Captions of the lines people on screen say, beside the voice-over's (user, 2026-11-23: two caption sources)."""
+"""Captions of the lines people on screen say, beside the voice-over's (two caption sources)."""
 
 import re
 import shutil
@@ -105,7 +105,7 @@ class TimingTests(unittest.TestCase):
 
 
 class UserClipTests(unittest.TestCase):
-    def test_lines_take_whole_spans_and_end_at_pauses(self):   # the W05 clip's heard spans, 2026-11-23
+    def test_lines_take_whole_spans_and_end_at_pauses(self):   # a test clip's heard spans
         heard = [(1.41, 2.54), (4.46, 5.09), (5.97, 6.99), (12.02, 12.72)]
         lines = ["You missed the bus again?", "I was there. The bus just didn't wait.", "Then we walk."]
         self.assertEqual(media_tools._share_spans(heard, lines), [(1.41, 2.54), (4.46, 6.99), (12.02, 12.72)])

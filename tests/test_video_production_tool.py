@@ -81,7 +81,7 @@ class VideoProductionToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("@bottle", first["steps"][-1]["prompt"])
 
     async def test_the_plan_does_not_judge_by_length_or_idea_count(self):
-        # user, 2026-11-21: one routing rule (a purpose goes to production, also for one shot); the old 15 s / 3-ideas
+        # one routing rule (a purpose goes to production, also for one shot); the old 15 s / 3-ideas
         # flag told hosts a one-shot ad did not need production
         p = await self.plan("c2")
         self.assertNotIn("needs_production", p)
@@ -130,7 +130,7 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
                 return httpx.Response(200, content=b"video-bytes")
             if path == "/v1/files/upload-urls":
                 return httpx.Response(200, json={"items": [{"upload_url": "https://storage.example.test/frame.jpg", "file_path": "api-assets/test/frame.jpg"}]})
-            if path == "/v1/account":   # MCP-13: whose key it is; kept copies are read only for that account
+            if path == "/v1/account":   # whose key it is; kept copies are read only for that account
                 return httpx.Response(200, json={"id": "test"})
             if request.method == "POST":
                 self.posts.append((path, json.loads(request.content)))
@@ -235,7 +235,7 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((made["narration"], made["music"]), ("job-1", "job-2"))
 
     async def test_with_the_switch_on_and_a_sample_the_voice_cloner_reads_the_script(self):
-        # MCP-11, 2026-11-08: the cloner read A4 exactly; the video model 2 in 8. Off in what we ship until upstream approves.
+        # In testing, the cloner read a test script exactly; the video model 2 in 8. Off in what we ship until upstream approves.
         with patch.dict(os.environ, {"MAGIC_HOUR_VOICE_OVER": "cloner"}):
             s = story("c5")
             for beat, says in zip(s["beats"], [["Some scents fade by noon."], ["It starts soft."], ["One spray is enough."], ["Mockup Fragrance."]]):
@@ -256,7 +256,7 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(film["sound"]["narration"])
 
     async def test_a_narration_that_says_other_words_is_not_met(self):
-        # A4, 8 November: the narration said made-up words and the speech check passed it.
+        # In testing, the narration said made-up words and the speech check passed it.
         p = await self.planned_with_voice()
         self.heard = "What Van Holtz of TMO Experience called the Mewmaw"
         film = await self.call("join_production_clips", production=p["production"], made={"1": "a", "2": "b", "3": "c"},
@@ -289,7 +289,7 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
             await self.call("join_production_clips", production=p["production"], made=made)
         film = await self.call("join_production_clips", production=p["production"], made=made, sound={"narration": "n", "music": "m"})
         self.assertEqual(film["sound"], {"narration": True, "music": True, "captions": True, "loudness_lufs": -16.0, "speech_seconds": 8.8,
-                                      "captions_left_out": 1})   # "Mockup Fragrance." is on the end card (MCP-23)
+                                      "captions_left_out": 1})   # "Mockup Fragrance." is on the end card
         self.assertEqual((self.sound["narration"], self.sound["music"]), ("narration.mp4", "music"))
         self.assertEqual(len(self.sound["parts"]), 4)
         starts = [part["at"] for part in self.sound["parts"]]
@@ -304,7 +304,7 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(any("looks the same" in line for line in film["unchecked"]))
 
     async def test_a_narration_with_no_speech_is_not_met(self):
-        # B1, 7 November: the narration call came back silent and the join counted it as placed.
+        # In testing, the narration call came back silent and the join counted it as placed.
         p = await self.planned_with_voice()
         with patch("mcp_magichour.media_tools.speech_spans", lambda audio, **k: [(0.0, 0.3)]):
             film = await self.call("join_production_clips", production=p["production"], made={"1": "a", "2": "b", "3": "c"},
@@ -335,7 +335,7 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
         made = await self.call("create_production_clip", production=p["production"], clip=2)
         path, body = self.posts[0]
         self.assertEqual((path, len(self.posts)), ("/v1/text-to-video", 1))
-        self.assertEqual((body["model"], body["resolution"], body["end_seconds"], body["aspect_ratio"], body["audio"]), ("minimax-h3", "480p", 13, "16:9", True))   # the scene model (user, 2026-11-14)
+        self.assertEqual((body["model"], body["resolution"], body["end_seconds"], body["aspect_ratio"], body["audio"]), ("minimax-h3", "480p", 13, "16:9", True))   # the scene model
         self.assertEqual(body["style"]["prompt"], p["clips"][1]["steps"][-1]["prompt"])
         self.assertEqual((made["id"], made["clip"], made["credits_charged"]), ("job-1", 2, 144))
 
@@ -366,7 +366,7 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(made["credits_charged"], 154)
 
     async def test_a_card_with_the_users_logo_is_made_by_the_image_editor_from_it(self):
-        # user, 2026-11-21: every card is generated; the logo goes to the image editor as its input picture
+        # every card is generated; the logo goes to the image editor as its input picture
         s = story("c4")
         s["beats"][0].update(picture="api-assets/x/logo.png", background="#0B1D3A")
         p = await self.call("plan_video_production", story=s)
@@ -382,10 +382,10 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
         path, body = self.posts[0]
         self.assertEqual((path, body["model"]), ("/v1/text-to-video", "minimax-h3"))
         self.assertEqual(body["references"], [{"name": "presenter", "file_path": "bench-presenter.png"},
-                                              {"name": "bottle", "file_path": "bench-mockup-fragrance.png"}])   # each pictured subject (W04)
+                                              {"name": "bottle", "file_path": "bench-mockup-fragrance.png"}])   # each pictured subject
 
     async def test_the_street_under_a_spoken_line_is_lifted_with_no_music_or_narration(self):
-        # W06 w22l (user, 2026-11-22, version A): the street under her line was heard only at full volume
+        # In testing, the street under her line was heard only at full volume
         s = story("c4")
         s["beats"][1]["spoken"] = ["Pay yourself first."]
         p = await self.call("plan_video_production", story=s)
@@ -402,7 +402,7 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((self.films / film["download_url"].rsplit("/", 1)[1]).read_bytes(), b"film with the street lifted")
 
     async def test_the_user_can_keep_the_background_as_it_was_made(self):
-        # user, 2026-11-23: the lift is a best-practice rule; the user's words override it
+        # the lift is a best-practice rule; the user's words override it
         s = story("c4")
         s["beats"][1]["spoken"] = ["Pay yourself first."]
         s["lift_background"] = False
@@ -426,12 +426,12 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
         p = await self.planned("c4")
         made = {"1": "a", "2": "b", "3": "c", "4": "d"}
         film = await self.call("join_production_clips", production=p["production"], made=made)
-        # 2026-11-20 audit: each clip keeps the sound its video step was made with; the two cards are made silent
+        # each clip keeps the sound its video step was made with; the two cards are made silent
         self.assertEqual(self.joined, [(["clip-1.mp4", "clip-2.mp4", "clip-3.mp4", "clip-4.mp4"], [False, True, True, False])])
         self.assertRegex(film["download_url"], r"/films/[0-9a-f]{32}\.mp4$")
         self.assertTrue((self.films / film["download_url"].rsplit("/", 1)[1]).exists())
         self.assertEqual(film["clips"], 4)
-        # W02 w11: clip 2 ran long (18.4 s for 13 s) and clip 3 starts from its last frame: its head is cut, its end kept
+        # clip 2 ran long (18.4 s for 13 s) and clip 3 starts from its last frame: its head is cut, its end kept
         self.assertEqual(self.fitted, [("clip-2.mp4", 13.0, "head")])
         self.assertEqual(film["kept_last_frame"], [{"clip": 2, "how": "head"}])
         self.assertEqual(self.posts, [])
@@ -478,7 +478,7 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
                            "says": ["Make mornings easier.", "Prepare the night before."]}], **extra}
 
     async def test_a_voice_over_goes_on_the_users_own_clip(self):
-        # MCP-14: the user's clip is a beat of its own (`source`); nothing is generated for it.
+        # The user's clip is a beat of its own (`source`); nothing is generated for it.
         import base64
         up = await self.call("upload_media", file_name="mine.mp4", data_base64=base64.b64encode(b"user-clip").decode())
         p = await self.call("plan_video_production", story=self.users_clip_story(up["file_path"]))
@@ -496,7 +496,7 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(film["sound"]["narration"])
 
     async def test_speech_in_the_users_clip_is_never_lowered_unless_the_host_says_it_is_background(self):
-        # 2026-11-13: the user's clip's own sound was lowered 10 dB as "effects", even when someone speaks in it.
+        # In testing, the user's clip's own sound was lowered 10 dB as "effects", even when someone speaks in it.
         import base64
         up = await self.call("upload_media", file_name="mine.mp4", data_base64=base64.b64encode(b"user-clip").decode())
         for speech, kept in [(None, [(0.0, 8.4)]), (True, [(0.0, 8.4)]), (False, [])]:
@@ -521,7 +521,7 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("voice-over-on-speech", [a["note"] for a in p["advice"]])
 
     async def test_a_voice_over_with_too_many_words_for_its_beat_is_warned_at_the_plan(self):
-        # I46a, 2026-11-13: 12 words in a 4 s beat; the last words ran past the end of the film.
+        # In testing: 12 words in a 4 s beat; the last words ran past the end of the film.
         story = {"title": "Jet", "aspect": "16:9", "setting": "An airfield at dawn.", "beats": [
             {"seconds": 4, "text": "A jet on the runway.", "clip": 1, "says": ["The F-35A Lightning II is powered by a single engine."]},
             {"seconds": 4, "text": "The jet takes off.", "clip": 1,
@@ -532,7 +532,7 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Beat 2: the voice-over has 12 words for 4 s", paced[0])
 
     async def test_a_new_clip_continues_from_the_users_clip(self):
-        # A3: the next clip starts from the last frame of the user's clip.
+        # The next clip starts from the last frame of the user's clip.
         import base64
         up = await self.call("upload_media", file_name="mine.mp4", data_base64=base64.b64encode(b"user-clip").decode())
         story = self.users_clip_story(up["file_path"])
@@ -548,7 +548,7 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.joined[-1], (["clip-1.mp4", "clip-2.mp4"], [True, False]))   # the new clip is silent
 
     async def test_the_users_clip_is_cut_to_source_start_and_end(self):
-        # J50b: keep the first 5 s of the user's 8 s clip and make a new ending from the frame at 5 s.
+        # Keep the first 5 s of the user's 8 s clip and make a new ending from the frame at 5 s.
         import base64
         cuts = []
 
@@ -574,7 +574,7 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse((await self.call("plan_video_production", story=bad))["ok"])
 
     async def test_the_users_picture_is_held_unchanged_for_its_seconds(self):
-        # W08 (user, 2026-11-22): a screenshot shown "full and unchanged" is a `source` beat, held still by code (0 credits).
+        # A screenshot shown "full and unchanged" is a `source` beat, held still by code (0 credits).
         import base64
         held = []
 
@@ -742,7 +742,7 @@ if __name__ == "__main__":
 
 class DownloadTests(unittest.IsolatedAsyncioTestCase):
     async def test_a_download_names_its_client(self):
-        """Wikimedia answers 403 to the default httpx User-Agent (W04, W07, 2026-11-14)."""
+        """Wikimedia answers 403 to the default httpx User-Agent."""
         import tempfile
         from mcp_magichour import video_production_tool as vpt
         seen = {}

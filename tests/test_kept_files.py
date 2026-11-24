@@ -1,4 +1,4 @@
-"""MCP-13: kept copies of uploads are private, expire after 7 days and are read only for the uploader's account.
+"""Kept copies of uploads are private, expire after 7 days and are read only for the uploader's account.
 No network: Blob and Magic Hour calls are fakes. 0 credits."""
 import asyncio
 import os

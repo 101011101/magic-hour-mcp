@@ -1,4 +1,4 @@
-"""Named looks for words, the caption choice and the double caption (user, 2026-11-17, MCP-23)."""
+"""Named looks for words, the caption choice and the double caption."""
 import tempfile
 import unittest
 from pathlib import Path
@@ -15,7 +15,7 @@ class LookTests(unittest.TestCase):
     def test_a_look_sets_font_style_and_capitals(self):
         style = media_tools.word_style({"text": "x", "look": "bold"})
         self.assertEqual((style["font"], style["style"]), ("Anton", "outline"))
-        self.assertNotIn("upper", style)   # the words are drawn as the host wrote them (user, 2026-11-17)
+        self.assertNotIn("upper", style)   # the words are drawn as the host wrote them
         self.assertEqual(media_tools.word_style({"text": "x", "look": "bold", "font": "Pacifico"})["font"], "Pacifico")
         self.assertEqual(media_tools.word_style({"text": "x"})["style"], "band")   # add_words_to_media keeps its default
 

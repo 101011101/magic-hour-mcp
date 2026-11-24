@@ -1,4 +1,4 @@
-"""Tests for tool management's new media tools (MCP-TOOLS-29 onward), on small media made with ffmpeg."""
+"""Tests for tool management's new media tools, on small media made with ffmpeg."""
 import asyncio
 import os
 import tempfile
@@ -36,7 +36,7 @@ class SoundOnVideoTests(unittest.TestCase):
         ff("-f", "lavfi", "-i", "sine=frequency=900:duration=6", str(self.long_voice))
 
     def test_music_under_the_videos_own_sound_keeps_the_picture_and_length(self):
-        """E27a-c: music under the user's clip."""
+        """Music under the user's clip."""
         out = self.dir / "out.mp4"
         done = mix_onto_video(self.film, out, music=self.music, original="keep")
         info = media_tools.probe(out)
@@ -46,7 +46,7 @@ class SoundOnVideoTests(unittest.TestCase):
         self.assertGreaterEqual(done["kept_spoken_spans"], 1)
 
     def test_replace_removes_the_videos_own_sound(self):
-        """E28b/c: a narration instead of the conversation."""
+        """A narration instead of the conversation."""
         out = self.dir / "out.mp4"
         done = mix_onto_video(self.film, out, voice=self.voice, original="replace")
         self.assertEqual(done["original"], "replace")
@@ -54,7 +54,7 @@ class SoundOnVideoTests(unittest.TestCase):
         self.assertTrue(media_tools.probe(out)["audio"])
 
     def test_a_voice_longer_than_the_video_is_not_cut(self):
-        """E28c: the last words ran past the end and were cut."""
+        """The last words ran past the end and were cut."""
         out = self.dir / "out.mp4"
         done = mix_onto_video(self.film, out, voice=self.long_voice, original="replace")
         self.assertTrue(done["voice_tempo"] > 1.0 or done["held_end_seconds"] > 0)
@@ -84,15 +84,14 @@ class NewPictureToolTests(unittest.TestCase):
            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", str(self.film))
 
     def test_warmer_raises_red_and_lowers_blue_same_size(self):
-        """B07c, J49a: warmer, nothing redrawn."""
+        """Warmer, nothing redrawn."""
         out = recolour(self.grey, self.dir / "warm.png", warmth=0.5)
         r, g, b = mean_rgb(out)
-        self.assertGreater(r, b + 40)   # clearly warmer (warmth 0.15 per unit was too weak: B07c)
+        self.assertGreater(r, b + 40)   # clearly warmer (warmth 0.15 per unit was too weak)
         from PIL import Image
         self.assertEqual(Image.open(out).size, (400, 300))
 
     def test_saturation_zero_is_black_and_white(self):
-        """B10c."""
         r, g, b = mean_rgb(recolour(self.red, self.dir / "bw.png", saturation=0))
         self.assertLess(max(r, g, b) - min(r, g, b), 3)
 
@@ -103,7 +102,7 @@ class NewPictureToolTests(unittest.TestCase):
         self.assertAlmostEqual(info["seconds"], 2, delta=0.3)
 
     def test_side_by_side_keeps_each_picture_whole(self):
-        """G35a: before and after, side by side, photos unchanged, no empty white space (run wnew had white bands)."""
+        """Before and after, side by side, photos unchanged, no empty white space (in testing there were white bands)."""
         from PIL import Image
         out = side_by_side([self.red, self.wide], self.dir / "sbs.png", "row", "16:9", labels=["Before", "After"])
         sheet = Image.open(out).convert("RGB")
@@ -125,7 +124,6 @@ class NewPictureToolTests(unittest.TestCase):
             side_by_side([self.red], self.dir / "x.png")
 
     def test_logo_in_the_top_right_corner_of_a_video(self):
-        """E29a."""
         out = overlay_picture(self.film, self.logo, self.dir / "logo.mp4", "top_right", size=0.2)
         info = media_tools.probe(out)
         self.assertEqual((info["width"], info["height"]), (320, 240))
@@ -144,7 +142,7 @@ class NewPictureToolTests(unittest.TestCase):
         self.assertEqual(Image.open(out).size, (400, 300))
 
     def test_card_attached_after_the_clip_in_one_file(self):
-        """E29b, run wnew: join_videos failed (media_tools.join calls ffmpeg by name); the card tool attaches it itself."""
+        """In testing, join_videos failed (media_tools.join calls ffmpeg by name); the card tool attaches it itself."""
         card = card_clip(self.dir / "card.mp4", 2, ["Ready for takeoff?"], "black", (320, 240))
         out = attach_card(self.film, card, self.dir / "with-card.mp4", "after")
         info = media_tools.probe(out)
@@ -155,7 +153,7 @@ class NewPictureToolTests(unittest.TestCase):
         self.assertLess(sum(Image.open(media_tools.last_frame(out, self.dir / "end.png")).convert("RGB").getpixel((5, 5))), 30)
 
     def test_a_generated_card_fills_the_frame_with_background_none(self):
-        """User, 2026-11-21: the card is generated first and given as a picture; with background none it fills the frame."""
+        """The card is generated first and given as a picture; with background none it fills the frame."""
         from PIL import Image
         made = self.dir / "made-card.png"
         Image.new("RGB", (640, 480), (11, 29, 58)).save(made)   # a generated card, the clip's shape
@@ -164,7 +162,7 @@ class NewPictureToolTests(unittest.TestCase):
         self.assertTrue(all(abs(a - b) < 12 for a, b in zip(corner, (11, 29, 58))), corner)   # no black border
 
     def test_end_card_matches_the_clip_and_can_be_joined(self):
-        """E29b: a 2 s black card with exact words, the clip's size, with a sound track."""
+        """A 2 s black card with exact words, the clip's size, with a sound track."""
         out = card_clip(self.dir / "card.mp4", 2, ["Ready for takeoff?", "@flightschool"], "black", (320, 240))
         info = media_tools.probe(out)
         self.assertEqual((info["width"], info["height"]), (320, 240))
@@ -182,7 +180,7 @@ class SwitchTests(unittest.TestCase):
         return asyncio.run(run())
 
     def test_on_with_the_conversation_front_or_the_tool_plan_switch(self):
-        # 2026-11-21: the conversation front is on by default, so the 5 tools are too
+        # The conversation front is on by default, so the 5 tools are too
         new = {"add_sound_to_video", "adjust_colours", "put_pictures_side_by_side", "put_picture_on_video", "make_card_clip"}
         self.assertFalse(new & self.names("off", conversation="off"))
         self.assertTrue(new <= self.names("on", conversation="off"))
@@ -202,7 +200,7 @@ if __name__ == "__main__":
 
 
 class HeadSwapPhotoTests(unittest.TestCase):
-    """swap_heads_in_photo helpers (b5 Y01, head swap check 2026-11-23)."""
+    """swap_heads_in_photo helpers."""
 
     def test_cut_box_grows_the_face_and_snaps_to_near_photo_edges(self):
         from mcp_magichour.tool_media import cut_box

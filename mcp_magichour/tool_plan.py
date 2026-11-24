@@ -1,4 +1,4 @@
-"""plan_tool_call: the tool-management planner (MCP-TOOLS-23).
+"""plan_tool_call: the tool-management planner.
 
 Tool management is kept separate from video composition: this
 module imports nothing from plan_request, video_production, video_production_tool or gates.
@@ -59,7 +59,7 @@ def _match(row: dict, value: str) -> str | None:
 
 
 def _words_option(row: dict) -> str | None:
-    """The 'exact words' option of a deciding row: hosts send the words themselves (dry run w24on, A02d, A06b)."""
+    """The 'exact words' option of a deciding row: hosts send the words themselves (seen in a dry run)."""
     return next((k for k in options(row) if k.lower() == "exact words"), None)
 
 
@@ -84,7 +84,7 @@ def _sheet_view(family: str) -> dict:
     }
 
 
-# K26 lb1l stupid (2026-11-20): the host told the user a length it made up, then the plan made another.
+# In a test chat, the host told the user a length it made up, then the plan made another.
 ONLY_THESE = ' Say only these questions and what happens if each is skipped. Do not tell the user a length, a shape or any other value that is not in these questions: those are decided later.'
 
 
@@ -105,7 +105,7 @@ def plan(family: str, request: str, answers: dict[str, str] | None, questions_as
     if unknown:
         raise ToolError(f"Unknown rows for {family}: {', '.join(unknown)}. Rows: {', '.join(rows)}.")
 
-    # A host-only row with `applies` may be left out (it does not apply), but never put to the user (2026-11-20 audit:
+    # A host-only row with `applies` may be left out (it does not apply), but never put to the user (in an audit,
     # "(Read from the files.) Is the target a photo or a video?" went to the user word for word).
     missing_host = [i for i, r in rows.items() if host_only(r) and ("applies" not in r and answers.get(i, ASK) == ASK
                                                                      or "applies" in r and answers.get(i) == ASK)]
@@ -113,7 +113,7 @@ def plan(family: str, request: str, answers: dict[str, str] | None, questions_as
         raise ToolError(f"Answer these rows yourself from the files or the rules, not by asking the user: {', '.join(missing_host)}.")
 
     always = [i for i, v in answers.items() if v == NOT_APPLICABLE and "applies" not in rows[i]]
-    if always:   # K16 lb1l (2026-11-20): 7 refusals in 3 chats, each retried as your_call
+    if always:   # 7 refusals in 3 test chats, each retried as your_call
         answers = {i: (YOUR_CALL if i in always else v) for i, v in answers.items()}
     for i, value in answers.items():
         r = rows[i]
@@ -121,12 +121,12 @@ def plan(family: str, request: str, answers: dict[str, str] | None, questions_as
                 and not _words_option(r):
             raise ToolError(f"Row {i} ({r['kind']}): {value!r} is not an option. Options: {', '.join(options(r))}.")
 
-    # Only rows the host marks 'ask' go to the user (user, 2026-11-13: ask only when the answer would materially
+    # Only rows the host marks 'ask' go to the user (ask only when the answer would materially
     # change the result). A row left out takes its default or, if it has `applies`, does not apply.
-    # One batch, no limit on its size, and only once (user, 2026-11-13): after the user was asked, rows still marked
+    # One batch, no limit on its size, and only once: after the user was asked, rows still marked
     # 'ask' take their default instead of a second round.
     # A row with `no_default` (which person gets the new face) has no safe guess: 'your_call' is asked like 'ask', and
-    # still open after the one batch, the plan stops (2026-11-20 audit: its default "Ask; do not guess" asked again).
+    # still open after the one batch, the plan stops (in an audit, its default "Ask; do not guess" asked again).
     answers = {i: (ASK if v == YOUR_CALL and rows[i].get("no_default") and not questions_asked else v) for i, v in answers.items()}
     open_rows = [r for i, r in rows.items() if answers.get(i) == ASK]
     if open_rows and not questions_asked:
@@ -151,7 +151,7 @@ def plan(family: str, request: str, answers: dict[str, str] | None, questions_as
         value = answers.get(i, NOT_APPLICABLE if "applies" in r else YOUR_CALL)
         if value == NOT_APPLICABLE:
             continue
-        # 2026-11-20 audit: the user's own 'your call' on words means write words that fit (user, 2026-11-19), not "No words"
+        # The user's own 'your call' on words means write words that fit, not "No words"
         own_words = value == YOUR_CALL and i in handed and "your_call" in r
         key = _match(r, value) if value != YOUR_CALL else (_words_option(r) if own_words else None)
         if key is None and value != YOUR_CALL and r["kind"] == "deciding":

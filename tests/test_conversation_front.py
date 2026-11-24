@@ -1,4 +1,4 @@
-"""plan_conversation (MCP-28): one batch, implied defaults, required files, the film sheet."""
+"""plan_conversation: one batch, implied defaults, required files, the film sheet."""
 import asyncio
 import os
 import subprocess
@@ -11,9 +11,6 @@ from fastmcp.exceptions import ToolError
 
 from mcp_magichour import conversation_front, media_helpers_tool, media_tools
 from mcp_magichour.conversation_front import front
-
-
-# ---- 2026-11-20 codebase audit
 
 
 class ConversationFrontTests(unittest.TestCase):
@@ -32,15 +29,15 @@ class ConversationFrontTests(unittest.TestCase):
     def test_new_video_sound_default_is_on(self):
         out = front("new_video", "a 10 second clip: a ufo flies through a starfield", {"from_picture": "words", "length": "10", "shape": "16:9"})
         sound = next(d for d in out["decisions"] if d["id"] == "sound")
-        assert sound["value"] == "Natural sound on." and "tell_the_user" not in sound   # no telling of defaults (user, 2026-11-19)
+        assert sound["value"] == "Natural sound on." and "tell_the_user" not in sound   # no telling of defaults
 
     def test_film_asks_open_rows_once_then_plans(self):
         ask = front("film", "an ad for my bottle", {"kind": "ad", "exact_words": "ask", "product_picture": "ask"})
         assert ask["stage"] == "ask_the_user" and {q["id"] for q in ask["questions"]} == {"exact_words", "product_picture"}
         done = front("film", "an ad for my bottle", {"kind": "ad", "exact_words": "ask", "product_picture": "ask"}, questions_asked=True)
-        assert done["ready"] and "story_rules" not in done   # 2026-11-22: the rules moved to the video tool
+        assert done["ready"] and "story_rules" not in done   # the rules moved to the video tool
         words = {d["id"]: d["value"] for d in done["decisions"]}["exact_words"]
-        assert "call-to-action" in words   # K21: a skipped words question on an ad still gives a call to action
+        assert "call-to-action" in words   # a skipped words question on an ad still gives a call to action
         assert not any("tell_the_user" in d for d in done["decisions"]) and "Tell the user" not in done["next"]
 
     def test_film_never_asks_about_sound(self):
@@ -48,14 +45,14 @@ class ConversationFrontTests(unittest.TestCase):
             front("film", "a street interview", {"sound": "ask"})
 
     def test_no_talking_is_not_silence(self):
-        # 2026-11-22: no rewrites; "nobody" stays nobody, and its text says the sound comes from music and sound effects
+        # no rewrites; "nobody" stays nobody, and its text says the sound comes from music and sound effects
         out = front("film", "an ad with mellow music and no talking", {"kind": "ad", "sound": "on", "who_speaks": "nobody"})
         vals = {d["id"]: d for d in out["decisions"]}
         assert vals["sound"]["value"] == "on" and vals["who_speaks"]["value"] == "nobody" and "not sound in every clip" in out["next"]
         assert "music" in vals["who_speaks"]["instruction"] and "Silent" not in vals["who_speaks"]["instruction"]
         with self.assertRaises(ToolError):   # a value that is not an option is the host's to fix, not rewritten
             front("film", "an ad with mellow music and no talking", {"kind": "ad", "sound": "music only", "who_speaks": "nobody"})
-        assert "audio` is true" not in out["next"]   # sound in the video, not the story's `audio` (user, 2026-11-22)
+        assert "audio` is true" not in out["next"]   # sound in the video, not the story's `audio`
 
     def test_silence_asked_stays_silent(self):
         out = front("film", "a silent film of a forest", {"kind": "story_mood", "sound": "silent", "who_speaks": "nobody"})
@@ -77,14 +74,14 @@ class ConversationFrontTests(unittest.TestCase):
             assert out["stage"] != "ask_the_user" or "short_or_film" not in [q["id"] for q in out["questions"]]
         longer = front("new_video", "a ufo over a city", {"from_picture": "words", "short_or_film": "a longer film please"}, questions_asked=True)
         assert longer["stage"] == "switch_family" and "family film" in longer["next"]
-        for short in ("short, not an ad", "one short clip, no story", "not a film, just short"):   # 2026-11-23 audit
+        for short in ("short, not an ad", "one short clip, no story", "not a film, just short"):
             kept = front("new_video", "a ufo over a city", {"from_picture": "words", "short_or_film": short}, questions_asked=True)
             assert kept["stage"] != "switch_family", short
         ad = front("new_video", "a ufo over a city", {"from_picture": "words", "short_or_film": "an ad for my shop"}, questions_asked=True)
         assert ad["stage"] == "switch_family"
 
     def test_a_skipped_product_picture_is_a_real_photo_and_words_is_the_users_choice(self):
-        # 2026-11-23 (user): no user wants a worse version; the look-alike is only the user's choice
+        # no user wants a worse version; the look-alike is only the user's choice
         skipped = front("film", "an ad for my bottle", {"kind": "ad", "product_picture": "ask"}, questions_asked=True)
         picture = {d["id"]: d["value"] for d in skipped["decisions"]}["product_picture"]
         assert picture.startswith("web")
@@ -93,7 +90,7 @@ class ConversationFrontTests(unittest.TestCase):
         assert "answer none" in words["instruction"]
 
     def test_the_conversation_holds_no_video_building_rules(self):
-        # 2026-11-23 (user): the conversation only asks and records answers; the video tool's rules of thumb build
+        # the conversation only asks and records answers; the video tool's rules of thumb build
         from mcp_magichour.video_production_tool import RULES_OF_THUMB
         text = str(conversation_front.FILM_ROWS)
         for rule in ("Hook in the first 3 s", "one spoken line per beat", "Use it for the hook", "no stretching", "One music track", "White letters"):
@@ -125,7 +122,7 @@ class ConversationFrontTests(unittest.TestCase):
         assert media[0]["name"] == "a.mp4" and "error" in media[0]
 
     def test_tool_names_sent_as_rows_are_left_out(self):
-        # c3/c4: hosts answered tool names as rows in 44 of 60 faces chats and the call was refused.
+        # In testing, hosts answered tool names as rows in 44 of 60 faces chats and the call was refused.
         out = front("faces", "put me into this beach photo", {"consent": "none", "scene": "scene picture",
                     "change_clothes_in_photo": "n/a", "place_person_in_scene": "n/a"},
                     attachments=[{"name": "me.jpg", "kind": "image"}, {"name": "beach.jpg", "kind": "image"}])
@@ -134,7 +131,7 @@ class ConversationFrontTests(unittest.TestCase):
 
     def test_the_plan_does_not_tell_the_user_the_defaults(self):
         out = front("new_video", "a 10 second clip: a ufo flies through a starfield", {"from_picture": "words", "length": "10", "shape": "16:9"})
-        assert out["stage"] == "plan" and "Tell the user" not in out["next"]   # user, 2026-11-19
+        assert out["stage"] == "plan" and "Tell the user" not in out["next"]
 
     def test_every_tool_that_had_no_sheet_now_has_a_row(self):
         from mcp_magichour import tool_plan
@@ -221,14 +218,14 @@ class ConversationFrontTests(unittest.TestCase):
         assert out["stage"] == "plan" and next(d for d in out["decisions"] if d["id"] == "sound")["value"] == "Natural sound on."
 
     def test_the_rows_come_with_the_answer_rules(self):
-        # 2026-11-21: the rules left the description (Claude Code keeps 2,048 bytes); the first call returns them with the rows
+        # the rules left the description (Claude Code keeps 2,048 bytes); the first call returns them with the rows
         from mcp_magichour.conversation_front import ANSWER_RULES, front
         for family in ("new_video", "film"):
             out = front(family, "a cat")
             assert out["stage"] == "fill_the_sheet" and out["next"].endswith(ANSWER_RULES)
 
     def test_a_narrator_and_people_on_screen_are_one_answer(self):
-        """b2d X01, X04 (2026-11-23): a narrator plus a presenter had no who_speaks option; both hosts were refused once."""
+        """A narrator plus a presenter had no who_speaks option; in testing, both hosts were refused once."""
         out = front("film", "a narrator, and a beekeeper says a line to the camera", {"kind": "explainer_list", "who_speaks": "narrator + one_on_screen"})
         who = {d["id"]: d for d in out["decisions"]}["who_speaks"]
         assert who["value"] == "narrator + one_on_screen" and "voice-over" in who["instruction"] and "on camera" in who["instruction"]

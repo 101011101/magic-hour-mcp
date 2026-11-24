@@ -1,4 +1,4 @@
-"""Best-practice rules apply when the user says nothing; the user's words override them (user, 2026-11-23)."""
+"""Best-practice rules apply when the user says nothing; the user's words override them."""
 
 import unittest
 

@@ -382,6 +382,10 @@ Later, after composition. Each new tool goes in a new file of tool management, n
   - Owner check: a copy is read only for the account the file_path names (`GET /v1/account`, cached 5 min).
   - Tests: `tests/test_kept_files.py` (9). Live check on test store mh-kept-test (Vercel project mh-kept-test): upload, private read, no-token read 403, last frame from the copy, another account refused. 0 credits.
   - Deploy: create a private Blob store, connect it with the variable `KEPT_BLOB_READ_WRITE_TOKEN`.
+- [x] **ID cleanup for the upstream PR.** Done 2026-11-24 (user: "finish everything so the PR is ready"). Ticket IDs, case IDs, run tags and (user, date) notes removed from the code, tests and JSON data that go to upstream. History is not changed.
+  - Map: `mcp-upgrade/removed-ids.tsv` (one row per removed line: file, line at 5558b97, IDs, old text, new text).
+  - Old text: `git show 5558b97:<file>` or `git blame <file> 5558b97`.
+  - Test files renamed: `test_lb1l_fixes.py` → `test_live_review_fixes.py`, `test_w11_fixes.py` → `test_joint_music_and_spelling.py`.
 - [x] **MCP-14 · The user's own clip in a production.** Approved by the user 2026-11-11 (E28 films); checked again in the next benchmark. Beat fields `source` (the user's clip: file_path, URL or project id) and `source_sound`; the clip is a clip of its own, 0 credits; the join uses it as it is. Tests: `tests/test_video_production_tool.py` (3 new). Shown: fx4 (E28a/b/c × 3 users: 9 of 9 used `source`, 9 films with narration on the user's clip, 1,571 credits) and demo1 (A3: original 6 s unchanged + 6 s new from its last frame, 144 credits instead of 288). Check in the next run: [benchmark 02](../benchmark/02-next.md). A plan cannot take the user's clip as a piece, so a voice-over or music on the user's clip (E28a) and continuing a given clip (A3) have no path. The join can read the clip since 2026-11-11 (MCP-01 line, `kept_files.py`).
 
 ## Done

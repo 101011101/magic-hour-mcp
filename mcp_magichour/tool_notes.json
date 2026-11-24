@@ -17,36 +17,36 @@
       "family": "image edit (redraws)",
       "does": "Redraws the whole picture from the user's picture and a prompt.",
       "type": [
-        "Change one object or the background: the car's colour, night for sunset, a beach behind a person (B07a/b/d, B09a-d: 3.3 to 4.7).",
-        "Remove an object or clutter (B08a-c: 3.3 to 4.0).",
-        "A style: film look, anime, black and white (B10a-c: 4.0 to 4.7).",
-        "The same character or product in new scenes (C16a/b: 4.0)."
+        "Change one object or the background: the car's colour, night for sunset, a beach behind a person (3.3 to 4.7).",
+        "Remove an object or clutter (3.3 to 4.0).",
+        "A style: film look, anime, black and white (4.0 to 4.7).",
+        "The same character or product in new scenes (4.0)."
       ],
       "antitype": [
         {
           "job": "A new shape with nothing added (a crop or a pad)",
           "use": "reframe_media",
-          "why": "Without aspect_ratio it keeps the input's shape: a wide photo asked to be square came back 640x384 (B12a-d: 1.0 to 1.3). For a new shape with the scene extended, edit_image with aspect_ratio is right (user, 2026-11-14, B12b)."
+          "why": "Without aspect_ratio it keeps the input's shape: a wide photo asked to be square came back 640x384 (1.0 to 1.3). For a new shape with the scene extended, edit_image with aspect_ratio is right."
         },
         {
           "job": "A caption or overlay on top of the user's photo, a meme caption",
           "use": "add_words_to_media",
-          "why": "Letters are misspelt or moved (B11a 2.3, J49b 2.3). Words in a designed picture are generated (user, 2026-11-14); fixing a misspelt word in a generated picture is edit_image."
+          "why": "Letters are misspelt or moved (2.3, 2.3). Words in a designed picture are generated; fixing a misspelt word in a generated picture is edit_image."
         },
         {
           "job": "Pictures side by side",
-          "use": "put_pictures_side_by_side (MCP-TOOLS-30)",
-          "why": "Both pictures are redrawn and cropped (G35a/b: 1.7 to 2.0)."
+          "use": "put_pictures_side_by_side",
+          "why": "Both pictures are redrawn and cropped (1.7 to 2.0)."
         },
         {
           "job": "Colour only, nothing else changed",
-          "use": "adjust_colours (MCP-TOOLS-35)",
-          "why": "Small details change too (B07c, J49a). Close enough for black and white (B10c 4.7)."
+          "use": "adjust_colours",
+          "why": "Small details change too. Close enough for black and white (4.7)."
         }
       ],
       "limits": [
         "Parts that should stay can change slightly, because the whole picture is redrawn.",
-        "An exact change to words already in a picture (1.5x bigger, same font, same centre) is approximate: run wset J49b grew 1.78x and redrew the cup. Say so to the user (user, 2026-11-14)."
+        "An exact change to words already in a picture (1.5x bigger, same font, same centre) is approximate: a run grew 1.78x and redrew the cup. Say so to the user."
       ],
       "deciding_question": "Should the picture be redrawn, or kept exactly and only reshaped, cut or written on?",
       "bench": "Right tool: 158 runs, average 3.6. Wrong tool: 129 runs, average 2.6.",
@@ -61,7 +61,7 @@
         "conflict": "The upstream description of edit_image (openapi_policies.py, #179) suggests flux-2-klein for a Free account. plan_tool_call's output must name the model.",
         "tier": "free (all models named here are free-tier)"
       },
-      "test": "Test run wlive1: A05a 5 (headshot by edit_image, flux-2-klein). Direct B07a: qwen-image-2.1 made a true navy, flux-2-klein a brighter royal blue; both kept the street. Small gap on a colour edit; the bench gap is on shape and words."
+      "test": "Test run: 5 (headshot by edit_image, flux-2-klein). Direct call: qwen-image-2.1 made a true navy, flux-2-klein a brighter royal blue; both kept the street. Small gap on a colour edit; the bench gap is on shape and words."
     },
     "edit_video": {
       "family": "video edit (re-generates)",
@@ -73,21 +73,21 @@
         {
           "job": "A new shape (vertical, square)",
           "use": "reframe_media",
-          "why": "Output is about 832x448 or 832x512 whatever was asked (E25a/b: 1.0)."
+          "why": "Output is about 832x448 or 832x512 whatever was asked (1.0)."
         },
         {
           "job": "A shorter clip, the best part, cut the boring parts",
           "use": "trim_media",
-          "why": "It re-renders the footage instead of cutting it (E26a/b: 2.0)."
+          "why": "It re-renders the footage instead of cutting it (2.0)."
         },
         {
           "job": "Words or a watermark",
           "use": "add_words_to_media",
-          "why": "The mark was missing (E29c: 1.0)."
+          "why": "The mark was missing (1.0)."
         }
       ],
       "limits": [
-        "Output shape is its own (about 832x512), not the input's (J49c)."
+        "Output shape is its own (about 832x512), not the input's."
       ],
       "deciding_question": "Should the video be re-made, or kept and only cut, reshaped or written on?",
       "bench": "Wrong tool: 36 runs, average 1.7."
@@ -96,50 +96,50 @@
       "family": "sound",
       "does": "Makes a music track from a style prompt. Sound only.",
       "type": [
-        "A music bed of 15 s or more (F30b/c: 4.0)."
+        "A music bed of 15 s or more (4.0)."
       ],
       "antitype": [
         {
           "job": "Music shorter than 15 s",
-          "use": "generate_music with duration 15, then trim_media (MCP-TOOLS-28)",
-          "why": "The API's minimum duration is 15 s: a 10 s request came back 15 s (F30a 2.3; E27a, E27c)."
+          "use": "generate_music with duration 15, then trim_media",
+          "why": "The API's minimum duration is 15 s: a 10 s request came back 15 s (2.3)."
         },
         {
           "job": "Music on the user's video",
-          "use": "generate_music or a voice, then add_sound_to_video (MCP-TOOLS-29)",
-          "why": "It makes a separate file; nothing puts it on the video (E27a-c: 2.0)."
+          "use": "generate_music or a voice, then add_sound_to_video",
+          "why": "It makes a separate file; nothing puts it on the video (2.0)."
         }
       ],
       "limits": [],
       "deciding_question": "How long, and on its own or under the user's video?",
       "bench": "Right tool: 40 runs, average 2.6.",
-      "test": "Test run wlive1: F30a: the agent asked 15 s and cut to 10 s (antitype confirmed)."
+      "test": "Test run: the agent asked 15 s and cut to 10 s (antitype confirmed)."
     },
     "add_subtitles_to_video": {
       "family": "subtitles",
       "does": "Transcribes the speech in the video and burns it in as subtitles.",
       "type": [
-        "Subtitles in the language that is spoken (E24a: 3.0)."
+        "Subtitles in the language that is spoken (3.0)."
       ],
       "antitype": [
         {
           "job": "Subtitles in another language",
-          "use": "none (MCP-TOOLS-33, a GAP): translate_video changes the speech, not only the subtitles",
-          "why": "It writes the spoken language: Spanish asked, English delivered (E24b: 2.0)."
+          "use": "none (a GAP): translate_video changes the speech, not only the subtitles",
+          "why": "It writes the spoken language: Spanish asked, English delivered (2.0)."
         },
         {
           "job": "Subtitles and a new shape",
-          "use": "reframe_media first, then this tool (MCP-TOOLS-27)",
-          "why": "It has no shape setting (E24d, E25c)."
+          "use": "reframe_media first, then this tool",
+          "why": "It has no shape setting."
         },
         {
           "job": "A clip with no speech",
           "use": "no call: tell the user there is no speech",
-          "why": "The job fails instead of saying so (E24c)."
+          "why": "The job fails instead of saying so."
         }
       ],
       "limits": [
-        "The first line is sometimes missing (E24a)."
+        "The first line is sometimes missing."
       ],
       "deciding_question": "Same language as the speech, or translated? Does the clip have speech?",
       "bench": "Right tool: 22 runs, average 2.4.",
@@ -153,38 +153,38 @@
     "swap_head_in_photo": {
       "family": "faces",
       "does": "Puts the whole head from one picture (face, hair, head shape) onto the body in another picture. 10 credits.",
-      "preferred": "User, 2026-11-13: use head swap for swapping faces in photos.",
+      "preferred": "Use head swap for swapping faces in photos.",
       "type": [
-        "Put the user's face on someone in a photo, keeping their hair and head shape so they are recognisable (C14a)."
+        "Put the user's face on someone in a photo, keeping their hair and head shape so they are recognisable."
       ],
       "antitype": [
         {
           "job": "A face or head swap in a video, one person",
           "use": "get_first_frame, swap_head_in_photo on that frame, then replace_character_in_video (wan-animate or, on the free plan, minimax-h3; style.mode animate)",
-          "why": "Head swap is photo only; the animated head-swapped frame keeps the video (test hs2, 2026-11-23)."
+          "why": "Head swap is photo only; the animated head-swapped frame keeps the video (test)."
         },
         {
           "job": "Several people in one photo, each with their own new head",
           "use": "swap_heads_in_photo",
-          "why": "No person choice: a second head swap on the whole photo changes everyone (test hs, 2026-11-23)."
+          "why": "No person choice: a second head swap on the whole photo changes everyone (test)."
         },
         {
           "job": "One chosen person in a group photo, if head swap picks the wrong one",
           "use": "detect_faces, then swap_face_in_photo (individual-faces)",
-          "why": "Its only settings are body_file_path and head_file_path: no face choice (C14b, not tested)."
+          "why": "Its only settings are body_file_path and head_file_path: no face choice (not tested)."
         }
       ],
       "limits": [
-        "Choosing one person among several is not a setting; ask which person first (C14b worked)."
+        "Choosing one person among several is not a setting; ask which person first (this worked)."
       ],
       "deciding_question": "Which picture gives the head, and which picture (and which person) receives it?",
-      "bench": "0 runs in the persona bench; 2 tests (C14b 4 in wlive1; C14a by eye, wlive1-direct).",
-      "test": "Test run wlive1: C14b 1.5 → 4 (asked which person, then head swap onto the right one). C14a used swap_face_in_photo (4), so head swap on C14a is still untested. C14a, direct call (wlive1-direct): the head swap is clearly the woman in the portrait (curly hair, face shape), suit, stars and retro look kept; the agent's face swap from wlive1 kept the astronaut's head and looked like a blend."
+      "bench": "0 runs in the persona bench; 2 tests (4 in a test run; one by eye, a direct call).",
+      "test": "Test run: 1.5 → 4 (asked which person, then head swap onto the right one). The astronaut case used swap_face_in_photo (4), so head swap on it is still untested. The astronaut case, direct call: the head swap is clearly the woman in the portrait (curly hair, face shape), suit, stars and retro look kept; the agent's face swap from the test run kept the astronaut's head and looked like a blend."
     },
     "swap_face_in_photo": {
       "family": "faces",
       "does": "Puts a face from one picture onto faces in another picture. The face only, not hair or head shape.",
-      "preferred": "Second choice (user, 2026-11-13): swap_head_in_photo first.",
+      "preferred": "Second choice: swap_head_in_photo first.",
       "type": [
         "Only when the user refuses a head swap: the face changes, hair and head shape stay."
       ],
@@ -192,22 +192,22 @@
         {
           "job": "A face swap on one person",
           "use": "swap_head_in_photo",
-          "why": "Only the face changes; hair and head shape stay, so the person is less recognisable (C14b 2.0 to 2.3)."
+          "why": "Only the face changes; hair and head shape stay, so the person is less recognisable (2.0 to 2.3)."
         },
         {
           "job": "Several people in one photo, each with their own new face",
           "use": "swap_heads_in_photo",
-          "why": "b5 Y01: individual-faces was a blend; user 'should be a head swap'."
+          "why": "individual-faces was a blend; 'should be a head swap'."
         }
       ],
       "limits": [],
       "deciding_question": "One person, or several people each with their own new face?",
-      "bench": "12 runs, average 3.1 (C14a 3.7 to 4.0, C14b 2.0 to 2.3).",
+      "bench": "12 runs, average 3.1 (one case 3.7 to 4.0, another 2.0 to 2.3).",
       "best_settings": {
         "use": {
           "face_swap_mode": "all-faces for one person"
         },
-        "evidence": "all-faces 3.86 (7 runs), individual-faces 2.00 (5 runs, all on C14b, the hard case). Not a fair comparison."
+        "evidence": "all-faces 3.86 (7 runs), individual-faces 2.00 (5 runs, all on the hard case). Not a fair comparison."
       }
     },
     "swap_face_in_video": {
@@ -220,23 +220,23 @@
         {
           "job": "One person in a video gets the user's face",
           "use": "get_first_frame, swap_head_in_photo on that frame, then replace_character_in_video (wan-animate or, on the free plan, minimax-h3; style.mode animate)",
-          "why": "b5 Y04: face swap, user 'should be a head swap'. Test hs2: recognisable, sound kept."
+          "why": "Face swap: 'should be a head swap'. Test: recognisable, sound kept."
         },
         {
           "job": "Only part of the clip",
-          "use": "trim_media first, then this tool (MCP-TOOLS-27)",
-          "why": "Asked for the first 5 s, it delivered all 10 s (C15a)."
+          "use": "trim_media first, then this tool",
+          "why": "Asked for the first 5 s, it delivered all 10 s."
         },
         {
           "job": "A face swap in a photo",
           "use": "swap_head_in_photo",
-          "why": "User's choice for photos."
+          "why": "The choice for photos."
         }
       ],
       "limits": [
-        "The new face is a blend; graders did not recognise the portrait (C15a 2.7). Warn the user.",
-        "Two faces in one clip: both barely change and the sound was lost (C15c: 1.0 to 1.3).",
-        "One person can be several face crops (a turned head): map each crop of that person, or the old face comes back when the head turns (b1 K13)."
+        "The new face is a blend; graders did not recognise the portrait (2.7). Warn the user.",
+        "Two faces in one clip: both barely change and the sound was lost (1.0 to 1.3).",
+        "One person can be several face crops (a turned head): map each crop of that person, or the old face comes back when the head turns."
       ],
       "deciding_question": "Which person, and which part of the clip?",
       "bench": "Right tool: 10 runs, average 1.8."
@@ -250,18 +250,18 @@
       "antitype": [
         {
           "job": "A logo with thin letters",
-          "use": "generate_image with the words in the prompt on a plain background, then this tool, and check the letters (user, 2026-11-14: words are generated); if they fade, cut out the logo without words, then add_words_to_media (MCP-TOOLS-25)",
-          "why": "The letters fade or smear (A06c: 2.7)."
+          "use": "generate_image with the words in the prompt on a plain background, then this tool, and check the letters (words are generated); if they fade, cut out the logo without words, then add_words_to_media",
+          "why": "The letters fade or smear (2.7)."
         },
         {
           "job": "A logo on a video",
-          "use": "remove_image_background, then put_picture_on_video (MCP-TOOLS-31)",
-          "why": "It only makes the PNG; nothing puts it on the video (E29a: 1.3)."
+          "use": "remove_image_background, then put_picture_on_video",
+          "why": "It only makes the PNG; nothing puts it on the video (1.3)."
         }
       ],
       "limits": [],
       "deciding_question": "Is there text in the picture? Where will the cut-out be used?",
-      "bench": "Right tool: 9 runs, average 1.6 (most of it E29a, a job no tool finishes)."
+      "bench": "Right tool: 9 runs, average 1.6 (most of it one case, a job no tool finishes)."
     },
     "reframe_media": {
       "family": "image by code",
@@ -274,35 +274,35 @@
         {
           "job": "A picture's new shape where the scene can be extended",
           "use": "edit_image with the new aspect_ratio, extending the scene",
-          "why": "User, 2026-11-14: generation first (B12b)."
+          "why": "Generation first."
         },
         {
           "job": "4:5",
-          "use": "none yet (MCP-TOOLS-34)",
-          "why": "Its shapes are 16:9, 9:16 and 1:1 (B12c, A03, G34b)."
+          "use": "none yet",
+          "why": "Its shapes are 16:9, 9:16 and 1:1."
         },
         {
           "job": "Two people who take turns, each centred",
-          "use": "trim_media per speaker, reframe_media each with its own focus, join_videos (MCP-TOOLS-27)",
-          "why": "One focus per call (E25b)."
+          "use": "trim_media per speaker, reframe_media each with its own focus, join_videos",
+          "why": "One focus per call."
         }
       ],
       "limits": [
-        "Not benchmarked: added in cbbe722, after the bench.",
-        "Crop loses the edges: set `focus` on the subject (B12d, the shoe on the left), or use pad or fill to keep everything."
+        "Not benchmarked.",
+        "Crop loses the edges: set `focus` on the subject (the shoe on the left), or use pad or fill to keep everything."
       ],
       "deciding_question": "Crop (lose the edges), or keep everything with bars (pad) or a blurred copy (fill)? Where is the subject?",
-      "bench": "0 runs in the persona bench; 3 test runs (wlive1).",
-      "test": "Test run wlive1 (2026-11-13, happy user, 1 run each): B12a 1 → 4, B12d 1 → 3 (whole shoe kept with matching padding; it stays small and off-centre), E25a 1 → 4 (9:16 crop with her centred)."
+      "bench": "0 runs in the persona bench; 3 test runs.",
+      "test": "Test run (happy user, 1 run each): 1 → 4, 1 → 3 (whole shoe kept with matching padding; it stays small and off-centre), 1 → 4 (9:16 crop with her centred)."
     },
     "trim_media": {
       "family": "video by code",
       "does": "Cuts a video or sound file from `start` to `end` seconds by code. Picture and sound kept. 0 credits.",
       "type": [
-        "Shorten the user's clip, keep the first N seconds, cut a clip into parts (E26a/b, J49c, J50b).",
-        "Music under 15 s: after generate_music (MCP-TOOLS-28).",
-        "A frame at a chosen time: trim to it, then get_last_frame (G33b).",
-        "Only part of a clip for a face swap: trim first (C15a)."
+        "Shorten the user's clip, keep the first N seconds, cut a clip into parts.",
+        "Music under 15 s: after generate_music.",
+        "A frame at a chosen time: trim to it, then get_last_frame.",
+        "Only part of a clip for a face swap: trim first."
       ],
       "antitype": [
         {
@@ -312,67 +312,67 @@
         }
       ],
       "limits": [
-        "Not benchmarked: added in cbbe722, after the bench.",
-        "It does not choose the part: 'the best 10 seconds' needs a look at the clip first (E26a, MCP-07)."
+        "Not benchmarked.",
+        "It does not choose the part: 'the best 10 seconds' needs a look at the clip first."
       ],
       "deciding_question": "Which part, from when to when?",
-      "bench": "0 runs in the persona bench; 2 test runs (wlive1).",
-      "test": "Test run wlive1: J49c 2.5 → 5 (first 5 s kept exactly). E26b 3: the cut was right, but the agent picked the part blind (half of it a static lead-in); it cannot see the clip (MCP-07)."
+      "bench": "0 runs in the persona bench; 2 test runs.",
+      "test": "Test run: 2.5 → 5 (first 5 s kept exactly). Another case, 3: the cut was right, but the agent picked the part blind (half of it a static lead-in); it cannot see the clip."
     },
     "add_words_to_media": {
       "family": "image by code",
       "does": "Draws exact words on a picture or video by code: title, caption, price, name, watermark. Always spelled right. 0 credits.",
       "type": [
-        "A caption on top of the user's photo (B11a).",
-        "A watermark or caption on a video, for the whole clip or from start to end (E29c).",
+        "A caption on top of the user's photo.",
+        "A watermark or caption on a video, for the whole clip or from start to end.",
         "Top and bottom text on a meme made from the user's picture."
       ],
       "antitype": [
         {
           "job": "Words that are part of a designed picture (headline, poster, flyer, logo, thumbnail, carousel slide)",
           "use": "generate_image or edit_image with the words in the prompt",
-          "why": "User, 2026-11-14: generation first; drawn words sit on top and look pasted on (A02d, A06b, G33b, G34a, G37a)."
+          "why": "Generation first; drawn words sit on top and look pasted on."
         },
         {
           "job": "Words that must look printed on an object (a sign, a label)",
           "use": "edit_image",
-          "why": "Drawn words do not follow the object (B11b)."
+          "why": "Drawn words do not follow the object."
         }
       ],
       "limits": [
-        "Not benchmarked: added in cbbe722, after the bench.",
+        "Not benchmarked.",
         "Places: top, middle, bottom, corners. Sizes: small, normal, large. No free position or font choice."
       ],
       "deciding_question": "The exact words, where, and how big? On an object, or over the picture?",
-      "bench": "0 runs in the persona bench; 3 test runs (wlive1).",
-      "test": "Test run wlive1: B11a 2 → 4, E29c 1 → 4 (watermark), A02a 4 (generate_image without words, then this tool: headline exact)."
+      "bench": "0 runs in the persona bench; 3 test runs.",
+      "test": "Test run: 2 → 4, 1 → 4 (watermark), 4 (generate_image without words, then this tool: headline exact)."
     },
     "mix_audio": {
       "family": "sound",
       "does": "Lays sound files over each other into one sound file: a voice over music, a podcast intro. Sound only. 0 credits.",
       "type": [
-        "A voice over music, music first then the voice (F32a, MCP-TOOLS-28)."
+        "A voice over music, music first then the voice."
       ],
       "antitype": [
         {
           "job": "Sound on the user's video",
-          "use": "generate_music or a voice, then add_sound_to_video (MCP-TOOLS-29)",
-          "why": "It outputs sound only, no picture (E27, E28)."
+          "use": "generate_music or a voice, then add_sound_to_video",
+          "why": "It outputs sound only, no picture."
         }
       ],
       "limits": [
-        "Not benchmarked: added in cbbe722, after the bench."
+        "Not benchmarked."
       ],
       "deciding_question": "Which tracks, from when, and how loud?",
       "bench": "0 runs.",
-      "test": "Test run wlive1: F30a 2.5 → 4: 15 s generate_music, cut to 10 s with a fade-out. Also used in C17a to fit a voice line."
+      "test": "Test run: 2.5 → 4: 15 s generate_music, cut to 10 s with a fade-out. Also used in another case to fit a voice line."
     },
     "join_videos": {
       "family": "video by code",
       "does": "Joins videos end to end with hard cuts, or sound files into one sound file. 0 credits.",
       "type": [
-        "Several clips into one film (E25b, J50b, C15a).",
-        "Voice lines made one at a time into one sound file (F31b, F32b)."
+        "Several clips into one film.",
+        "Voice lines made one at a time into one sound file."
       ],
       "antitype": [
         {
@@ -382,7 +382,7 @@
         },
         {
           "job": "Sound on a video",
-          "use": "add_sound_to_video (MCP-TOOLS-29)",
+          "use": "add_sound_to_video",
           "why": "It refuses a mix of video and sound files."
         }
       ],
@@ -396,8 +396,8 @@
       "family": "video by code",
       "does": "Takes the last frame of a video as a picture. 0 credits.",
       "type": [
-        "Continue a clip: the last frame becomes the start of create_video_from_image (J50b).",
-        "A frame at a chosen time: trim_media to it first (G33b)."
+        "Continue a clip: the last frame becomes the start of create_video_from_image.",
+        "A frame at a chosen time: trim_media to it first."
       ],
       "antitype": [
         {
@@ -420,12 +420,12 @@
         {
           "job": "Several people in one photo, each with a new face or head",
           "use": "swap_heads_in_photo",
-          "why": "Test hsl Y01 (2026-11-23): detect_faces then swap_face_in_photo gave a blend; the faces barely changed."
+          "why": "Test: detect_faces then swap_face_in_photo gave a blend; the faces barely changed."
         },
         {
           "job": "Any job that is not a per-face swap",
           "use": "no call",
-          "why": "Called as an extra step in 30 runs (average 1.9); its face crops were delivered as results (C14b, G33b)."
+          "why": "Called as an extra step in 30 runs (average 1.9); its face crops were delivered as results."
         }
       ],
       "limits": [],
@@ -436,15 +436,15 @@
       "family": "image make",
       "does": "Makes pictures from text. Shapes 1:1, 16:9, 9:16. Many models.",
       "type": [
-        "Product shots, illustrations, scenes (A01, A04: 3.3 to 4.5).",
-        "Designed pictures with words: headline, poster, flyer, logo, thumbnail, carousel slide; the exact words quoted in the prompt (user, 2026-11-14)."
+        "Product shots, illustrations, scenes (3.3 to 4.5).",
+        "Designed pictures with words: headline, poster, flyer, logo, thumbnail, carousel slide; the exact words quoted in the prompt."
       ],
       "antitype": [],
       "limits": [
         "Shapes: only 1:1, 16:9, 9:16 in the aspect setting; 4:5 needs another step.",
-        "Exact counts and colours drift: about 25 balloons for 3 (A04c), clear glass for amber (A01d).",
-        "A vague user's details get lost: a silver bottle on white for 'matte black on marble' (A01a); ask, do not guess.",
-        "Words can be misspelt (flux-2-klein: A02b, A06b in the bench). Use qwen-image-2.1, quote the words, check the result; fix with edit_image if wrong."
+        "Exact counts and colours drift: about 25 balloons for 3, clear glass for amber.",
+        "A vague user's details get lost: a silver bottle on white for 'matte black on marble'; ask, do not guess.",
+        "Words can be misspelt (flux-2-klein in the bench). Use qwen-image-2.1, quote the words, check the result; fix with edit_image if wrong."
       ],
       "deciding_question": "Are there exact words? Exact counts or colours that must be right? What shape?",
       "bench": "Right tool: 202 runs, average 3.3.",
@@ -465,7 +465,7 @@
       "family": "video make",
       "does": "Makes a video from text. 1 to 60 s; 16:9, 9:16, 1:1.",
       "type": [
-        "A short clip of a scene (J49c 3.2)."
+        "A short clip of a scene (3.2)."
       ],
       "antitype": [
         {
@@ -476,11 +476,11 @@
         {
           "job": "A label or exact words in the video",
           "use": "add_words_to_media after",
-          "why": "Labels missing (I46b)."
+          "why": "Labels missing."
         }
       ],
       "limits": [
-        "Motion of objects can be wrong: the frisbee passes through the dog (D19a).",
+        "Motion of objects can be wrong: the frisbee passes through the dog.",
         "Most of its runs are video composition items; for single clips the bench has few cases."
       ],
       "deciding_question": "How long, what shape, with sound or silent?",
@@ -492,7 +492,7 @@
         "avoid": {
           "model": "default"
         },
-        "evidence": "User, 2026-11-14 (sound test, 60 clips): minimax-h3 made the scene sound in every case; ltx-2.5 missed wind, the background under a voice, a second speaker and the second line of a two-line clip. User, 2026-11-20: minimax-h3 for single clips too; ltx-2.5 only for a clip over 30 s (minimax-h3 makes at most 30 s). Older bench: ltx-2.5 beat default in 11 of 16 cases (2.24 vs 1.97).",
+        "evidence": "Sound test, 60 clips: minimax-h3 made the scene sound in every case; ltx-2.5 missed wind, the background under a voice, a second speaker and the second line of a two-line clip. minimax-h3 for single clips too; ltx-2.5 only for a clip over 30 s (minimax-h3 makes at most 30 s). Older bench: ltx-2.5 beat default in 11 of 16 cases (2.24 vs 1.97).",
         "tier": "free (all models named here are free-tier)"
       }
     },
@@ -500,18 +500,18 @@
       "family": "video make",
       "does": "Animates a picture into a video. 1 to 60 s. Keeps the picture's shape.",
       "type": [
-        "Bring a picture to life (C17a/b 4.0, G37 reels 3.0 to 3.3).",
-        "Continue a clip from its last frame (J50b)."
+        "Bring a picture to life (4.0, reels 3.0 to 3.3).",
+        "Continue a clip from its last frame."
       ],
       "antitype": [
         {
           "job": "A still end card",
-          "use": "make_card_clip with attach after: the clip and the card come back as one file, no join_videos (MCP-TOOLS-32)",
-          "why": "It adds motion and the card came out 2 s instead of 9 (E29b)."
+          "use": "make_card_clip with attach after: the clip and the card come back as one file, no join_videos",
+          "why": "It adds motion and the card came out 2 s instead of 9."
         }
       ],
       "limits": [
-        "The motion asked for may not happen: a push-in zoom for a quarter turn of the bottle (D18a).",
+        "The motion asked for may not happen: a push-in zoom for a quarter turn of the bottle.",
         "No shape setting: reframe_media after if a shape was asked."
       ],
       "deciding_question": "What should move, and how long?",
@@ -521,18 +521,18 @@
       "family": "image edit (redraws)",
       "does": "Enlarges a picture. Modes: pro, preserve, balanced, creative.",
       "type": [
-        "Make a sharp picture bigger (B13c 4.8)."
+        "Make a sharp picture bigger (4.8)."
       ],
       "antitype": [
         {
           "job": "Restore an old photo, keep the faces",
           "use": "test edit_image first; use mode preserve",
-          "why": "Faces were regenerated with broader smiles and different features (B13a 2.0)."
+          "why": "Faces were regenerated with broader smiles and different features (2.0)."
         }
       ],
       "limits": [
-        "Scale is a factor (2x): a 640 px long edge is not hit exactly (B13b: 480x480).",
-        "A very blurry photo is only slightly cleaner (B13b 2.0)."
+        "Scale is a factor (2x): a 640 px long edge is not hit exactly (480x480).",
+        "A very blurry photo is only slightly cleaner (2.0)."
       ],
       "deciding_question": "Bigger only, or also fixed? How big?",
       "bench": "Right tool: 11 runs, average 3.5.",
@@ -541,21 +541,21 @@
           "scale_factor": 2
         },
         "avoid": {},
-        "evidence": "Undecided. Persona bench: preserve 3.10 (20 runs) vs balanced 2.0 (2 runs), no same-case pair. B13a same case, one run each: balanced 3 (wlive1), preserve 2 (w24on, faces redrawn with broader smiles). Test both on B13a/B13b before choosing."
+        "evidence": "Undecided. Persona bench: preserve 3.10 (20 runs) vs balanced 2.0 (2 runs), no same-case pair. Same case, one run each: balanced 3, preserve 2 (faces redrawn with broader smiles). Test both before choosing."
       },
-      "test": "Test run wlive1: B13a 2 → 3 with mode preserve: clean 640 sepia enlargement, faces smoothed and slightly altered (limit confirmed). w24on B13a with preserve: 2 (faces redrawn); B13b with the planner: 4."
+      "test": "Test run: 2 → 3 with mode preserve: clean 640 sepia enlargement, faces smoothed and slightly altered (limit confirmed). Dry run with preserve: 2 (faces redrawn); another case with the planner: 4."
     },
     "generate_headshot": {
       "family": "faces",
       "does": "Makes a professional headshot from a photo of a person.",
       "type": [
-        "A professional headshot (A05b 4.0)."
+        "A professional headshot (4.0)."
       ],
       "antitype": [
         {
           "job": "A square headshot or a set background",
           "use": "edit_image, or reframe_media 1:1 after",
-          "why": "It returned 928x1152 portrait, framed to the waist, and an office background for 'plain grey' (A05a 3.0)."
+          "why": "It returned 928x1152 portrait, framed to the waist, and an office background for 'plain grey' (3.0)."
         }
       ],
       "limits": [
@@ -568,7 +568,7 @@
       "family": "image make",
       "does": "Makes a meme from a topic on a known template.",
       "type": [
-        "A meme about a topic, the template chosen by the tool (G39b 3.5)."
+        "A meme about a topic, the template chosen by the tool (3.5)."
       ],
       "antitype": [
         {
@@ -578,7 +578,7 @@
         }
       ],
       "limits": [
-        "Captions can break mid-word or overflow the panel, and drift off the topic (G39b: a weekend joke for 'Mondays')."
+        "Captions can break mid-word or overflow the panel, and drift off the topic (a weekend joke for 'Mondays')."
       ],
       "deciding_question": "The user's picture and words, or a template and a joke on a topic?",
       "bench": "Right tool: 6 runs, average 3.5."
@@ -587,33 +587,33 @@
       "family": "talking video",
       "does": "Makes a photo of a person speak given words.",
       "type": [
-        "A photo of the user saying a line (C17a/b 4.0)."
+        "A photo of the user saying a line (4.0)."
       ],
       "antitype": [
         {
           "job": "A set shape",
           "use": "reframe_media after",
-          "why": "It keeps the photo's shape: 1024x1536 for 'square' (C17a/b)."
+          "why": "It keeps the photo's shape: 1024x1536 for 'square'."
         }
       ],
       "limits": [
         "Resolution 480p or 720p.",
-        "The clip is as long as asked even when the speech is shorter: an 8 s clip with 4.5 s of speech ends with 3 s of silence (wlive2 C17a), or repeats the line's start (b1 C17a: \"Hi ev\" again at 4.9 s). Longer than the line: pad the line with silence first (mix_audio `seconds`).",
+        "The clip is as long as asked even when the speech is shorter: an 8 s clip with 4.5 s of speech ends with 3 s of silence, or repeats the line's start (\"Hi ev\" again at 4.9 s). Longer than the line: pad the line with silence first (mix_audio `seconds`).",
         "Lip movement failed in 1 of 2 test runs."
       ],
       "deciding_question": "The exact line, and the shape?",
       "bench": "Right tool: 5 runs, average 4.0.",
-      "test": "Test runs: wlive1 C17a 2 (mouth closed in the sampled frames); wlive2 C17a 4 (mouth moves with the speech, square, no captions). One bad run in two."
+      "test": "Test runs: 2 (mouth closed in the sampled frames); 4 (mouth moves with the speech, square, no captions). One bad run in two."
     },
     "create_spoken_ad_video": {
       "family": "talking video",
       "does": "Makes a short ad video of a person speaking (UGC ad). Models kling-3.0, ltx-2.5, veo3.1.",
       "type": [
-        "A talking ad from a picture and a line (C17b 4.0, H43a 4.0)."
+        "A talking ad from a picture and a line (4.0, 4.0)."
       ],
       "antitype": [],
       "limits": [
-        "Length: 5 s came back for 8 s asked (C17a/b); check the length setting."
+        "Length: 5 s came back for 8 s asked; check the length setting."
       ],
       "deciding_question": "Length, line, shape?",
       "bench": "4 runs, average 3.8."
@@ -627,8 +627,8 @@
       "antitype": [
         {
           "job": "A voice-over with no presenter, or the original footage kept as it is",
-          "use": "generate_music or a voice, then add_sound_to_video (MCP-TOOLS-29)",
-          "why": "It re-made the footage at 832x448, details changed (E28a); black clips and burned-in captions (E28c 1.7)."
+          "use": "generate_music or a voice, then add_sound_to_video",
+          "why": "It re-made the footage at 832x448, details changed; black clips and burned-in captions (1.7)."
         }
       ],
       "limits": [
@@ -639,11 +639,11 @@
     },
     "add_sound_to_video": {
       "family": "video by code",
-      "does": "Lays music and/or a voice-over on the user's video by code: the picture is kept, nothing is generated, 0 credits. Built for tool management (MCP-TOOLS-29), on the shared media_tools.add_sound.",
+      "does": "Lays music and/or a voice-over on the user's video by code: the picture is kept, nothing is generated, 0 credits. Built for tool management, on the shared media_tools.add_sound.",
       "type": [
-        "Music under the user's clip (E27a-c).",
-        "A voice-over on the user's clip, or a narration in place of its sound (E28a-c).",
-        "Music under speech in the clip, the speech kept clear (E27c, radio calls): original=keep."
+        "Music under the user's clip.",
+        "A voice-over on the user's clip, or a narration in place of its sound.",
+        "Music under speech in the clip, the speech kept clear (radio calls): original=keep."
       ],
       "antitype": [
         {
@@ -667,10 +667,10 @@
     },
     "adjust_colours": {
       "family": "image by code",
-      "does": "Changes only the colours of a picture or video by code: warmth, saturation (0 = black and white), brightness, contrast. Nothing redrawn, 0 credits. Built for tool management (MCP-TOOLS-35).",
+      "does": "Changes only the colours of a picture or video by code: warmth, saturation (0 = black and white), brightness, contrast. Nothing redrawn, 0 credits. Built for tool management.",
       "type": [
-        "Warmer or cooler (B07c, J49a).",
-        "Black and white (B10c).",
+        "Warmer or cooler.",
+        "Black and white.",
         "Brighter or more contrast."
       ],
       "antitype": [
@@ -689,15 +689,15 @@
     },
     "put_pictures_side_by_side": {
       "family": "image by code",
-      "does": "Puts 2 to 4 pictures into one (row, column, 2x2 grid), each whole: scaled to fit, never cropped, stretched or redrawn; optional exact labels. 0 credits. MCP-TOOLS-30.",
+      "does": "Puts 2 to 4 pictures into one (row, column, 2x2 grid), each whole: scaled to fit, never cropped, stretched or redrawn; optional exact labels. 0 credits.",
       "type": [
-        "Before and after (G35a).",
+        "Before and after.",
         "A comparison or a collage of the user's photos."
       ],
       "antitype": [
         {
           "job": "A made-up after picture",
-          "use": "edit_image first for the new picture, then this tool with the original and the new one (G35b)",
+          "use": "edit_image first for the new picture, then this tool with the original and the new one",
           "why": "This tool only arranges pictures that exist."
         }
       ],
@@ -710,15 +710,15 @@
     },
     "put_picture_on_video": {
       "family": "video by code",
-      "does": "Puts a picture (a logo; transparent PNG kept) on a video or picture, in a corner or the centre, sized, see-through, for all or part of a clip. Video kept exactly, 0 credits. MCP-TOOLS-31.",
+      "does": "Puts a picture (a logo; transparent PNG kept) on a video or picture, in a corner or the centre, sized, see-through, for all or part of a clip. Video kept exactly, 0 credits.",
       "type": [
-        "A logo on the user's video for the whole clip (E29a)."
+        "A logo on the user's video for the whole clip."
       ],
       "antitype": [
         {
           "job": "Text or a handle as a watermark",
           "use": "add_words_to_media",
-          "why": "Words are drawn exactly by add_words_to_media (E29c)."
+          "why": "Words are drawn exactly by add_words_to_media."
         }
       ],
       "limits": [
@@ -730,9 +730,9 @@
     },
     "make_card_clip": {
       "family": "video by code",
-      "does": "Makes a still card as a clip, with a silent sound track and the size of a given clip, so join_videos can add it. 0 credits. MCP-TOOLS-32. The card itself is generated first (generate_image or edit_image) and given as `picture`, background none (user, 2026-11-21).",
+      "does": "Makes a still card as a clip, with a silent sound track and the size of a given clip, so join_videos can add it. 0 credits. The card itself is generated first (generate_image or edit_image) and given as `picture`, background none.",
       "type": [
-        "An end card or title card attached to the user's clip in one call (attach=after or before) (E29b)."
+        "An end card or title card attached to the user's clip in one call (attach=after or before)."
       ],
       "antitype": [
         {
@@ -743,7 +743,7 @@
         {
           "job": "Drawing the card's words on a flat colour by code",
           "use": "generate_image (qwen-image-2.1, words quoted), then this tool with the picture",
-          "why": "User, 2026-11-21: every card is generated; a drawn card only when the user asks for one. A small misspelling on a generated card is kept (C1 cc1l: the code words looked worse)."
+          "why": "Every card is generated; a drawn card only when the user asks for one. A small misspelling on a generated card is kept (the code words looked worse)."
         }
       ],
       "limits": [
@@ -771,7 +771,7 @@
         "Needs both pictures."
       ],
       "deciding_question": "Is the outfit a picture or words?",
-      "bench": "Draft 2026-11-20 from the tool's inputs; no bench runs yet."
+      "bench": "Draft from the tool's inputs; no bench runs yet."
     },
     "place_person_in_scene": {
       "family": "faces",
@@ -790,7 +790,7 @@
         "resolution is required: 640px, 1k, 2k or 4k; the price grows with it (from 50 credits at 640px)."
       ],
       "deciding_question": "Is the scene a picture or words?",
-      "bench": "Draft 2026-11-20 from the tool's inputs; no bench runs yet."
+      "bench": "Draft from the tool's inputs; no bench runs yet."
     },
     "replace_character_in_video": {
       "family": "faces",
@@ -798,7 +798,7 @@
       "type": [
         "style.mode replace: the character takes the person's place.",
         "style.mode animate: the picture moves like the person in the video.",
-        "Head swap in a video: style.mode animate with a head-swapped first frame (get_first_frame, swap_head_in_photo) as the picture. The room, clothes, motion, mouth and sound stay (test hs2, 2026-11-23, wan-animate 480p, 486 credits for 10 s)."
+        "Head swap in a video: style.mode animate with a head-swapped first frame (get_first_frame, swap_head_in_photo) as the picture. The room, clothes, motion, mouth and sound stay (test, wan-animate 480p, 486 credits for 10 s)."
       ],
       "antitype": [
         {
@@ -812,7 +812,7 @@
         "With several people: selection_mode point (wan-animate, minimax-h3)."
       ],
       "deciding_question": "Replace the person, or copy the movement onto the picture?",
-      "bench": "Draft 2026-11-20 from the tool's inputs; no bench runs yet."
+      "bench": "Draft from the tool's inputs; no bench runs yet."
     },
     "translate_video": {
       "family": "change_video",
@@ -823,7 +823,7 @@
       "antitype": [
         {
           "job": "Translated subtitles",
-          "use": "none (MCP-TOOLS-33, a GAP): add_subtitles_to_video writes only the spoken language",
+          "use": "none (a GAP): add_subtitles_to_video writes only the spoken language",
           "why": "This tool changes the speech, not the text."
         }
       ],
@@ -832,7 +832,7 @@
         "720p and 1080p need a paid plan."
       ],
       "deciding_question": "Which language?",
-      "bench": "Draft 2026-11-20 from the tool's inputs; no bench runs yet."
+      "bench": "Draft from the tool's inputs; no bench runs yet."
     },
     "create_video_from_audio": {
       "family": "new_video",
@@ -851,7 +851,7 @@
         "Free plans: 15 s of output."
       ],
       "deciding_question": "The whole track or a part?",
-      "bench": "Draft 2026-11-20 from the tool's inputs; no bench runs yet."
+      "bench": "Draft from the tool's inputs; no bench runs yet."
     },
     "ai_voice_cloner_create_audio": {
       "family": "sound",
@@ -875,13 +875,13 @@
         "style.prompt up to 5000 characters; speed 0.75-1.30."
       ],
       "deciding_question": "Is the voice the user's own?",
-      "bench": "Draft 2026-11-20 from the tool's inputs; no bench runs yet."
+      "bench": "Draft from the tool's inputs; no bench runs yet."
     },
     "swap_heads_in_photo": {
       "family": "faces",
       "does": "Puts a new head (face, hair, head shape) on each of several people in one photo, each from their own picture. 10 credits per person.",
       "type": [
-        "Two or more people in a photo, each gets their own new head (b5 Y01)."
+        "Two or more people in a photo, each gets their own new head."
       ],
       "antitype": [
         {
@@ -899,7 +899,7 @@
         "Each entry: person (1 = leftmost face) and head. The tool runs face detection and waits up to 3 minutes."
       ],
       "deciding_question": "Which picture goes on which person?",
-      "bench": "Test hs2 (2026-11-23): both people became their portraits, beach kept, no seam."
+      "bench": "Test: both people became their portraits, beach kept, no seam."
     },
     "get_first_frame": {
       "family": "faces",
@@ -910,7 +910,7 @@
       "antitype": [],
       "limits": [],
       "deciding_question": "—",
-      "bench": "Test hs2 (2026-11-23)."
+      "bench": "One test run."
     }
   },
   "free_models": {

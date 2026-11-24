@@ -65,7 +65,7 @@
       "name": "medium-only",
       "strategy": "time",
       "max_seconds": 10,
-      "why": "user 2026-11-06: cut only on a change of medium (card, scene, still) or the length cap; cap cuts balanced (10 + 10)"
+      "why": "cut only on a change of medium (card, scene, still) or the length cap; cap cuts balanced (10 + 10)"
     }
   ],
   "checks": [

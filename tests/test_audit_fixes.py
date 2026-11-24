@@ -1,5 +1,5 @@
-"""Codebase audit fixes, 2026-11-20 (planner side). The user: minimax is the play, ltx-era rules off, as few clips as
-possible, split only when needed."""
+"""Codebase audit fixes (planner side): minimax is the play, ltx-era rules off, as few clips as possible, split only
+when needed."""
 import unittest
 
 from mcp_magichour import video_production as vp
