@@ -26,8 +26,14 @@ ASK, YOUR_CALL, NOT_APPLICABLE = "ask", "your_call", "n/a"
 Family = Literal["new_picture", "change_picture", "faces", "change_video", "new_video", "talking", "sound"]
 
 
+def switch(name: str, default: bool) -> bool:
+    """An on/off setting: on/1/true/yes or off/0/false/no, case and spaces ignored. Anything else keeps the default."""
+    value = os.getenv(name, "").strip().lower()
+    return True if value in ("on", "1", "true", "yes") else False if value in ("off", "0", "false", "no") else default
+
+
 def enabled() -> bool:
-    return os.getenv("MAGIC_HOUR_TOOL_PLAN", "off").strip().lower() in ("on", "1", "true")
+    return switch("MAGIC_HOUR_TOOL_PLAN", False)
 
 
 @lru_cache(maxsize=1)

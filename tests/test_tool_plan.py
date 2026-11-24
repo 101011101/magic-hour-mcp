@@ -274,6 +274,21 @@ class SwitchTests(unittest.TestCase):
         with patch.dict(os.environ, env, clear=True):
             self.assertNotIn("plan_tool_call", tool_names({}))
 
+    def test_the_switches_read_on_off_yes_no(self):
+        """MAGIC_HOUR_CONVERSATION=no kept the front on; MAGIC_HOUR_TOOL_PLAN=yes left the planner off."""
+        from mcp_magichour import conversation_front, tool_media
+        checks = (tool_plan.enabled, conversation_front.enabled, tool_media.enabled)
+        for value in ("on", " ON ", "1", "true", "yes", "Yes"):
+            with patch.dict(os.environ, {"MAGIC_HOUR_TOOL_PLAN": value, "MAGIC_HOUR_CONVERSATION": value}):
+                self.assertEqual([c() for c in checks], [True, True, True], value)
+        for value in ("off", " OFF ", "0", "false", "no", "No"):
+            with patch.dict(os.environ, {"MAGIC_HOUR_TOOL_PLAN": value, "MAGIC_HOUR_CONVERSATION": value}):
+                self.assertEqual([c() for c in checks], [False, False, False], value)
+        env = {k: v for k, v in os.environ.items() if k not in ("MAGIC_HOUR_TOOL_PLAN", "MAGIC_HOUR_CONVERSATION")}
+        for unset in ({}, {"MAGIC_HOUR_TOOL_PLAN": "maybe", "MAGIC_HOUR_CONVERSATION": "maybe"}):   # the defaults
+            with patch.dict(os.environ, {**env, **unset}, clear=True):
+                self.assertEqual([c() for c in checks], [False, True, True], unset)
+
     def test_on_registers_the_tool(self):
         self.assertIn("plan_tool_call", tool_names({"MAGIC_HOUR_TOOL_PLAN": "on"}))
 

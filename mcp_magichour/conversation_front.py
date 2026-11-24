@@ -17,7 +17,6 @@ MAGIC_HOUR_CONVERSATION=off brings back plan_request. Read-only, no credits.
 from __future__ import annotations
 
 import asyncio
-import os
 import re
 import tempfile
 from pathlib import Path
@@ -37,7 +36,7 @@ Family = Literal["new_picture", "change_picture", "faces", "change_video", "new_
 
 def enabled() -> bool:
     # On by default: with no switch set the server shipped the old plan_request.
-    return os.getenv("MAGIC_HOUR_CONVERSATION", "on").strip().lower() not in ("off", "0", "false")
+    return tool_plan.switch("MAGIC_HOUR_CONVERSATION", True)
 
 
 # Rules every family follows.

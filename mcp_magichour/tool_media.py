@@ -383,7 +383,7 @@ def _need() -> None:
 
 
 def enabled() -> bool:
-    conversation = os.getenv("MAGIC_HOUR_CONVERSATION", "on").strip().lower() not in ("off", "0", "false")   # on by default
+    conversation = tool_plan.switch("MAGIC_HOUR_CONVERSATION", True)   # on by default
     return tool_plan.enabled() or conversation
 
 
