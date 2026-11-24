@@ -28,7 +28,7 @@ from mcp.types import ToolAnnotations
 from pydantic import BaseModel, Field
 
 from . import kept_files, media_tools
-from .video_production_tool import FILMS_DIR, _api, _download, _need_ffmpeg, _read_kept, _refuse_text, _upload
+from .video_production_tool import FILMS_DIR, _api, _download, _drop_local, _need_ffmpeg, _read_kept, _refuse_text, _upload
 
 UPLOAD_MAX_BYTES = 100 * 1024 * 1024
 KINDS = {
@@ -331,6 +331,7 @@ def register_media_helpers(mcp: FastMCP) -> None:
         loud = await asyncio.to_thread(media_tools.loudness_db, film)
         base = os.getenv("MAGIC_HOUR_MCP_PUBLIC_URL", "http://127.0.0.1:8000").rstrip("/")
         url = await asyncio.to_thread(media_tools.store, film, name, FILMS_DIR, base)
+        _drop_local(film)
         return {"download_url": url, "seconds": round(measured["seconds"], 1), "width": measured["width"],
                 "height": measured["height"], "loudness_db": loud}
 

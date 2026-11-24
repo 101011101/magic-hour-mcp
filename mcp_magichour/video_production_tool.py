@@ -51,10 +51,18 @@ WORDS_MIN_MATCH = 0.8      # the share of the script's words a transcript must h
 TRANSCRIBE_URL = "https://api.openai.com/v1/audio/transcriptions"
 
 
+def _drop_local(film: Path) -> None:
+    """With BLOB_READ_WRITE_TOKEN the film is served from Blob: the local copy and its sound layers only fill /tmp."""
+    if os.getenv("BLOB_READ_WRITE_TOKEN"):
+        film.unlink(missing_ok=True)
+        shutil.rmtree(film.with_name(film.stem + ".layers"), ignore_errors=True)
+
+
 async def _transcribe(audio: Path) -> str | None:
-    """What a narration says, by Whisper, when the server has OPENAI_API_KEY. None when it cannot be checked."""
+    """What a narration says, by Whisper, when the server has OPENAI_API_KEY and MAGIC_HOUR_TRANSCRIBE_CHECK=on.
+    None when it cannot be checked. Off by default: the check sends the narration audio to OpenAI."""
     key = os.getenv("OPENAI_API_KEY")
-    if not key or not media_tools.have_ffmpeg():
+    if not key or os.getenv("MAGIC_HOUR_TRANSCRIBE_CHECK", "").lower() not in ("1", "on", "true") or not media_tools.have_ffmpeg():
         return None
     wav = audio.with_name(audio.stem + "-16k.wav")
     try:
@@ -961,6 +969,7 @@ async def join_clips(story: dict, made: dict[str, str], sound: dict[str, str] | 
     loud = await asyncio.to_thread(media_tools.loudness_db, film)
     base = os.getenv("MAGIC_HOUR_MCP_PUBLIC_URL", "http://127.0.0.1:8000").rstrip("/")
     url = await asyncio.to_thread(media_tools.store, film, name, FILMS_DIR, base)
+    _drop_local(film)
     checked, unchecked = _check_film(planned, story, measured, loud, lengths, result.get("sound") or {})
     return {"download_url": url, "seconds": round(measured["seconds"], 1), "width": measured["width"], "height": measured["height"],
             "clips": len(files), **result, "checked": checked, "unchecked": unchecked,

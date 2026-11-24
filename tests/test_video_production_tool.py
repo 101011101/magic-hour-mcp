@@ -190,7 +190,7 @@ class TranscribeTests(unittest.IsolatedAsyncioTestCase):
             return httpx.Response(200, json={"text": "東京へようこそ"})
         real = httpx.AsyncClient
         with tempfile.TemporaryDirectory() as d, \
-                patch.dict(os.environ, {"OPENAI_API_KEY": "synthetic-test-key"}), \
+                patch.dict(os.environ, {"OPENAI_API_KEY": "synthetic-test-key", "MAGIC_HOUR_TRANSCRIBE_CHECK": "on"}), \
                 patch.object(vpt.media_tools, "have_ffmpeg", lambda: True), \
                 patch.object(vpt.media_tools, "_ffmpeg", lambda args: Path(args[-1]).write_bytes(b"RIFF")), \
                 patch.object(vpt.httpx, "AsyncClient", lambda **kw: real(transport=httpx.MockTransport(answer), **kw)):
@@ -957,3 +957,36 @@ class PublicLinkTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(out.read_bytes(), b"\x00film")
             with self.assertRaises(ToolError):
                 await vpt._download("http://127.0.0.1:8000/films/../secret.mp4", self.folder / "copy2.mp4")
+
+
+class PrivacyAndDiskTests(unittest.IsolatedAsyncioTestCase):
+    async def test_the_narration_goes_to_openai_only_when_the_check_is_turned_on(self):
+        import tempfile
+        from mcp_magichour import media_tools, video_production_tool as vpt
+        narration = Path(self.enterContext(tempfile.TemporaryDirectory())) / "narration.wav"
+        media_tools._ffmpeg(["-f", "lavfi", "-i", "sine=d=0.3", str(narration)])   # a real sound, so only the switch stops it
+        sent = []
+
+        class Refused:
+            def __init__(self, *a, **k):
+                sent.append(k)
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "sk-test"}), patch.object(vpt.httpx, "AsyncClient", Refused):
+            os.environ.pop("MAGIC_HOUR_TRANSCRIBE_CHECK", None)
+            self.assertIsNone(await vpt._transcribe(narration))
+        self.assertEqual(sent, [])
+
+    async def test_a_film_stored_in_blob_leaves_no_local_copy(self):
+        import tempfile
+        from mcp_magichour import video_production_tool as vpt
+        folder = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        film, layers = folder / "f.mp4", folder / "f.layers"
+        film.write_bytes(b"film")
+        layers.mkdir()
+        (layers / "music.wav").write_bytes(b"wav")
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("BLOB_READ_WRITE_TOKEN", None)
+            vpt._drop_local(film)   # served from this folder: kept
+        self.assertTrue(film.exists() and layers.exists())
+        with patch.dict(os.environ, {"BLOB_READ_WRITE_TOKEN": "test"}):
+            vpt._drop_local(film)
+        self.assertFalse(film.exists() or layers.exists())
