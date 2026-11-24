@@ -177,6 +177,20 @@ class FlowTests(unittest.TestCase):
         err, data, _ = call(self.mcp, "final_check", {"approved": approved, "results": results})
         self.assertEqual([x["id"] for x in data["not_met"]], ["line"])
 
+    def test_quotes_and_quoted_words_in_any_script_are_checked(self):
+        # Cyrillic words used to squash to "", and "" is in every text: any quote passed and nothing had to carry the words.
+        request = self.request(WALK_ANYWAY + ' A sign says "Добро пожаловать".')
+        plan = good_plan(request)
+        plan["sheet"]["exact_words"] = {"answer": "Счастливого пути", "source": "user", "quote": "Счастливого пути"}
+        err, data, _ = call(self.mcp, "submit_plan", plan)
+        problems = " | ".join(data["problems"])
+        self.assertIn("sheet 'exact_words': the quote is not the user's words", problems)
+        self.assertIn('nothing carries the words the user named: "Добро пожаловать"', problems)
+        plan["sheet"]["exact_words"] = {"answer": "Добро пожаловать", "source": "user", "quote": "Добро пожаловать"}
+        plan["checklist"][1]["want"] += ' and a sign "Добро пожаловать"'
+        err, data, _ = call(self.mcp, "submit_plan", plan)
+        self.assertTrue(data["ok"], data)
+
     def test_ask_user(self):
         plan = good_plan(self.request())
         plan["sheet"]["look"] = {"answer": "?", "source": "ask"}

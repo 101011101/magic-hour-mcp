@@ -130,7 +130,15 @@ def hard_signals(original: str, attachments: list[str]) -> list[str]:
 
 
 def _squash(text: str) -> str:
-    return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
+    """Without case or punctuation. Letters of every script count: "Добро пожаловать" does not become ""."""
+    return re.sub(r"[\W_]+", " ", text.casefold()).strip()
+
+
+def _within(part: str, whole: str) -> bool:
+    """`part` is in `whole`, compared squashed. A part with no letters or digits ("★★★") is compared as typed: an empty
+    squashed part would match anything."""
+    squashed = _squash(part)
+    return squashed in _squash(whole) if squashed else bool(part.strip()) and part.strip() in whole
 
 
 # ---- the shapes the host fills ---------------------------------------------------------------------------------------
@@ -220,19 +228,18 @@ def register_gates(mcp: FastMCP, mode: str = MODE) -> None:
     async def submit_plan(request: str, sheet: dict[str, Answer], checklist: list[Line], steps: list[Step]) -> dict:
         data = read(request, "request")
         original, problems, ask = data["original"], [], []
-        said = _squash(original)
         for key in SHEET_REQUIRED:
             if key not in sheet:
                 problems.append(f"sheet: '{key}' is not answered ({QUESTIONS[key]})")
         for key, a in sheet.items():
-            if a.source == "user" and (not a.quote or _squash(a.quote) not in said):
+            if a.source == "user" and not _within(a.quote, original):
                 problems.append(f"sheet '{key}': the quote is not the user's words. Copy them exactly, or use 'your call' or 'ask'.")
             if a.source == "ask":
                 ask.append(QUESTIONS.get(key, key))
-        wants = " ".join(_squash(line.want) for line in checklist)
+        wants = " ".join(line.want for line in checklist)
         for item in brief_items(original, data["attachments"]):
-            value = _squash(item["value"])
-            found = value in wants or (item["kind"] == "file" and re.search(r"\b(attached|photo|picture|image|clip|video|logo)\b", wants))
+            found = _within(item["value"], wants) or (
+                item["kind"] == "file" and re.search(r"\b(attached|photo|picture|image|clip|video|logo)\b", _squash(wants)))
             if not found:
                 problems.append(f"checklist: nothing carries the {item['kind']} the user named: \"{item['value']}\"")
         ids = {line.id for line in checklist}
