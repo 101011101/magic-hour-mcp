@@ -67,7 +67,21 @@ def _quarter_turn(rotation) -> bool:
 def probe(file: Path) -> dict:
     """Length, size and whether there is a sound track. With ffprobe when it exists, else from ffmpeg's own report.
     The size is the size shown: a phone video stored 640x360 with a rotation of 90 is 360x640, as ffmpeg turns
-    its frames before any filter. Album art in a sound file (an "attached pic") is not a picture track."""
+    its frames before any filter. Album art in a sound file (an "attached pic") is not a picture track.
+    A file whose header has no length (a browser recording) is read through once to find it; a picture keeps 0 s."""
+    info = _probe_header(file)
+    if not info["seconds"] and (info["width"] or info["audio"]):
+        report = _ffmpeg(["-i", str(file), "-c", "copy", "-f", "null", "-"], capture=True)
+        played = re.findall(r"time=(\d+):(\d+):(\d+\.?\d*)", report)
+        frames = re.findall(r"frame=\s*(\d+)", report)
+        if played and (info["audio"] or (frames and int(frames[-1]) > 1)):
+            h, m, sec = played[-1]
+            info["seconds"] = int(h) * 3600 + int(m) * 60 + float(sec)
+    return info
+
+
+def _probe_header(file: Path) -> dict:
+    """probe from the file's header only."""
     if shutil.which("ffprobe"):
         raw = _run(["ffprobe", "-v", "error", "-show_entries",
                     "format=duration:stream=codec_type,width,height:stream_side_data=rotation:stream_tags=rotate"

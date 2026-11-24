@@ -113,6 +113,47 @@ class AlbumArtTests(MediaTest):
                     self.assertAlmostEqual(m.probe(joined)["seconds"], 2.0, delta=0.15)
 
 
+class NoDurationTests(MediaTest):
+    """A browser recording written as a stream: its header has no duration ("Duration: N/A")."""
+
+    def recording(self):
+        webm = self.dir / "rec.webm"
+        with open(webm, "wb") as f:
+            subprocess.run([m.ffmpeg_exe(), "-v", "error", "-f", "lavfi", "-i", "testsrc=s=160x90:r=24:d=2", "-f", "lavfi", "-i", "sine=d=2",
+                            "-c:v", "libvpx", "-c:a", "libopus", "-shortest", "-f", "webm", "-"], stdout=f, check=True)
+        if "Duration: N/A" not in m._ffmpeg(["-i", str(webm)], capture=True):
+            self.skipTest("this ffmpeg wrote a duration")
+        return webm
+
+    def frame(self, video, at, name):
+        from PIL import Image
+        self.ff("-ss", str(at), "-i", str(video), "-frames:v", "1", str(self.dir / name))
+        return Image.open(self.dir / name).convert("RGB")
+
+    def test_the_length_is_read_from_the_file_itself(self):
+        webm = self.recording()
+        for name, path in probe_paths():
+            with self.subTest(path=name), path():
+                self.assertAlmostEqual(m.probe(webm)["seconds"], 2.0, delta=0.1)
+                part = m.trim(webm, self.dir / "part.mp4", 0.5, 1.5)
+                self.assertAlmostEqual(m.probe(part)["seconds"], 1.0, delta=0.1)
+
+    def test_words_with_no_end_stay_to_the_end(self):
+        webm = self.recording()
+        with without_ffprobe():
+            m.draw_words(webm, [{"text": "SALE", "place": "middle", "size": "large"}], self.dir / "words.mp4", False)
+        drawn, plain = self.frame(self.dir / "words.mp4", 1.7, "a.png"), self.frame(webm, 1.7, "b.png")
+        changed = sum(1 for p, q in zip(drawn.getdata(), plain.getdata()) if sum(abs(x - y) for x, y in zip(p, q)) > 60)
+        self.assertGreater(changed, 100)
+
+    def test_a_picture_still_has_no_length(self):
+        from PIL import Image
+        Image.new("RGB", (40, 30), "red").save(self.dir / "p.png")
+        for name, path in probe_paths():
+            with self.subTest(path=name), path():
+                self.assertEqual(m.probe(self.dir / "p.png")["seconds"], 0)
+
+
 class LimitTests(MediaTest):
     def test_an_ffmpeg_run_past_the_time_limit_is_stopped_with_a_clear_error(self):
         slow = ["-re", "-f", "lavfi", "-i", "anullsrc=r=8000:cl=mono", "-t", "3", "-f", "null", "-"]   # 3 s at real speed
