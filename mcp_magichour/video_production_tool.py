@@ -59,9 +59,9 @@ async def _transcribe(audio: Path) -> str | None:
     wav = audio.with_name(audio.stem + "-16k.wav")
     try:
         await asyncio.to_thread(media_tools._ffmpeg, ["-i", str(audio), "-vn", "-ac", "1", "-ar", "16000", str(wav)])
-        async with httpx.AsyncClient(timeout=httpx.Timeout(120.0)) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(120.0)) as client:   # no language: a narration may be in any
             response = await client.post(TRANSCRIBE_URL, headers={"Authorization": f"Bearer {key}"},
-                                         data={"model": "whisper-1", "language": "en"}, files={"file": (wav.name, wav.read_bytes(), "audio/wav")})
+                                         data={"model": "whisper-1"}, files={"file": (wav.name, wav.read_bytes(), "audio/wav")})
             response.raise_for_status()
             return response.json().get("text", "")
     except Exception:   # the check is extra: a failed check leaves the words to the ear, it does not fail the join

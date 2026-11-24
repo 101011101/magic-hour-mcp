@@ -441,6 +441,18 @@ class NarratorVoiceTests(unittest.TestCase):
         self.assertIn("cv-0001", " ".join(validate_story({**s, "voice": "Ashley"})))
 
 
+class WordMatchTests(unittest.TestCase):
+    def test_a_script_in_another_alphabet_is_compared_word_by_word(self):
+        self.assertEqual(vp.word_match("Привет, мир. Как дела?", "Привет, мир! Как дела?"), 1.0)
+        self.assertLess(vp.word_match("Добрый вечер всем", "Привет, мир"), 0.5)
+        self.assertEqual(vp.word_match("東京へようこそ", "東京へ、ようこそ。"), 1.0)   # no spaces: each letter is a word
+        self.assertEqual(vp.word_match("東京へ よこそ", "東京へようこそ"), 0.86)
+        self.assertEqual(vp.word_match("It starts soft. One spray is enough.", "It starts soft. One spray is enough."), 1.0)
+
+    def test_a_script_with_no_words_is_not_checked(self):
+        self.assertIsNone(vp.word_match("hello", "... !"))
+
+
 class ColourCodeTests(unittest.TestCase):
     def test_a_colour_code_in_a_subjects_words_is_asked_about_and_swapped(self):
         s = {"title": "Bottle", "aspect": "16:9", "setting": "A white studio.",

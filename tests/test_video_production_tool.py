@@ -113,6 +113,27 @@ class VideoProductionToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.requests, [])
 
 
+class TranscribeTests(unittest.IsolatedAsyncioTestCase):
+    async def test_the_word_check_does_not_force_english(self):
+        # a narration may be in any language; a forced "en" turned a Japanese narration into other words
+        import tempfile
+        from mcp_magichour import video_production_tool as vpt
+        sent = []
+
+        def answer(request):
+            sent.append(request.content)
+            return httpx.Response(200, json={"text": "東京へようこそ"})
+        real = httpx.AsyncClient
+        with tempfile.TemporaryDirectory() as d, \
+                patch.dict(os.environ, {"OPENAI_API_KEY": "synthetic-test-key"}), \
+                patch.object(vpt.media_tools, "have_ffmpeg", lambda: True), \
+                patch.object(vpt.media_tools, "_ffmpeg", lambda args: Path(args[-1]).write_bytes(b"RIFF")), \
+                patch.object(vpt.httpx, "AsyncClient", lambda **kw: real(transport=httpx.MockTransport(answer), **kw)):
+            heard = await vpt._transcribe(Path(d) / "narration.mp3")
+        self.assertEqual(heard, "東京へようこそ")
+        self.assertNotIn(b'name="language"', sent[0])
+
+
 class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
     """Make and join the clips of a plan against an in-memory API. The file steps (ffmpeg) are replaced."""
 

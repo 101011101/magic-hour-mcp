@@ -93,10 +93,19 @@ VOICE_OVER_MODES = ("video", "cloner")
 CLONER_CREDITS_PER_10_LETTERS = 1   # 0.1 credits a character, rounded up
 
 
-def word_match(heard: str, script: str) -> float:
-    """The share of the script's words that a transcript has, in order (longest common subsequence). 1.0 = all."""
-    a = re.findall(r"[a-z0-9']+", script.lower().replace("\u2019", "'"))
-    b = re.findall(r"[a-z0-9']+", heard.lower().replace("\u2019", "'"))
+# Words in any alphabet (in testing, a Russian or Japanese script had no a-z words and failed every check).
+# A script written with no spaces (Chinese, Japanese, Thai) counts each letter as a word.
+NO_SPACE = "\u0e00-\u0e7f\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff"
+WORD = re.compile(rf"[{NO_SPACE}]|(?:[^\W{NO_SPACE}]|')+")
+
+
+def word_match(heard: str, script: str) -> float | None:
+    """The share of the script's words that a transcript has, in order (longest common subsequence). 1.0 = all.
+    None when the script has no words to compare."""
+    a = WORD.findall(script.casefold().replace("\u2019", "'"))
+    b = WORD.findall(heard.casefold().replace("\u2019", "'"))
+    if not a:
+        return None
     row = [0] * (len(b) + 1)
     for x in a:
         prev = 0
