@@ -1340,6 +1340,9 @@ def apply_answers(story: dict, answers: dict[str, str]) -> tuple[dict, list[str]
                 before = beats[int(num) - 2]
                 before["seconds"] += beat["seconds"]
                 before["exact_words"] = before.get("exact_words", []) + beat.get("exact_words", [])
+                for field in ("says", "spoken", "sounds", "in_scene_words"):   # what is heard or seen on the card stays
+                    if beat.get(field):
+                        before[field] = before.get(field, []) + beat[field]
                 before["text"] = before["text"].rstrip() + " It ends on the finished picture, held centred and still."
                 drops.append(int(num) - 1)
         elif kind == "together":

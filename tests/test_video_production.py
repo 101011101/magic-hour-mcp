@@ -441,6 +441,31 @@ class NarratorVoiceTests(unittest.TestCase):
         self.assertIn("cv-0001", " ".join(validate_story({**s, "voice": "Ashley"})))
 
 
+LOGO = "https://example.com/logo.png"
+
+
+def logo_reveal(reveal_seconds=6, card_seconds=3, **card):
+    """A logo that forms from its picture, then a card that holds the same picture (the plan merges it)."""
+    return {"title": "Acme", "aspect": "16:9", "setting": "A white studio.", "narrator": "calm", "captions": True,
+            "subjects": [{"id": "logo", "role": "product", "words": "the Acme logo, a blue triangle", "picture": LOGO}],
+            "beats": [{"seconds": reveal_seconds, "text": "The Acme logo forms from blue light.", "subjects": ["logo"],
+                       "says": ["Meet Acme."], "clip": 1},
+                      {"seconds": card_seconds, "kind": "card", "text": "The logo held still on white.", "picture": LOGO,
+                       "clip": 2, **card}]}
+
+
+class HeldCardMergeTests(unittest.TestCase):
+    def test_a_merged_card_keeps_its_voice_over_sounds_and_words(self):
+        s = logo_reveal(says=["Built to last."], sounds=["a soft chime"], in_scene_words=["ACME"], spoken=["Acme!"])
+        answered, problems = vp.apply_answers(s, {"held-2": "merge"})
+        self.assertEqual(problems, [])
+        beat = answered["beats"][0]
+        self.assertEqual([beat.get(k) for k in ("says", "sounds", "in_scene_words", "spoken")],
+                         [["Meet Acme.", "Built to last."], ["a soft chime"], ["ACME"], ["Acme!"]])
+        voice = next(line for line in plan(answered, "manual", cuts=[])["checklist"] if line["id"] == "voice")
+        self.assertIn("Meet Acme. Built to last.", voice["want"])
+
+
 class WordMatchTests(unittest.TestCase):
     def test_a_script_in_another_alphabet_is_compared_word_by_word(self):
         self.assertEqual(vp.word_match("Привет, мир. Как дела?", "Привет, мир! Как дела?"), 1.0)
