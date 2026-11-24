@@ -1150,6 +1150,7 @@ def questions(story: dict, planned: dict) -> list[dict]:
                     "options": {"split": "Give beat {0} a clip of its own.".format(n), "keep": "Keep the clip. The line may not be said."},
                     "recommend": "split",
                 })
+    joined: list[dict] = []   # the clip of the beat before, with the joins recommended so far (they add up)
     for n, beat in enumerate(beats, start=1):
         before = beats[n - 2] if n > 1 else None
         if _held_after_reveal(story, beat, before):
@@ -1171,10 +1172,11 @@ def questions(story: dict, planned: dict) -> list[dict]:
                 and (link == "continues" or (link == "event" and shared))
                 and beat.get("kind", "scene") == "scene" and before.get("kind", "scene") == "scene" and not before.get("source")
                 and not beat.get("together_route")):   # the user's own clip is never generated, so it cannot be joined
-            group = [b for b in beats if b.get("clip") == before["clip"]] + [beat]
+            group = (joined if joined and joined[-1] is before else [b for b in beats if b.get("clip") == before["clip"]]) + [beat]
             together = sum(b["seconds"] for b in group)
             # a line the host split off on an ltx-2.5 clip (line-<n>) stays split
             if together <= clip_limit(story, group) and not any(b.get("spoken_route") == "split" for b in group):
+                joined = group
                 why = (f"Beat {n} continues the same shot as beat {n - 1}, but they are in different clips. A cut in the "
                        "middle of one motion shows as a jump.") if link == "continues" else (
                        f"Beat {n} has the same place and person as beat {n - 1}, but they are in different clips. The same "
@@ -1279,7 +1281,9 @@ def apply_answers(story: dict, answers: dict[str, str]) -> tuple[dict, list[str]
     groups = [b.get("clip") for b in beats]   # the host's grouping, kept while beats are added or split off
     inserts: list[tuple[int, dict]] = []
     drops: list[int] = []   # beats removed by an answer (index), after the answers are read
-    for key, choice in answers.items():
+    # The joins go last, in beat order: each puts a beat in the clip that the beat before is in by then.
+    joins_last = lambda item: int(item[0].split("-")[1]) if re.fullmatch(r"together-\d+", item[0]) else 0
+    for key, choice in sorted(answers.items(), key=joins_last):
         kind, _, num = key.partition("-")
         if key == "colour-codes":
             if choice == "words":

@@ -477,6 +477,31 @@ class HeldCardMergeTests(unittest.TestCase):
         self.assertEqual(vp.held_merges(s, "person", 15), {"held-2": "merge"})
 
 
+def river_walk(seconds, picture=None):
+    """Three beats of one walk, each in a clip of its own: each later beat continues the one before."""
+    maya = {"id": "maya", "role": "person", "words": "Maya, a woman with a red coat", **({"picture": picture} if picture else {})}
+    texts = ["Maya walks along the river.", "Maya keeps walking.", "Maya walks on further."]
+    return {"title": "River", "aspect": "16:9", "setting": "A river path at dusk.", "subjects": [maya],
+            "beats": [{"seconds": seconds, "text": t, "subjects": ["maya"], "place": "river", "clip": n,
+                       **({"link": "continues"} if n > 1 else {})} for n, t in enumerate(texts, start=1)]}
+
+
+class TogetherTests(unittest.TestCase):
+    def test_joins_give_the_same_clips_in_any_answer_order(self):
+        for order in (["together-2", "together-3"], ["together-3", "together-2"]):
+            with self.subTest(order):
+                answered, problems = vp.apply_answers(river_walk(3), {k: "join" for k in order})
+                self.assertEqual(problems, [])
+                self.assertEqual([b["clip"] for b in answered["beats"]], [1, 1, 1])
+
+    def test_a_join_is_asked_only_while_the_joined_clip_fits(self):
+        s = river_walk(12, picture="https://example.com/maya.jpg")   # 36 s in all; minimax-h3 makes 30 s
+        asked = [q for q in vp.questions(s, plan(s, "manual", cuts=[2, 3])) if q["id"].startswith("together")]
+        self.assertEqual([q["id"] for q in asked], ["together-2"])
+        answered, _ = vp.apply_answers(s, {q["id"]: q["recommend"] for q in asked})
+        self.assertTrue(plan(answered, "manual", cuts=vp.host_cuts(answered))["ok"])
+
+
 class WordMatchTests(unittest.TestCase):
     def test_a_script_in_another_alphabet_is_compared_word_by_word(self):
         self.assertEqual(vp.word_match("Привет, мир. Как дела?", "Привет, мир! Как дела?"), 1.0)
