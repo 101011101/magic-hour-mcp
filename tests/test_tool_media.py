@@ -320,6 +320,17 @@ class HeadSwapPhotoTests(unittest.TestCase):
         photo = Image.effect_noise((640, 384), 80).convert("RGB")
         self.assertEqual(locate_face(photo, photo.crop((310, 80, 490, 308))), (310, 80, 180, 228))
 
+    def test_a_small_cut_out_is_pasted_back_without_an_error(self):
+        """The faded edge was 12 px on each side: a cut-out under 25 px raised 'x1 must be greater than or equal to x0'."""
+        from PIL import Image
+        from mcp_magichour.tool_media import cut_box, put_head_back
+        photo = Image.effect_noise((400, 300), 60).convert("RGB")
+        face = (200, 150, 9, 11)
+        box = cut_box(face, photo.size)
+        new = Image.new("RGB", (box[2] - box[0], box[3] - box[1]), (0, 255, 0))
+        pasted = put_head_back(photo, new, box, 0, [face])
+        self.assertEqual(pasted.size, photo.size)
+
     def test_tool_is_listed_with_person_places(self):
         async def tools():
             async with Client(create_mcp()) as client:
@@ -455,6 +466,16 @@ class SwapHeadsToolTests(unittest.TestCase):
         self.assertGreater(change_in(before, after, self.boxes[0]), 50)
         self.assertGreater(change_in(before, after, self.boxes[1]), 50)
         self.assertEqual(change_in(before, after, self.boxes[2]), 0)
+
+    def test_a_face_too_small_to_swap_is_refused_before_any_charge(self):
+        """A 9x11 px face crashed after the person before it was charged."""
+        boxes = [(60, 80, 90, 110), (300, 150, 9, 11)]
+        group_photo((640, 384), boxes).save(self.dir / "small.png")
+        api = FakeMagicHour(boxes)
+        error, text = api.swap(self.dir / "small.png", [{"person": 1, "head": "https://h/a.png"}, {"person": 2, "head": "https://h/b.png"}])
+        self.assertTrue(error)
+        self.assertIn("Nothing was charged", text)
+        self.assertEqual(api.charged, 0)
 
     def test_a_phone_photo_turned_by_its_exif_tag_stays_upright(self):
         """A phone JPEG with Orientation 6 was sent sideways to face detection and came back sideways."""

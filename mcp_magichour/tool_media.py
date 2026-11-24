@@ -232,6 +232,8 @@ def card_clip(out: Path, seconds: float, words: list[str] | None = None, backgro
 # So each person is cut out, head swapped alone, and only the new head is put back.
 
 HEAD_SWAP_WAIT_SECONDS = 180
+EDGE = 12   # px over which a pasted head fades out at a cut-out's inner edge
+MIN_FACE = 2 * EDGE + 1   # px: a smaller face has no room for that fade, so it is refused before any charge
 
 
 def _diff_score(big, small, x: int, y: int) -> float:
@@ -356,10 +358,10 @@ def put_head_back(base, new, box: tuple, i: int, faces: list, keep=None, rivals:
     # the face area is pasted whole: skin on skin changes little, and holes there let the old fringe show
     changed = ImageChops.lighter(changed, _oval(faces[i], base.size).crop(box))
     changed = changed.filter(ImageFilter.MaxFilter(15)).filter(ImageFilter.GaussianBlur(6))
-    e = 12
+    ex, ey = min(EDGE, (cut.width - 1) // 2), min(EDGE, (cut.height - 1) // 2)   # a small cut-out has a narrower fade
     edge = Image.new("L", cut.size, 0)
-    ImageDraw.Draw(edge).rectangle((0 if x0 == 0 else e, 0 if y0 == 0 else e, cut.width - 1 - (0 if x1 == base.width else e),
-                                    cut.height - 1 - (0 if y1 == base.height else e)), fill=255)
+    ImageDraw.Draw(edge).rectangle((0 if x0 == 0 else ex, 0 if y0 == 0 else ey, cut.width - 1 - (0 if x1 == base.width else ex),
+                                    cut.height - 1 - (0 if y1 == base.height else ey)), fill=255)
     mask = ImageChops.multiply(changed, edge.filter(ImageFilter.GaussianBlur(6)))
     if rivals:   # faces not pasted yet: each keeps the pixels nearer to it
         mask = ImageChops.multiply(mask, _own(0, [faces[i]] + rivals, box))
@@ -533,6 +535,10 @@ def register_tool_media(mcp: FastMCP) -> None:
                 if not 1 <= n <= len(found):
                     raise ToolError(f"person {n}: the photo has {len(found)} faces (1 = leftmost). Nothing was charged.")
                 faces.append(found[n - 1])
+            for s, (_, _, w, h) in zip(swaps, faces):
+                if min(w, h) < MIN_FACE:
+                    raise ToolError(f"person {s.get('person') or s.get('face')}: the face is {w}x{h} px; a head swap here "
+                                    f"needs a face at least {MIN_FACE} px wide and high. Nothing was charged.")
             credits, done = 0, []
             # people in the photo who get no new head keep their own area; each pasted head is kept from later pastes
             keep = Image.new("L", photo.size, 0)
