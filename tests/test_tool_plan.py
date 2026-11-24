@@ -289,6 +289,27 @@ class SwitchTests(unittest.TestCase):
             with patch.dict(os.environ, {**env, **unset}, clear=True):
                 self.assertEqual([c() for c in checks], [False, True, True], unset)
 
+    def test_a_tool_is_named_only_when_it_is_listed(self):
+        """With the front off, swap_head_in_photo sent hosts to swap_heads_in_photo and the sheets sent films to
+        plan_conversation: neither was listed."""
+        async def described(env):
+            with patch.dict(os.environ, env):
+                server = create_mcp()
+            async with Client(server) as client:
+                return {t.name: t.description for t in await client.list_tools()}
+        off = asyncio.run(described({"MAGIC_HOUR_CONVERSATION": "off", "MAGIC_HOUR_TOOL_PLAN": "off"}))
+        self.assertNotIn("swap_heads_in_photo", off)
+        self.assertNotIn("swap_heads_in_photo", off["swap_head_in_photo"])
+        on = asyncio.run(described({"MAGIC_HOUR_CONVERSATION": "on", "MAGIC_HOUR_TOOL_PLAN": "off"}))
+        self.assertIn("swap_heads_in_photo", on["swap_head_in_photo"])
+        for front, planner in (("off", "plan_request"), ("on", "plan_conversation")):
+            with patch.dict(os.environ, {"MAGIC_HOUR_CONVERSATION": front}):
+                for out in (tool_plan.plan("sound", "a music bed", None), tool_plan.plan("sound", "a music bed", {"on_its_own": "on its own"})):
+                    film = next(r for r in out["rules"] if "film of several shots" in r)
+                    self.assertIn(planner, film)
+                    if front == "off":
+                        self.assertNotIn("plan_conversation", film)
+
     def test_on_registers_the_tool(self):
         self.assertIn("plan_tool_call", tool_names({"MAGIC_HOUR_TOOL_PLAN": "on"}))
 

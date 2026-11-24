@@ -30,6 +30,10 @@ PROJECT_CONTENT_BLOCK_GUIDANCE = (
     "retry or reword the blocked request."
 )
 
+# Named only when tool_media registers swap_heads_in_photo (see _apply_operation_policy).
+HEADS_IN_PHOTO = (" It has no person choice: for several people in one photo, each with their own new head, use "
+                  "swap_heads_in_photo.")
+
 # MCP-facing metadata is keyed by the canonical API route. The HTTP contract
 # and synced OpenAPI source remain unchanged.
 API_TOOL_METADATA = {
@@ -313,8 +317,7 @@ API_TOOL_METADATA = {
         "swap_head_in_photo",
         "Swap head in photo",
         "Swaps a head from a supplied image onto a supplied body image. Costs 10 credits; returns "
-        "a project id for wait_for_image_project. It has no person choice: for several people in one photo, each with "
-        "their own new head, use swap_heads_in_photo.",
+        "a project id for wait_for_image_project." + HEADS_IN_PHOTO,
     ),
     ("POST", "/v1/image-background-remover"): (
         "remove_image_background",
@@ -577,6 +580,11 @@ def _apply_operation_policy(*, path: str, method: str, operation: dict[str, Any]
     metadata = API_TOOL_METADATA.get((method, path))
     if metadata:
         operation["operationId"], operation["summary"], operation["description"] = metadata
+        if (method, path) == ("POST", "/v1/head-swap"):
+            from .tool_media import enabled as tool_media_on   # at call time: tool_media imports the server's helpers
+
+            if not tool_media_on():   # swap_heads_in_photo is not listed: do not send hosts to it
+                operation["description"] = operation["description"].replace(HEADS_IN_PHOTO, "")
 
     properties = (
         operation.get("requestBody", {}).get("content", {}).get("application/json", {})

@@ -46,6 +46,17 @@ def notes() -> dict:
     return json.loads((HERE / "tool_notes.json").read_text())
 
 
+# With the conversation front off, plan_conversation is not listed: the film rule names plan_request.
+FILM_RULE_FRONT_OFF = ("A request for a film of several shots or scenes goes to plan_request (then plan_video_production), "
+                       "not these sheets.")
+
+
+def rules() -> list[str]:
+    if switch("MAGIC_HOUR_CONVERSATION", True):
+        return sheets()["rules"]
+    return [FILM_RULE_FRONT_OFF if "plan_conversation" in r else r for r in sheets()["rules"]]
+
+
 def host_only(row: dict) -> bool:
     """A row the host answers itself (from the files, or a rule): never put to the user as a question."""
     return row["ask"].startswith("(")
@@ -86,7 +97,7 @@ def _sheet_view(family: str) -> dict:
         "is": f["is"],
         "rows": [{"id": r["id"], "kind": r["kind"], "applies": r.get("applies", "always"), "ask": r["ask"],
                   "read_from": r["read_from"], "options": options(r), "default": r["default"]} for r in f["rows"]],
-        "rules": sheets()["rules"],
+        "rules": rules(),
     }
 
 
@@ -184,7 +195,7 @@ def plan(family: str, request: str, answers: dict[str, str] | None, questions_as
             or ("GAP" in rows[d["id"]]["why"] and d["instruction"] != "Stop.")]
     return {"ready": True, "stage": "plan", "family": family, "request": request, "decisions": decisions,
             "settings": settings, "free_models": notes().get("free_models", {}), "tools": tool_notes,
-            "gaps": gaps, "rules": sheets()["rules"],
+            "gaps": gaps, "rules": rules(),
             "next": ("Call the tools in the order the decisions give, with `settings` (free-tier models only) and the "
                      "user's details word for word. Check each tool's `antitype` and `limits` before calling it. "
                      + ("For each row in `gaps`, tell the user plainly what cannot be done and offer the nearest option."
