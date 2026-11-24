@@ -550,9 +550,10 @@ def register_tool_media(mcp: FastMCP) -> None:
             source, is_picture = await _fetch_media(picture, f, ("image",))
             if not is_picture:
                 raise ToolError("`picture` is not a picture. For a video, see swap_face_in_video.")
-            photo = ImageOps.exif_transpose(Image.open(source))   # a phone photo upright, as it is shown
-            alpha = photo.convert("RGBA").getchannel("A") if _see_through(photo) else None
-            photo = photo.convert("RGB")
+            def opened():   # a phone photo upright, as it is shown; in a thread: a large photo took seconds
+                photo = ImageOps.exif_transpose(Image.open(source))
+                return photo.convert("RGB"), photo.convert("RGBA").getchannel("A") if _see_through(photo) else None
+            photo, alpha = await asyncio.to_thread(opened)
             heads = []   # every head is checked before the first charge: a wrong project id failed after others were paid for
             for s in swaps:
                 try:
@@ -562,7 +563,7 @@ def register_tool_media(mcp: FastMCP) -> None:
             found = []
             if any(not s.get("face") for s in swaps):
                 photo_file = f / "photo.png"
-                photo.save(photo_file)
+                await asyncio.to_thread(photo.save, photo_file)
                 crops = await _detected_faces(await _upload(photo_file), f)
                 found = sorted([await asyncio.to_thread(locate_face, photo, Image.open(c).convert("RGB")) for c in crops])
                 if len(set(found)) < len(found):   # two crops placed on one face: the person numbers would be wrong
@@ -596,14 +597,14 @@ def register_tool_media(mcp: FastMCP) -> None:
                 job = {}
                 try:
                     cut_file = f / f"cut{i}.png"
-                    cut, margins = padded(photo.crop(box), box, photo.size)
-                    cut.save(cut_file)
+                    cut, margins = await asyncio.to_thread(padded, photo.crop(box), box, photo.size)
+                    await asyncio.to_thread(cut.save, cut_file)
                     body = await _upload(cut_file)
                     job = await _api("POST", "/v1/head-swap", {"name": f"{name or 'Head swap'} · person {i + 1}",
                                                                "assets": {"body_file_path": body, "head_file_path": heads[i]}})
                     credits += job.get("credits_charged") or 0
-                    new = unpadded(Image.open(await _download(await _image_url(job["id"]), f / f"swapped{i}.png")), margins,
-                                   (box[2] - box[0], box[3] - box[1]))
+                    swapped = await _download(await _image_url(job["id"]), f / f"swapped{i}.png")
+                    new = await asyncio.to_thread(lambda: unpadded(Image.open(swapped), margins, (box[2] - box[0], box[3] - box[1])))
                     pasted = await asyncio.to_thread(put_head_back, photo, new, box, i, faces, keep, faces[i + 1:] + others)
                 except Exception as error:
                     if not done:
@@ -617,7 +618,7 @@ def register_tool_media(mcp: FastMCP) -> None:
             out = f / "heads-swapped.png"
             if alpha:   # the see-through parts stay see-through (they came back black)
                 photo.putalpha(alpha)
-            photo.save(out)
+            await asyncio.to_thread(photo.save, out)
             result = {**await _deliver(out, True), "credits_charged": credits, "people": done}
             if failed:
                 result |= {"failed": failed, "not_tried": [_who(s) for s in swaps[len(done) + 1:]]}
