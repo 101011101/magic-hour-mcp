@@ -35,6 +35,7 @@ def have_ffmpeg() -> bool:
 
 
 FFMPEG_TIMEOUT = 600   # seconds; an ffmpeg run still going after this is stopped (one call cannot run for ever)
+EVEN_SIZE = "scale=trunc(iw/2)*2:trunc(ih/2)*2"   # 4:2:0 H.264 needs an even width and height (a 321x241 video failed)
 
 
 def _run(command: list, **options) -> subprocess.CompletedProcess:
@@ -271,7 +272,7 @@ def fit_length(file: Path, seconds: float, how: str, out: Path) -> Path:
     start = max(0.0, length - seconds * speed)
     video = f"setpts=(PTS-STARTPTS)/{speed:.5f}" if speed > 1 else "setpts=PTS-STARTPTS"
     sound = (["-af", f"asetpts=PTS-STARTPTS,atempo={speed:.5f}"] if speed > 1 else []) if info["audio"] else ["-an"]
-    _ffmpeg(["-ss", f"{start:.3f}", "-i", str(file), "-vf", video, *sound, "-t", f"{seconds:.3f}",
+    _ffmpeg(["-ss", f"{start:.3f}", "-i", str(file), "-vf", f"{video},{EVEN_SIZE}", *sound, "-t", f"{seconds:.3f}",
              "-c:v", "libx264", "-crf", "18", "-c:a", "aac", "-ar", "48000", str(out)])
     return out
 
@@ -412,7 +413,7 @@ def trim(source: Path, out: Path, start: float = 0.0, end: float | None = None) 
         codec = {".wav": ["-c:a", "pcm_s16le"], ".mp3": ["-c:a", "libmp3lame", "-q:a", "2"]}.get(out.suffix.lower(), ["-c:a", "aac"])
         _ffmpeg(["-ss", f"{start:.3f}", "-i", str(source), "-t", f"{end - start:.3f}", "-vn", *codec, str(out)])
     else:
-        _ffmpeg(["-ss", f"{start:.3f}", "-i", str(source), "-t", f"{end - start:.3f}", "-c:v", "libx264", "-crf", "18",
+        _ffmpeg(["-ss", f"{start:.3f}", "-i", str(source), "-t", f"{end - start:.3f}", "-vf", EVEN_SIZE, "-c:v", "libx264", "-crf", "18",
                  "-pix_fmt", "yuv420p", "-c:a", "aac", str(out)])
     return out
 
@@ -661,7 +662,7 @@ def fit_parts(parts: list[dict], seconds: float) -> dict:
 def hold_end(film: Path, seconds: float, out: Path) -> Path:
     """The film with its last frame held `seconds` longer (its sound padded with silence)."""
     has_audio = probe(film)["audio"]
-    _ffmpeg(["-i", str(film), "-vf", f"tpad=stop_mode=clone:stop_duration={seconds:.2f}",
+    _ffmpeg(["-i", str(film), "-vf", f"tpad=stop_mode=clone:stop_duration={seconds:.2f},{EVEN_SIZE}",
              *(["-af", f"apad=pad_dur={seconds:.2f}"] if has_audio else []),
              "-c:v", "libx264", "-pix_fmt", "yuv420p", *(["-c:a", "aac"] if has_audio else []), str(out)])
     return out
@@ -1092,6 +1093,8 @@ def draw_captions(film: Path, timed: list[dict], out: Path) -> Path:
         inputs += ["-loop", "1", "-i", str(pngs[-1])]
         chain.append(f"[{last}][{i + 1}:v]overlay=shortest=1:enable='between(t,{line['start']:.2f},{line['end']:.2f})'[v{i}]")
         last = f"v{i}"
+    chain.append(f"[{last}]{EVEN_SIZE},format=yuv420p[even]")
+    last = "even"
     _ffmpeg([*inputs, "-filter_complex", ";".join(chain), "-map", f"[{last}]", "-map", "0:a?",
                            "-c:v", "libx264", "-crf", "18", "-c:a", "copy", str(out)])
     for png in pngs:

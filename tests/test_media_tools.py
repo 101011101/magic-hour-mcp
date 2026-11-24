@@ -192,6 +192,20 @@ class JoinSoundTests(MediaTest):
         self.assertAlmostEqual(heard[1][0], 2.0, delta=0.1)   # the second clip's sound starts with its picture
 
 
+class OddSizeTests(MediaTest):
+    def test_a_video_of_an_odd_size_is_trimmed_fitted_held_and_worded(self):
+        odd = self.dir / "odd.webm"   # a browser recording can have an odd size; H.264 4:2:0 cannot
+        self.ff("-f", "lavfi", "-i", "testsrc=s=161x91:r=24:d=1", "-f", "lavfi", "-i", "sine=d=1", "-c:v", "libvpx", "-c:a", "libopus", str(odd))
+        made = {"trim": lambda: m.trim(odd, self.dir / "t.mp4", 0.2, 0.8),
+                "fit_length": lambda: m.fit_length(odd, 0.5, "head", self.dir / "f.mp4"),
+                "hold_end": lambda: m.hold_end(odd, 0.5, self.dir / "h.mp4"),
+                "draw_words": lambda: m.draw_words(odd, [{"text": "Hello"}], self.dir / "w.mp4", False)}
+        for name, make in made.items():
+            with self.subTest(name):
+                info = m.probe(make())
+                self.assertEqual((info["width"], info["height"]), (160, 90))
+
+
 class LimitTests(MediaTest):
     def test_an_ffmpeg_run_past_the_time_limit_is_stopped_with_a_clear_error(self):
         slow = ["-re", "-f", "lavfi", "-i", "anullsrc=r=8000:cl=mono", "-t", "3", "-f", "null", "-"]   # 3 s at real speed
