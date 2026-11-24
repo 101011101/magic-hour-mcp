@@ -411,6 +411,11 @@ async def _detected_faces(target: str, folder: Path) -> list[Path]:
     raise ToolError(f"Face detection {job['id']} was still queued after {HEAD_SWAP_WAIT_SECONDS} s. Nothing was charged; try again later.")
 
 
+def _who(swap: dict) -> str:
+    """How an entry of `swaps` names its person, for a message."""
+    return f"face {swap['face']}" if swap.get("face") else f"person {swap['person']}"
+
+
 async def _head_ref(head: str) -> str:
     """A head picture as the head swap takes it: a file_path or URL as it is, an image project id as its URL."""
     if head.startswith(("http://", "https://", "api-assets/")):
@@ -535,10 +540,15 @@ def register_tool_media(mcp: FastMCP) -> None:
                 if not 1 <= n <= len(found):
                     raise ToolError(f"person {n}: the photo has {len(found)} faces (1 = leftmost). Nothing was charged.")
                 faces.append(found[n - 1])
-            for s, (_, _, w, h) in zip(swaps, faces):
-                if min(w, h) < MIN_FACE:
-                    raise ToolError(f"person {s.get('person') or s.get('face')}: the face is {w}x{h} px; a head swap here "
-                                    f"needs a face at least {MIN_FACE} px wide and high. Nothing was charged.")
+            given = {}
+            for s, face in zip(swaps, faces):
+                if min(face[2:]) < MIN_FACE:
+                    raise ToolError(f"{_who(s)}: the face is {face[2]}x{face[3]} px; a head swap here needs a face at "
+                                    f"least {MIN_FACE} px wide and high. Nothing was charged.")
+                if tuple(face) in given:   # the same person twice was charged twice, and one head was lost
+                    raise ToolError(f"{given[tuple(face)]} and {_who(s)} are the same face in the photo. Give each person "
+                                    "once. Nothing was charged.")
+                given[tuple(face)] = _who(s)
             credits, done = 0, []
             # people in the photo who get no new head keep their own area; each pasted head is kept from later pastes
             keep = Image.new("L", photo.size, 0)

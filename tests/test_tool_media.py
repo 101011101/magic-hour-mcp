@@ -467,6 +467,15 @@ class SwapHeadsToolTests(unittest.TestCase):
         self.assertGreater(change_in(before, after, self.boxes[1]), 50)
         self.assertEqual(change_in(before, after, self.boxes[2]), 0)
 
+    def test_a_person_given_twice_is_refused_before_any_charge(self):
+        """The same person twice (or once by number, once by face path) was charged twice and one head was lost."""
+        for second in ({"person": 1, "head": "https://h/b.png"}, {"face": "api-assets/acc/det1/0.png", "head": "https://h/b.png"}):
+            api = FakeMagicHour(self.boxes)
+            error, text = api.swap(self.photo, [{"person": 1, "head": "https://h/a.png"}, second])
+            self.assertTrue(error, text)
+            self.assertIn("Nothing was charged", text)
+            self.assertEqual(api.charged, 0)
+
     def test_a_face_too_small_to_swap_is_refused_before_any_charge(self):
         """A 9x11 px face crashed after the person before it was charged."""
         boxes = [(60, 80, 90, 110), (300, 150, 9, 11)]
