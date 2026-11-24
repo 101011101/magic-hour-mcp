@@ -109,7 +109,7 @@ def side_by_side(pictures: list[Path], out: Path, layout: str = "row", aspect: s
     grid (2x2). background: blur (the default: each cell filled with a blurred, darkened copy of its own picture, so no
     empty space shows; in testing there were white bands) or a colour. labels: one per picture, exact, in a bold band
     across the top of its cell."""
-    from PIL import Image, ImageDraw, ImageFilter, ImageFont
+    from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
     if not 2 <= len(pictures) <= 4:
         raise ValueError("give 2 to 4 pictures")
@@ -126,7 +126,7 @@ def side_by_side(pictures: list[Path], out: Path, layout: str = "row", aspect: s
            and any(draw.textlength(label, font=font) > cell_w * 0.9 for label in labels or [] if label)):
         font = font.font_variant(size=font.size - 2)
     for i, path in enumerate(pictures):
-        pic = Image.open(path).convert("RGB")
+        pic = ImageOps.exif_transpose(Image.open(path)).convert("RGB")   # a phone photo upright, as it is shown
         x0, y0 = (i % cols) * (cell_w + gap), (i // cols) * (cell_h + gap)
         if background == "blur":
             cover = max(cell_w / pic.width, cell_h / pic.height)
@@ -161,8 +161,8 @@ def overlay_picture(base: Path, picture: Path, out: Path, place: str = "top_righ
     """A picture (a logo; a transparent PNG keeps its transparency) on a video or a picture. size: its width as a share
     of the base's width; margin: the gap to the edges, as a share of the base's width; start/end: seconds (video)."""
     if base.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp"):
-        from PIL import Image
-        info = {"width": Image.open(base).width}
+        from PIL import Image, ImageOps
+        info = {"width": ImageOps.exif_transpose(Image.open(base)).width}   # ffmpeg turns a phone photo upright too
     else:
         info = media_tools.probe(base)
     m = max(0, round(info["width"] * margin))
@@ -487,7 +487,7 @@ def register_tool_media(mcp: FastMCP) -> None:
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True),
     )
     async def swap_heads_in_photo(picture: str, swaps: list[dict[str, str | int]], name: str | None = None) -> dict:
-        from PIL import Image, ImageChops
+        from PIL import Image, ImageChops, ImageOps
 
         if not swaps or any(not ((s.get("face") or s.get("person")) and s.get("head")) for s in swaps):
             raise ToolError("Give `swaps` as a list of {person, head} (person 1 = leftmost face): one entry per person.")
@@ -496,7 +496,7 @@ def register_tool_media(mcp: FastMCP) -> None:
             source, is_picture = await _fetch_media(picture, f, ("image",))
             if not is_picture:
                 raise ToolError("`picture` is not a picture. For a video, see swap_face_in_video.")
-            photo = Image.open(source).convert("RGB")
+            photo = ImageOps.exif_transpose(Image.open(source)).convert("RGB")   # a phone photo upright, as it is shown
             found = []
             if any(not s.get("face") for s in swaps):
                 photo_file = f / "photo.png"

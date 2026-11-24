@@ -1,12 +1,15 @@
 """Tests for tool management's new media tools, on small media made with ffmpeg."""
 import asyncio
+import json
 import os
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 from fastmcp import Client
+from fastmcp.exceptions import ToolError
 
 from mcp_magichour import media_tools
 from mcp_magichour.openapi_server import create_mcp
@@ -149,6 +152,34 @@ class NewPictureToolTests(unittest.TestCase):
         self.assertGreater(left, 3)      # the first letter is whole
         self.assertLess(right, 317)      # the last letter is whole
 
+    def phone_photo(self):
+        """A portrait photo (300x400, red band on top) stored landscape with EXIF Orientation 6, as phones save it."""
+        from PIL import Image, ImageDraw
+        upright = Image.new("RGB", (300, 400), (0, 0, 200))
+        ImageDraw.Draw(upright).rectangle((0, 0, 299, 60), fill=(255, 0, 0))
+        exif = Image.Exif()
+        exif[0x0112] = 6
+        phone = self.dir / "phone.jpg"
+        upright.transpose(Image.Transpose.ROTATE_90).save(phone, exif=exif.tobytes(), quality=95)
+        return phone
+
+    def test_side_by_side_shows_a_phone_photo_upright(self):
+        """A phone photo was shown sideways."""
+        from PIL import Image
+        sheet = Image.open(side_by_side([self.phone_photo(), self.grey], self.dir / "sbs.png", "row", "16:9",
+                                        background="white")).convert("RGB")
+        r, g, b = sheet.getpixel((320, 5))   # upright: 540x720 in the 640x720 cell, the red band on top
+        self.assertTrue(r > 200 and g < 60 and b < 60, (r, g, b))
+
+    def test_a_logo_on_a_phone_photo_is_sized_from_its_upright_width(self):
+        """The logo's size and margin came from the stored width (400), not the shown width (300)."""
+        from PIL import Image
+        im = Image.open(overlay_picture(self.phone_photo(), self.logo, self.dir / "phone-logo.png", "top_right",
+                                        size=0.2)).convert("RGB")
+        self.assertEqual(im.size, (300, 400))
+        self.assertGreater(im.getpixel((285, 30))[1], 200)   # the 60 px logo ends 9 px from the right edge: yellow
+        self.assertLess(im.getpixel((215, 30))[1], 80)       # left of it: the red band
+
     def test_side_by_side_needs_two_to_four(self):
         with self.assertRaises(ValueError):
             side_by_side([self.red], self.dir / "x.png")
@@ -288,3 +319,129 @@ class CharacterReplaceTextTests(unittest.TestCase):
         named = re.findall(r"selection_mode (\w+)", operation["description"])
         self.assertTrue(named)
         self.assertLessEqual(set(named), allowed)
+
+
+def group_photo(size, boxes):
+    """A plain photo with a noise-textured 'face' in each box, so a face crop is found in one place only."""
+    from PIL import Image
+    photo = Image.new("RGB", size, (120, 140, 160))
+    noise = Image.effect_noise(size, 70).convert("RGB")
+    for x, y, w, h in boxes:
+        photo.paste(noise.crop((x, y, x + w, y + h)), (x, y))
+    return photo
+
+
+def change_in(before, after, box):
+    """The mean change of a box between two pictures, 0 to 765."""
+    from PIL import ImageChops, ImageStat
+    x, y, w, h = box
+    return sum(ImageStat.Stat(ImageChops.difference(before.crop((x, y, x + w, y + h)), after.crop((x, y, x + w, y + h)))).mean)
+
+
+class FakeMagicHour:
+    """The Magic Hour calls of swap_heads_in_photo, with no network. Face detection returns crops cut at `boxes` from
+    the uploaded photo; a head swap paints a green oval over the middle of its cut-out."""
+
+    def __init__(self, boxes, failed_job=None, missing=()):
+        self.boxes, self.failed_job, self.missing = boxes, failed_job, set(missing)
+        self.dir = Path(tempfile.mkdtemp())
+        self.uploads, self.jobs, self.charged = {}, {}, 0
+
+    async def api(self, method, path, body=None):
+        if method == "POST" and path == "/v1/face-detection":
+            self.detected = self.uploads[body["assets"]["target_file_path"]]
+            return {"id": "det1"}
+        if path == "/v1/face-detection/det1":
+            return {"status": "complete", "faces": [{"path": f"api-assets/acc/det1/{n}.png", "url": f"https://x/det1/{n}.png"}
+                                                    for n in range(len(self.boxes))]}
+        if method == "POST" and path == "/v1/head-swap":
+            job = f"hs{len(self.jobs)}"
+            self.jobs[job] = body
+            self.charged += 10
+            return {"id": job, "credits_charged": 10}
+        if path.startswith("/v1/image-projects/"):
+            project = path.rsplit("/", 1)[1]
+            if project in self.missing:
+                raise ToolError(f"Magic Hour refused {path} (HTTP 404): not found")
+            if project == self.failed_job:
+                return {"status": "error", "error": {"message": "no face"}}
+            return {"status": "complete", "downloads": [{"url": f"https://x/{project}.png"}]}
+        raise AssertionError(path)
+
+    async def upload(self, file, kind="image"):
+        ref = f"api-assets/acc/up{len(self.uploads)}.png"
+        self.uploads[ref] = Path(shutil.copy(file, self.dir / f"up{len(self.uploads)}.png"))
+        return ref
+
+    async def download(self, url, out):
+        from PIL import Image, ImageDraw
+        name = url.rsplit("/", 1)[1][:-4]
+        if "/det1/" in url:
+            x, y, w, h = self.boxes[int(name)]
+            Image.open(self.detected).convert("RGB").crop((x, y, x + w, y + h)).save(out)
+        else:
+            cut = Image.open(self.uploads[self.jobs[name]["assets"]["body_file_path"]]).convert("RGB")
+            ImageDraw.Draw(cut).ellipse((cut.width * 0.25, cut.height * 0.2, cut.width * 0.75, cut.height * 0.8), fill=(0, 255, 0))
+            cut.save(out)
+        return out
+
+    async def fetch_media(self, media, folder, kinds=("image", "video")):
+        return Path(shutil.copy(media, folder / ("source" + Path(media).suffix))), True
+
+    async def deliver(self, out, picture):
+        return {"file": str(shutil.copy(out, self.dir / "result.png"))}
+
+    def swap(self, picture, swaps):
+        """Call swap_heads_in_photo; returns (is_error, the result's text)."""
+        from mcp_magichour import tool_media
+
+        async def run():
+            with patch.dict(os.environ, {"MAGIC_HOUR_CONVERSATION": "on"}):
+                server = create_mcp()
+            with patch.object(tool_media, "_api", self.api), patch.object(tool_media, "_upload", self.upload), \
+                    patch.object(tool_media, "_download", self.download), \
+                    patch.object(tool_media, "_fetch_media", self.fetch_media), \
+                    patch.object(tool_media, "_deliver", self.deliver), \
+                    patch("mcp_magichour.openapi_server.current_authorization_header", return_value="Bearer synthetic-test-token"), \
+                    patch("mcp_magichour.oauth_compat.current_authorization_header", return_value="Bearer synthetic-test-token"):
+                async with Client(server) as client:
+                    result = await client.call_tool("swap_heads_in_photo", {"picture": str(picture), "swaps": swaps},
+                                                    raise_on_error=False)
+            return result.is_error, result.content[0].text
+        return asyncio.run(run())
+
+
+class SwapHeadsToolTests(unittest.TestCase):
+    """swap_heads_in_photo through the MCP client, with the Magic Hour API faked."""
+
+    def setUp(self):
+        self.dir = Path(tempfile.mkdtemp())
+        self.boxes = [(60, 80, 90, 110), (260, 80, 90, 110), (460, 80, 90, 110)]
+        self.photo = self.dir / "group.png"
+        group_photo((640, 384), self.boxes).save(self.photo)
+
+    def test_two_of_three_people_get_a_new_head(self):
+        from PIL import Image
+        api = FakeMagicHour(self.boxes)
+        error, text = api.swap(self.photo, [{"person": 1, "head": "https://h/a.png"}, {"person": 2, "head": "https://h/b.png"}])
+        self.assertFalse(error, text)
+        done = json.loads(text)
+        self.assertEqual(done["credits_charged"], 20)
+        before, after = Image.open(self.photo).convert("RGB"), Image.open(done["file"]).convert("RGB")
+        self.assertGreater(change_in(before, after, self.boxes[0]), 50)
+        self.assertGreater(change_in(before, after, self.boxes[1]), 50)
+        self.assertEqual(change_in(before, after, self.boxes[2]), 0)
+
+    def test_a_phone_photo_turned_by_its_exif_tag_stays_upright(self):
+        """A phone JPEG with Orientation 6 was sent sideways to face detection and came back sideways."""
+        from PIL import Image
+        upright = [(60, 200, 90, 110), (230, 200, 90, 110)]
+        phone = self.dir / "phone.jpg"
+        exif = Image.Exif()
+        exif[0x0112] = 6
+        group_photo((384, 640), upright).transpose(Image.Transpose.ROTATE_90).save(phone, exif=exif.tobytes(), quality=95)
+        api = FakeMagicHour(upright)
+        error, text = api.swap(phone, [{"person": 1, "head": "https://h/a.png"}])
+        self.assertFalse(error, text)
+        self.assertEqual(Image.open(api.detected).size, (384, 640))
+        self.assertEqual(Image.open(json.loads(text)["file"]).size, (384, 640))
