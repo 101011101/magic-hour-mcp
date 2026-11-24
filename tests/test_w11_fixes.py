@@ -10,7 +10,7 @@ from mcp_magichour import media_tools as m
 
 
 def ff(*args):
-    subprocess.check_call(["ffmpeg", "-v", "error", "-y", *map(str, args)])
+    subprocess.check_call([m.ffmpeg_exe(), "-v", "error", "-y", *map(str, args)])
 
 
 @unittest.skipUnless(m.have_ffmpeg(), "needs ffmpeg")
@@ -25,7 +25,7 @@ class W11FixTests(unittest.TestCase):
         return out
 
     def last_frame_bytes(self, file):
-        return subprocess.run(["ffmpeg", "-v", "error", "-sseof", "-0.05", "-i", str(file), "-frames:v", "1", "-f", "rawvideo",
+        return subprocess.run([m.ffmpeg_exe(), "-v", "error", "-sseof", "-0.05", "-i", str(file), "-frames:v", "1", "-f", "rawvideo",
                                "-pix_fmt", "gray", "-s", "32x24", "-"], capture_output=True).stdout
 
     def close(self, a, b):
@@ -54,7 +54,7 @@ class W11FixTests(unittest.TestCase):
         music = self.dir / "music.wav"
         ff("-f", "lavfi", "-i", "sine=f=440:d=8", music)
         m.add_sound(film, self.dir / "out.mp4", music=music, layers=self.dir / "l", music_at=4.0)
-        level = lambda start: float(subprocess.run(["ffmpeg", "-hide_banner", "-ss", str(start), "-t", "1", "-i", str(self.dir / "l" / "music.wav"),
+        level = lambda start: float(subprocess.run([m.ffmpeg_exe(), "-hide_banner", "-ss", str(start), "-t", "1", "-i", str(self.dir / "l" / "music.wav"),
                                                     "-af", "volumedetect", "-f", "null", "-"], capture_output=True, text=True).stderr
                                      .split("mean_volume:")[1].split("dB")[0])
         self.assertLess(level(1), -60)
@@ -68,7 +68,7 @@ class W11FixTests(unittest.TestCase):
         music = self.dir / "music.wav"
         ff("-f", "lavfi", "-i", "sine=f=440:d=8", music)
         m.add_sound(film, self.dir / "out.mp4", music=music, layers=self.dir / "l", music_at=4.0)
-        level = lambda start: float(subprocess.run(["ffmpeg", "-hide_banner", "-ss", str(start), "-t", "1", "-i", str(self.dir / "l" / "effects.wav"),
+        level = lambda start: float(subprocess.run([m.ffmpeg_exe(), "-hide_banner", "-ss", str(start), "-t", "1", "-i", str(self.dir / "l" / "effects.wav"),
                                                     "-af", "volumedetect", "-f", "null", "-"], capture_output=True, text=True).stderr
                                      .split("mean_volume:")[1].split("dB")[0])
         self.assertGreater(level(1) - level(6), m.EFFECTS_UNDER_DB - 1.5)

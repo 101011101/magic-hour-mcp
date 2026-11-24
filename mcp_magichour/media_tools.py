@@ -56,9 +56,9 @@ def probe(file: Path) -> dict:
     report = _ffmpeg(["-i", str(file)], capture=True)
     duration = re.search(r"Duration: (\d+):(\d+):(\d+\.?\d*)", report)
     size = re.search(r"Video: .*? (\d{2,5})x(\d{2,5})", report)
-    if not duration or not (size or "Audio:" in report):
+    if not (size or "Audio:" in report):
         raise RuntimeError(f"ffmpeg could not read {file.name}")
-    h, m, sec = duration.groups()
+    h, m, sec = duration.groups() if duration else (0, 0, 0)   # a picture has no duration ("Duration: N/A"), as with ffprobe
     return {"seconds": int(h) * 3600 + int(m) * 60 + float(sec), "width": int(size[1]) if size else 0,
             "height": int(size[2]) if size else 0, "audio": "Audio:" in report}
 

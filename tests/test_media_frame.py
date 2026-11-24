@@ -15,7 +15,7 @@ class FrameTests(unittest.TestCase):
 
     def clip(self, name, size, seconds):
         out = self.dir / name
-        subprocess.check_call(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", f"testsrc=s={size}:d={seconds}", str(out)])
+        subprocess.check_call([m.ffmpeg_exe(), "-v", "error", "-y", "-f", "lavfi", "-i", f"testsrc=s={size}:d={seconds}", str(out)])
         return out
 
     def test_a_small_shape_miss_is_cropped_and_a_large_one_is_filled(self):
@@ -83,13 +83,13 @@ class TicketTests(unittest.TestCase):
 
     def clip(self, name, size, seconds):
         out = self.dir / name
-        subprocess.check_call(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", f"testsrc=s={size}:d={seconds}",
+        subprocess.check_call([m.ffmpeg_exe(), "-v", "error", "-y", "-f", "lavfi", "-i", f"testsrc=s={size}:d={seconds}",
                                "-f", "lavfi", "-i", f"sine=f=440:d={seconds}", "-shortest", str(out)])
         return out
 
     def tone(self, name, seconds, freq=440):
         out = self.dir / name
-        subprocess.check_call(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", f"sine=f={freq}:d={seconds}", str(out)])
+        subprocess.check_call([m.ffmpeg_exe(), "-v", "error", "-y", "-f", "lavfi", "-i", f"sine=f={freq}:d={seconds}", str(out)])
         return out
 
     def test_trim_keeps_the_asked_part_with_its_sound(self):
@@ -118,13 +118,13 @@ class TicketTests(unittest.TestCase):
         self.assertLess(self.mean_db(out, 5.5, 2), -80)
 
     def mean_db(self, path, start, seconds):
-        err = subprocess.run(["ffmpeg", "-hide_banner", "-ss", str(start), "-t", str(seconds), "-i", str(path), "-af", "volumedetect",
+        err = subprocess.run([m.ffmpeg_exe(), "-hide_banner", "-ss", str(start), "-t", str(seconds), "-i", str(path), "-af", "volumedetect",
                               "-f", "null", "-"], capture_output=True, text=True).stderr
         return float(err.split("mean_volume:")[1].split("dB")[0])
 
     def silent_film(self, seconds=8, sound="anullsrc=r=48000:cl=stereo"):
         film = self.dir / "film.mp4"
-        subprocess.check_call(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", f"testsrc=s=320x240:d={seconds}", "-f", "lavfi",
+        subprocess.check_call([m.ffmpeg_exe(), "-v", "error", "-y", "-f", "lavfi", "-i", f"testsrc=s=320x240:d={seconds}", "-f", "lavfi",
                                "-i", sound, "-t", str(seconds), "-c:v", "libx264", "-c:a", "aac", str(film)])
         return film
 
@@ -155,7 +155,7 @@ class TicketTests(unittest.TestCase):
     def talking_film(self, street):
         """8 s: a voice (300 Hz) from 3 to 6 s over a steady street (pink noise of amplitude `street`)."""
         film = self.dir / "talk.mp4"
-        subprocess.check_call(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc=s=320x240:d=8", "-f", "lavfi",
+        subprocess.check_call([m.ffmpeg_exe(), "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc=s=320x240:d=8", "-f", "lavfi",
                                "-i", f"anoisesrc=c=pink:a={street}:d=8:r=48000", "-f", "lavfi", "-i", "sine=f=300:d=8:r=48000",
                                "-filter_complex", "[2:a]volume='0.5*between(t,3,6)':eval=frame[v];[1:a][v]amix=inputs=2:normalize=0[a]",
                                "-map", "0:v", "-map", "[a]", "-t", "8", "-c:v", "libx264", "-c:a", "aac", str(film)])
@@ -184,7 +184,7 @@ class TicketTests(unittest.TestCase):
 
     def test_a_loud_music_track_is_lowered_more_to_stay_under_the_voice(self):
         voice = self.dir / "voice.wav"
-        subprocess.check_call(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "sine=f=660:d=2", "-af", "volume=0.3", str(voice)])
+        subprocess.check_call([m.ffmpeg_exe(), "-v", "error", "-y", "-f", "lavfi", "-i", "sine=f=660:d=2", "-af", "volume=0.3", str(voice)])
         m.add_sound(self.silent_film(), self.dir / "out.mp4", voice, [{"start": 0, "end": 2, "at": 3}], self.tone("music.wav", 8),
                     layers=self.dir / "l")
         speech, music = self.dir / "l" / "speech.wav", self.dir / "l" / "music.wav"
@@ -237,7 +237,7 @@ class TicketTests(unittest.TestCase):
 
         got = m.reframe(self.clip("w.mp4", "854x480", 1), "9:16", self.dir / "p.mp4", "pad", color="0x1B2A4A")
         self.assertEqual(got["way"], "pad")
-        subprocess.check_call(["ffmpeg", "-v", "error", "-y", "-i", str(self.dir / "p.mp4"), "-frames:v", "1", str(self.dir / "f.png")])
+        subprocess.check_call([m.ffmpeg_exe(), "-v", "error", "-y", "-i", str(self.dir / "p.mp4"), "-frames:v", "1", str(self.dir / "f.png")])
         r, g, b = Image.open(self.dir / "f.png").convert("RGB").getpixel((240, 20))
         self.assertTrue(abs(r - 0x1B) < 12 and abs(g - 0x2A) < 12 and abs(b - 0x4A) < 12, (r, g, b))
 
