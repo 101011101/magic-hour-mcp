@@ -56,23 +56,44 @@ def _ffmpeg(args: list[str], capture: bool = False) -> str:
     return ""
 
 
+def _quarter_turn(rotation) -> bool:
+    """True for a rotation of 90 or -90 degrees: the picture is shown with its width and height swapped."""
+    try:
+        return round(abs(float(rotation))) % 180 == 90
+    except (TypeError, ValueError):
+        return False
+
+
 def probe(file: Path) -> dict:
-    """Length, size and whether there is a sound track. With ffprobe when it exists, else from ffmpeg's own report."""
+    """Length, size and whether there is a sound track. With ffprobe when it exists, else from ffmpeg's own report.
+    The size is the size shown: a phone video stored 640x360 with a rotation of 90 is 360x640, as ffmpeg turns
+    its frames before any filter."""
     if shutil.which("ffprobe"):
-        raw = _run(["ffprobe", "-v", "error", "-show_entries", "format=duration:stream=codec_type,width,height",
+        raw = _run(["ffprobe", "-v", "error", "-show_entries",
+                    "format=duration:stream=codec_type,width,height:stream_side_data=rotation:stream_tags=rotate",
                     "-of", "json", str(file)], check=True, stdout=subprocess.PIPE).stdout
         data = json.loads(raw)
         video = next((s for s in data["streams"] if s["codec_type"] == "video"), {})   # a voice track has no picture
-        return {"seconds": float(data["format"].get("duration") or 0), "width": video.get("width", 0), "height": video.get("height", 0),
+        width, height = video.get("width", 0), video.get("height", 0)
+        turns = [d.get("rotation") for d in video.get("side_data_list", [])] + [(video.get("tags") or {}).get("rotate")]
+        if any(_quarter_turn(t) for t in turns):
+            width, height = height, width
+        return {"seconds": float(data["format"].get("duration") or 0), "width": width, "height": height,
                 "audio": any(s["codec_type"] == "audio" for s in data["streams"])}
     report = _ffmpeg(["-i", str(file)], capture=True)
     duration = re.search(r"Duration: (\d+):(\d+):(\d+\.?\d*)", report)
-    size = re.search(r"Video: .*? (\d{2,5})x(\d{2,5})", report)
+    # one block for each stream: its "Stream #" line and the lines under it (the rotation is in the video's block)
+    streams = re.split(r"\n(?=\s*Stream #)", report)[1:]
+    video = next((s for s in streams if "Video:" in s.split("\n", 1)[0]), "")
+    size = re.search(r"Video: .*? (\d{2,5})x(\d{2,5})", video)
     if not (size or "Audio:" in report):
         raise RuntimeError(f"ffmpeg could not read {file.name}")
     h, m, sec = duration.groups() if duration else (0, 0, 0)   # a picture has no duration ("Duration: N/A"), as with ffprobe
-    return {"seconds": int(h) * 3600 + int(m) * 60 + float(sec), "width": int(size[1]) if size else 0,
-            "height": int(size[2]) if size else 0, "audio": "Audio:" in report}
+    width, height = (int(size[1]), int(size[2])) if size else (0, 0)
+    turn = re.search(r"rotation of (-?\d+(?:\.\d+)?) degrees", video) or re.search(r"^\s*rotate\s*:\s*(-?\d+)", video, re.M)
+    if turn and _quarter_turn(turn[1]):
+        width, height = height, width
+    return {"seconds": int(h) * 3600 + int(m) * 60 + float(sec), "width": width, "height": height, "audio": "Audio:" in report}
 
 
 def loudness_db(file: Path) -> float | None:
