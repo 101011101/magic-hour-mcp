@@ -201,6 +201,20 @@ def sheet_index() -> str:
     return "\n".join(lines)
 
 
+# How to answer the rows. Sent with the rows (the first call), not in the description:
+# Claude Code keeps only the first 2,048 bytes of a description.
+ROW_RULES = (" Mark 'ask' ONLY for a row whose answer would change the result and that the user's words and files do not "
+             "answer; mark as few rows 'ask' as you can. Rows you leave out take their default.")
+
+
+def tool_call(family: str, request: str, answers: dict[str, str] | None = None, questions_asked: bool = False) -> dict:
+    """What plan_tool_call returns: plan(), and with the rows how to answer them."""
+    out = plan(family, request, answers, questions_asked)
+    if out.get("stage") == "fill_the_sheet":
+        out["next"] += ROW_RULES
+    return out
+
+
 def register_tool_plan(mcp: FastMCP) -> None:
     if not enabled():
         return
@@ -221,18 +235,16 @@ def register_tool_plan(mcp: FastMCP) -> None:
             "better (the words in the generation prompt; a new shape by extending the picture). Otherwise (a clear new "
             "picture, clip or sound with no words) call the tool directly. Not for a film of several shots: use "
             "plan_conversation with family film when it is listed, else plan_request. "
-            "Send the family and `answers` in ONE call. Rows (* = answer from the files yourself; options in "
-            "brackets):\n" + sheet_index() + "\n"
-            "Answer a row with an option, the user's own words, 'your_call' or 'n/a'; mark 'ask' ONLY for a row "
-            "whose answer would change the result and that the user's words and files do not answer. Rows you leave "
-            "out take their default. Mark as few rows 'ask' as you can. Returns every open question "
-            "in one batch (ask the user once, all together), or the plan: which tools in "
-            "order, free-tier settings (free models only), each tool's known faults, and gaps (what no tool can do). Call with the "
-            "family only to see the full sheet. Read-only; spends no credits and creates nothing."
+            # The row lists left the description (3,139 bytes; Claude Code keeps 2,048): the first call returns them.
+            "First call: the family and the user's request word for word, with no answers; the result lists the "
+            "family's rows, their options and how to answer them. Then send `answers` for every row in ONE call. "
+            "Returns every open question in one batch (ask the user once, all together), or the plan: which tools in "
+            "order, free-tier settings (free models only), each tool's known faults, and gaps (what no tool can do). "
+            "Read-only; spends no credits and creates nothing."
         ),
         annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False),
     )
     def plan_tool_call(family: Family, request: str, answers: dict[str, str] | None = None,
                        questions_asked: bool = False) -> dict:
         """questions_asked: true once the user has been asked this plan's questions; nothing is asked again."""
-        return plan(family, request, answers, questions_asked)
+        return tool_call(family, request, answers, questions_asked)

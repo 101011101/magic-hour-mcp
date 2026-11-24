@@ -292,6 +292,18 @@ class SwitchTests(unittest.TestCase):
     def test_on_registers_the_tool(self):
         self.assertIn("plan_tool_call", tool_names({"MAGIC_HOUR_TOOL_PLAN": "on"}))
 
+    def test_the_description_fits_claude_code_and_the_first_call_has_the_rows(self):
+        """3,139 bytes: Claude Code keeps 2,048, so the row lists and the answer rules were cut."""
+        async def described():
+            with patch.dict(os.environ, {"MAGIC_HOUR_TOOL_PLAN": "on"}):
+                async with Client(create_mcp()) as client:
+                    return next(t for t in await client.list_tools() if t.name == "plan_tool_call").description
+        self.assertLessEqual(len(asyncio.run(described()).encode()), 2048)
+        first = tool_plan.tool_call("new_picture", "a poster")   # what plan_tool_call returns
+        self.assertEqual(first["stage"], "fill_the_sheet")
+        self.assertIn("exact_words", [r["id"] for r in first["rows"]])
+        self.assertIn("Mark 'ask' ONLY", first["next"])
+
     def test_the_server_offers_the_sheet_fields(self):
         async def schema():
             with patch.dict(os.environ, {"MAGIC_HOUR_TOOL_PLAN": "on"}):
