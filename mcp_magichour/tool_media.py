@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import subprocess
 import tempfile
 from pathlib import Path
 from typing import Literal
@@ -24,9 +25,23 @@ from .media_helpers_tool import _api, _deliver, _download, _fetch_media, _upload
 from . import tool_plan
 
 Original = Literal["keep", "under", "replace"]
+EVEN = "crop=trunc(iw/2)*2:trunc(ih/2)*2:0:0"   # H.264 in yuv420p needs even sizes: an odd last row or column is cut
 
 
 # ---- sound on the user's video
+
+def _mp4_ready(film: Path, work: Path) -> Path:
+    """The film as it is when its video can be copied into an mp4 (the later steps do that), else re-encoded to H.264
+    (a VP8 WebM, a ProRes .mov)."""
+    try:
+        media_tools._ffmpeg(["-i", str(film), "-map", "0:v:0", "-c", "copy", "-frames:v", "1", str(work / "check.mp4")])
+        return film
+    except subprocess.CalledProcessError:
+        encoded = work / "encoded.mp4"
+        media_tools._ffmpeg(["-i", str(film), "-map", "0:v:0", "-map", "0:a?", "-vf", f"{EVEN},format=yuv420p",
+                             "-c:v", "libx264", "-c:a", "aac", str(encoded)])
+        return encoded
+
 
 def mix_onto_video(film: Path, out: Path, music: Path | None = None, voice: Path | None = None, voice_at: float = 0.0,
                    original: Original = "under", music_swell: bool = False) -> dict:
@@ -40,6 +55,7 @@ def mix_onto_video(film: Path, out: Path, music: Path | None = None, voice: Path
         raise ValueError("give music, a voice, or both")
     with tempfile.TemporaryDirectory() as folder:   # the working files go when the mix is done
         work = Path(folder)
+        film = _mp4_ready(film, work)
         if original == "replace":
             silent = work / "silent.mp4"
             media_tools._ffmpeg(["-i", str(film), "-an", "-c:v", "copy", str(silent)])
@@ -74,7 +90,7 @@ def recolour(source: Path, out: Path, warmth: float = 0.0, saturation: float = 1
     steps.append(f"eq=saturation={sat:.3f}:brightness={max(-0.5, min(0.5, brightness)):.3f}:contrast={max(0.5, min(2.0, contrast)):.3f}")
     if sat == 0:
         steps.append("format=gray")   # black and white exactly, no tint left by the colour conversion
-    steps.append("format=rgb24" if picture else "format=yuv420p")
+    steps.append("format=rgb24" if picture else f"{EVEN},format=yuv420p")
     args = ["-i", str(source), "-vf", ",".join(steps)]
     if not picture:
         args += ["-c:v", "libx264", "-c:a", "copy"]
@@ -151,7 +167,7 @@ def overlay_picture(base: Path, picture: Path, out: Path, place: str = "top_righ
     when = f":enable='between(t,{start or 0},{end})'" if end is not None else (f":enable='gte(t,{start})'" if start else "")
     picture_base = base.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp")
     graph = (f"[1:v]format=rgba,scale={logo_w}:-1,colorchannelmixer=aa={max(0.05, min(1.0, opacity)):.2f}[l];"
-             f"[0:v][l]overlay={x}:{y}{when}" + ("" if picture_base else ",format=yuv420p") + "[v]")
+             f"[0:v][l]overlay={x}:{y}{when}" + ("" if picture_base else f",{EVEN},format=yuv420p") + "[v]")
     args = ["-i", str(base), "-i", str(picture), "-filter_complex", graph, "-map", "[v]"]
     if not picture_base:
         args += ["-map", "0:a?", "-c:v", "libx264", "-c:a", "copy"]

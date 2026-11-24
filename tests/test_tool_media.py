@@ -72,6 +72,18 @@ class SoundOnVideoTests(unittest.TestCase):
             mix_onto_video(self.film, self.dir / "out.mp4", voice=self.long_voice, original="replace")
         self.assertEqual(list(scratch.iterdir()), [])
 
+    def test_a_video_mp4_cannot_hold_as_it_is_gets_sound(self):
+        """A ProRes .mov (or a VP8 WebM) failed: its video was copied into an mp4."""
+        prores = self.dir / "clip.mov"
+        ff("-f", "lavfi", "-i", "testsrc=size=320x240:rate=24:duration=2", "-f", "lavfi", "-i", "sine=duration=2",
+           "-c:v", "prores_ks", "-c:a", "aac", "-shortest", str(prores))
+        for original in ("under", "replace"):
+            out = self.dir / f"prores-{original}.mp4"
+            mix_onto_video(prores, out, music=self.music, original=original)
+            info = media_tools.probe(out)
+            self.assertTrue(info["audio"])
+            self.assertEqual((info["width"], info["height"]), (320, 240))
+
 
 def mean_rgb(path):
     from PIL import Image, ImageStat
@@ -143,6 +155,16 @@ class NewPictureToolTests(unittest.TestCase):
         self.assertTrue(r > 200 and g > 200 and b < 80, (r, g, b))      # yellow logo in the top right
         r, g, b = im.getpixel((20, 220))
         self.assertTrue(abs(r - g) < 15 and abs(g - b) < 15, (r, g, b))  # grey elsewhere
+
+    def test_a_video_of_odd_size_can_be_recoloured_and_get_a_logo(self):
+        """A 321x241 video failed: H.264 in yuv420p needs even sizes."""
+        odd = self.dir / "odd.mp4"
+        ff("-f", "lavfi", "-i", "testsrc=size=321x241:rate=24:duration=1", "-f", "lavfi", "-i", "sine=duration=1",
+           "-c:v", "libx264", "-pix_fmt", "yuv444p", "-c:a", "aac", "-shortest", str(odd))
+        for out in (recolour(odd, self.dir / "odd-warm.mp4", warmth=0.3), overlay_picture(odd, self.logo, self.dir / "odd-logo.mp4")):
+            info = media_tools.probe(out)
+            self.assertEqual((info["width"], info["height"]), (320, 240))
+            self.assertTrue(info["audio"])
 
     def test_logo_on_a_picture(self):
         out = overlay_picture(self.grey, self.logo, self.dir / "grey-with-logo.png", "bottom_left", size=0.25)
