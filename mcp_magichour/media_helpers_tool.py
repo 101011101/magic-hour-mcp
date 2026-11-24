@@ -434,6 +434,9 @@ def register_media_helpers(mcp: FastMCP) -> None:
         _need_ffmpeg()
         if not tracks:
             raise ToolError("Give at least one track.")
+        late = [f"track {i + 1} starts at {t.at:g} s" for i, t in enumerate(tracks) if seconds is not None and t.at >= seconds]
+        if late:   # in testing, a track at 20 s in a 10 s mix gave 10 s of silence
+            raise ToolError(f"{'; '.join(late)}, at or after the mix's end at {seconds:g} s. Start each track inside the mix.")
         with tempfile.TemporaryDirectory() as folder:
             laid = []
             for i, t in enumerate(tracks):

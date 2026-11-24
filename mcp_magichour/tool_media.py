@@ -14,14 +14,15 @@ import os
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from . import media_tools
-from .media_helpers_tool import _api, _deliver, _download, _fetch_media, _upload
+from .media_helpers_tool import MIX_MAX_SECONDS, _api, _deliver, _download, _fetch_media, _upload
 from . import tool_plan
 
 Original = Literal["keep", "under", "replace"]
@@ -66,15 +67,25 @@ def mix_onto_video(film: Path, out: Path, music: Path | None = None, voice: Path
             spoken = media_tools.speech_spans(film)
         parts, fit = [], {"tempo": 1.0, "hold": 0.0, "moved": False}
         if voice:
+            if voice_at >= seconds:
+                raise ValueError(f"voice_at {voice_at:g} s is at or after the end of the {seconds:.1f} s video. "
+                                 "Start the voice inside the video.")
             length = media_tools.probe_seconds(voice)
             fit = media_tools.fit_parts([{"start": 0.0, "end": length, "at": max(0.0, voice_at)}], seconds)
+            if seconds + fit["hold"] > MIX_MAX_SECONDS:
+                raise ValueError(f"The voice is {length:.0f} s; with it the video would be {seconds + fit['hold']:.0f} s, "
+                                 f"and this tool makes at most {MIX_MAX_SECONDS} s. Use a shorter voice or a longer video.")
             parts = fit["parts"]
             if fit["hold"] > 0:
                 film = media_tools.hold_end(film, fit["hold"], work / "held.mp4")
         mix = media_tools.add_sound(film, out, narration=voice, parts=parts or None, music=music, spoken=spoken,
                                     music_swell=music_swell)
-        return {"seconds": round(media_tools.probe_seconds(out), 2), "lufs": mix["lufs"], "original": original,
+        done = {"seconds": round(media_tools.probe_seconds(out), 2), "lufs": mix["lufs"], "original": original,
                 "kept_spoken_spans": len(spoken), "voice_tempo": round(fit["tempo"], 3), "held_end_seconds": round(fit["hold"], 2)}
+        if fit["hold"] > seconds:   # in testing, a 5-minute voice on a 5 s card gave 258 s of one still frame
+            done["note"] = (f"The voice is longer than the video: the last frame is held for {fit['hold']:.0f} s, more than "
+                            "the video itself. Tell the user, or use a shorter voice or a longer video.")
+        return done
 
 
 # ---- colour change by code
@@ -466,7 +477,9 @@ def register_tool_media(mcp: FastMCP) -> None:
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True),
     )
     async def add_sound_to_video(video: str, music: str | None = None, voice: str | None = None,
-                                 original: Original = "under", voice_at: float = 0.0, music_swell: bool = False) -> dict:
+                                 original: Original = "under",
+                                 voice_at: Annotated[float, Field(ge=0, le=MIX_MAX_SECONDS)] = 0.0,
+                                 music_swell: bool = False) -> dict:
         _need()
         if not (music or voice):
             raise ToolError("Give `music`, `voice`, or both.")
@@ -498,8 +511,10 @@ def register_tool_media(mcp: FastMCP) -> None:
         ),
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True),
     )
-    async def adjust_colours(media: str, warmth: float = 0.0, saturation: float = 1.0, brightness: float = 0.0,
-                             contrast: float = 1.0) -> dict:
+    async def adjust_colours(media: str, warmth: Annotated[float, Field(ge=-1, le=1)] = 0.0,
+                             saturation: Annotated[float, Field(ge=0, le=2)] = 1.0,
+                             brightness: Annotated[float, Field(ge=-0.5, le=0.5)] = 0.0,
+                             contrast: Annotated[float, Field(ge=0.5, le=2)] = 1.0) -> dict:
         _need()
         with tempfile.TemporaryDirectory() as folder:
             source, picture = await _fetch_media(media, Path(folder))
@@ -648,16 +663,20 @@ def register_tool_media(mcp: FastMCP) -> None:
             "the video is kept exactly, 0 credits. Remove a logo's background first with remove_image_background if "
             "needed. `media`: the video or picture underneath; `picture`: the logo; each a file_path, URL or finished "
             "project id. `place`: top_left, top_right, bottom_left, bottom_right, center. `size`: the logo's width as a "
-            "share of the video's width (0.15 = small corner logo). `opacity` 0.05 to 1. `start`/`end`: seconds, video "
+            "share of the video's width, 0.02 to 0.9 (0.15 = small corner logo). `opacity` 0.05 to 1. `start`/`end`: seconds, video "
             "only; leave out for the whole clip. For words, use add_words_to_media. Returns download_url and file_path."
         ),
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True),
     )
     async def put_picture_on_video(media: str, picture: str,
                                    place: Literal["top_left", "top_right", "bottom_left", "bottom_right", "center"] = "top_right",
-                                   size: float = 0.15, opacity: float = 1.0, start: float | None = None,
-                                   end: float | None = None) -> dict:
+                                   size: Annotated[float, Field(ge=0.02, le=0.9)] = 0.15,
+                                   opacity: Annotated[float, Field(ge=0.05, le=1)] = 1.0,
+                                   start: Annotated[float, Field(ge=0, le=MIX_MAX_SECONDS)] | None = None,
+                                   end: Annotated[float, Field(gt=0, le=MIX_MAX_SECONDS)] | None = None) -> dict:
         _need()
+        if end is not None and end <= (start or 0):
+            raise ToolError(f"`end` ({end:g} s) must be after `start` ({start or 0:g} s).")
         with tempfile.TemporaryDirectory() as folder:
             (Path(folder) / "b").mkdir(); (Path(folder) / "l").mkdir()
             base, base_is_picture = await _fetch_media(media, Path(folder) / "b")
@@ -679,7 +698,7 @@ def register_tool_media(mcp: FastMCP) -> None:
             "Then pass that picture here as `picture` with background none: it fills the frame. Words drawn on a flat "
             "colour (`words`, no picture) only when the user asks for a plain drawn card. "
             "It has a silent sound track, so join_videos "
-            "can add it before or after the user's clip. `seconds`: how long. `words`: one line each, the first larger, "
+            "can add it before or after the user's clip. `seconds`: how long, 0.5 to 600. `words`: one line each, the first larger, "
             "spelled exactly. `background`: a colour such as black or #1B2A4A, or none (the picture fills the frame). `like_video`: the user's clip, to match "
             "its size (else `aspect`). `picture`: optional, a file_path, URL or finished image project id. `attach`: "
             "after (an end card) or before (a title card) returns the user's clip and the card as ONE file, the clip's "
@@ -688,7 +707,7 @@ def register_tool_media(mcp: FastMCP) -> None:
         ),
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True),
     )
-    async def make_card_clip(seconds: float, words: list[str] | None = None, background: str = "black",
+    async def make_card_clip(seconds: Annotated[float, Field(ge=0.5, le=MIX_MAX_SECONDS)], words: list[str] | None = None, background: str = "black",
                              like_video: str | None = None, aspect: Literal["16:9", "9:16", "1:1"] = "16:9",
                              picture: str | None = None, attach: Literal["no", "before", "after"] = "no") -> dict:
         _need()

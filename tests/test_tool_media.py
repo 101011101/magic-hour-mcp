@@ -265,6 +265,75 @@ class NewPictureToolTests(unittest.TestCase):
         self.assertTrue(info["audio"])
 
 
+@unittest.skipUnless(media_tools.have_ffmpeg(), "no ffmpeg")
+class VoiceLengthTests(unittest.TestCase):
+    """In testing, voice_at 50 on a 6 s clip and a 5-minute voice on a 5 s card gave long, mostly frozen videos."""
+
+    def setUp(self):
+        self.dir = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        self.film = self.dir / "clip.mp4"
+        ff("-f", "lavfi", "-i", "testsrc=size=320x240:rate=24:duration=4", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(self.film))
+        self.voice = self.dir / "voice.wav"
+        ff("-f", "lavfi", "-i", "sine=frequency=900:duration=12", str(self.voice))
+
+    def test_a_voice_that_starts_after_the_video_is_refused(self):
+        with self.assertRaisesRegex(ValueError, "at or after the end of the 4.0 s video"):
+            mix_onto_video(self.film, self.dir / "out.mp4", voice=self.voice, voice_at=5)
+
+    def test_a_result_over_the_limit_is_refused_before_the_work(self):
+        with patch("mcp_magichour.tool_media.MIX_MAX_SECONDS", 10), patch.object(media_tools, "add_sound") as sound:
+            with self.assertRaisesRegex(ValueError, "at most 10 s"):
+                mix_onto_video(self.film, self.dir / "out.mp4", voice=self.voice)
+        sound.assert_not_called()
+
+    def test_a_hold_longer_than_the_video_is_named(self):
+        done = mix_onto_video(self.film, self.dir / "out.mp4", voice=self.voice)
+        assert done["held_end_seconds"] > 4 and "held for" in done["note"]
+
+
+class EditLimitTests(unittest.TestCase):
+    """In testing, out-of-range values were clamped or rendered without a word (make_card_clip seconds 100000 ran
+    for hours; warmth 5 made a white picture; start 5 with end 1 never showed the logo)."""
+
+    def call(self, tool, arguments):
+        async def run():
+            with patch.dict(os.environ, {"MAGIC_HOUR_TOOL_PLAN": "on"}):
+                server = create_mcp()
+            async with Client(server) as client:
+                return await client.call_tool(tool, arguments)
+        return asyncio.run(run())
+
+    def test_values_outside_the_documented_ranges_are_refused_before_any_fetch(self):
+        cases = [("make_card_clip", {"seconds": 100000, "words": ["huge"]}),
+                 ("make_card_clip", {"seconds": -5, "words": ["x"]}),
+                 ("add_sound_to_video", {"video": "a", "voice": "b", "voice_at": -4}),
+                 ("add_sound_to_video", {"video": "a", "voice": "b", "voice_at": 1e6}),
+                 ("adjust_colours", {"media": "a", "warmth": 5}),
+                 ("adjust_colours", {"media": "a", "saturation": -3}),
+                 ("adjust_colours", {"media": "a", "brightness": 9}),
+                 ("adjust_colours", {"media": "a", "contrast": 0}),
+                 ("put_picture_on_video", {"media": "a", "picture": "b", "size": 5}),
+                 ("put_picture_on_video", {"media": "a", "picture": "b", "size": 0}),
+                 ("put_picture_on_video", {"media": "a", "picture": "b", "opacity": -3}),
+                 ("put_picture_on_video", {"media": "a", "picture": "b", "start": 5, "end": 1}),
+                 ("mix_audio", {"tracks": [{"media": "a", "at": 20}], "seconds": 10})]
+        fetched = []
+
+        async def fetch(*args, **kwargs):
+            fetched.append(args)
+            raise AssertionError("fetched")
+        with patch("mcp_magichour.tool_media._fetch_media", fetch), patch("mcp_magichour.media_helpers_tool._fetch_media", fetch):
+            for tool, arguments in cases:
+                with self.subTest(tool=tool, arguments=arguments):
+                    try:   # a range is refused as invalid arguments (McpError); a check in the tool as a ToolError
+                        self.call(tool, arguments)
+                    except Exception as error:
+                        assert "fetched" not in str(error), str(error)
+                    else:
+                        self.fail("accepted")
+        assert not fetched
+
+
 class SwitchTests(unittest.TestCase):
     def names(self, value, conversation="on"):
         async def run():
