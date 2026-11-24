@@ -40,6 +40,7 @@ SPENDING = {
     "generate_image", "generate_music", "place_person_in_scene", "remove_image_background", "replace_character_in_video",
     "restyle_video", "swap_face_in_photo", "swap_face_in_video", "swap_head_in_photo", "translate_video", "upscale_image",
     "upscale_video", "create_production_clip", "create_production_sound",
+    "ai_voice_generator_create_audio", "ai_voice_cloner_create_audio", "swap_heads_in_photo",
 }
 SHEET_REQUIRED = ("subject", "seconds", "aspect", "sound", "exact_words", "look")
 SAID = "From the user's words: copy the words that answer it."

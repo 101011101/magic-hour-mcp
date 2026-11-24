@@ -1,5 +1,6 @@
 import asyncio
 import json
+import re
 import unittest
 
 from fastmcp import Client, FastMCP
@@ -206,6 +207,28 @@ class MiddlewareTests(unittest.TestCase):
         self.assertNotIn("plan_token", warn["generate_music"].get("required", []))
         self.assertIn("plan_token", warn["generate_music"]["properties"])
         self.assertNotIn("plan_token", refuse["start_request"]["properties"])
+
+
+class SpendingListTests(unittest.TestCase):
+    """Every tool on the real server that charges credits needs the plan token in refuse mode."""
+
+    def test_every_tool_that_charges_credits_needs_the_plan_token(self):
+        from unittest.mock import patch
+
+        from mcp_magichour import openapi_server
+
+        async def go():
+            with patch.object(openapi_server, "GATES_MODE", "refuse"), patch.object(gates, "MODE", "refuse"):
+                mcp = openapi_server.create_mcp()
+            async with Client(mcp) as client:
+                return await client.list_tools()
+
+        tools = {t.name: t for t in asyncio.run(go())}
+        charging = {name for name, t in tools.items() if re.search(r"credits_charged|\d credits? per\b", t.description or "")}
+        self.assertEqual(sorted(charging - gates.SPENDING), [])
+        for name in ("ai_voice_generator_create_audio", "ai_voice_cloner_create_audio", "swap_heads_in_photo"):
+            with self.subTest(tool=name):
+                self.assertIn("plan_token", tools[name].inputSchema.get("required", []))
 
 
 if __name__ == "__main__":
