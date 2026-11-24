@@ -98,6 +98,15 @@ class ConversationFrontTests(unittest.TestCase):
         words = next(d for d in chose["decisions"] if d["id"] == "product_picture")
         assert "answer none" in words["instruction"]
 
+    def test_an_attached_picture_is_the_product_photo_by_default(self):
+        """With shoe.jpg attached and the row left out, the plan said to find a web photo of the product."""
+        request, answers = "a 15 second TikTok ad for my sneaker brand", {"kind": "ad", "shape": "9:16", "length": "15"}
+        out = front("film", request, answers, attachments=[{"name": "shoe.jpg", "kind": "image"}])
+        picture = next(d for d in out["decisions"] if d["id"] == "product_picture")
+        assert picture["value"] == "photo" and "user's photo" in picture["instruction"]
+        bare = front("film", request, answers)
+        assert next(d for d in bare["decisions"] if d["id"] == "product_picture")["value"].startswith("web")
+
     def test_the_conversation_holds_no_video_building_rules(self):
         # the conversation only asks and records answers; the video tool's rules of thumb build
         from mcp_magichour.video_production_tool import RULES_OF_THUMB
