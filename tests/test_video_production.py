@@ -17,8 +17,9 @@ from mcp_magichour.video_production import (
     split,
     validate_story,
 )
+from mcp_magichour import video_production as vp
 
-STORIES = Path(__file__).parent / "fixtures" / "stories"
+STORIES =Path(__file__).parent / "fixtures" / "stories"
 
 
 def story(prefix):
@@ -438,6 +439,17 @@ class NarratorVoiceTests(unittest.TestCase):
             with self.subTest(voice):
                 self.assertFalse(plan({**s, "voice": voice})["ok"])
         self.assertIn("cv-0001", " ".join(validate_story({**s, "voice": "Ashley"})))
+
+
+class ColourCodeTests(unittest.TestCase):
+    def test_a_colour_code_in_a_subjects_words_is_asked_about_and_swapped(self):
+        s = {"title": "Bottle", "aspect": "16:9", "setting": "A white studio.",
+             "subjects": [{"id": "bottle", "role": "copy", "words": "a perfume bottle in brand purple #3B1F6B"}],
+             "beats": [{"seconds": 5, "text": "The bottle turns on a table.", "subjects": ["bottle"]}]}
+        self.assertIn("colour-codes", [q["id"] for q in vp.questions(s, plan(s))])
+        answered, problems = vp.apply_answers(s, {"colour-codes": "words"})
+        self.assertEqual(problems, [])
+        self.assertNotIn("#3B1F6B", plan(answered)["clips"][0]["steps"][-1]["prompt"])
 
 
 class OutputCheckTests(unittest.TestCase):

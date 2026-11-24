@@ -1206,12 +1206,14 @@ def questions(story: dict, planned: dict) -> list[dict]:
             "options": {"ok": "None of these happens.", "change": "One happens: change the beats or `clip` numbers and plan again."},
             "recommend": "ok",
         })
-    texts = [story.get("setting", "")] + [b.get("text", "") for b in beats if b.get("kind", "scene") == "scene"]
+    # a subject's words go into every prompt that shows it, like the setting
+    texts = ([story.get("setting", "")] + [s.get("words", "") for s in story.get("subjects", [])]
+             + [b.get("text", "") for b in beats if b.get("kind", "scene") == "scene"])
     codes = sorted({c for t in texts for c in HEX.findall(t)})
     if codes and not story.get("colour_codes"):
         out.append({
             "id": "colour-codes", "beat": None,
-            "ask": (f"The setting or a scene names colours by code ({', '.join(codes)}). A code in a prompt was drawn on screen as text."),
+            "ask": (f"The setting, a subject or a scene names colours by code ({', '.join(codes)}). A code in a prompt was drawn on screen as text."),
             "options": {"words": "Write them as colour words: " + ", ".join(f"{c} as {colour_name(c)}" for c in codes) + ".",
                         "keep": "Keep the codes."},
             "recommend": "words",
@@ -1261,6 +1263,9 @@ def apply_answers(story: dict, answers: dict[str, str]) -> tuple[dict, list[str]
             if choice == "words":
                 swap = lambda text: NAMED_HEX.sub(lambda m: m.group(1).rstrip() if m.group(1) and m.group(1).strip().lower() == colour_name(m.group(2)) else (m.group(1) or "") + colour_name(m.group(2)), text)
                 story["setting"] = swap(story.get("setting", ""))
+                for subject in story.get("subjects", []):
+                    if subject.get("words"):
+                        subject["words"] = swap(subject["words"])
                 for b in beats:
                     if b.get("kind", "scene") == "scene":
                         b["text"] = swap(b["text"])
