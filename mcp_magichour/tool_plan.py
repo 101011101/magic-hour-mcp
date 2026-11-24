@@ -147,7 +147,7 @@ def plan(family: str, request: str, answers: dict[str, str] | None, questions_as
     else:
         handed = {i for i, v in answers.items() if v == YOUR_CALL and i not in always}
 
-    decisions, texts = [], []
+    decisions, texts, picked = [], [], []
     for i, r in rows.items():
         value = answers.get(i, NOT_APPLICABLE if "applies" in r else YOUR_CALL)
         if value == NOT_APPLICABLE:
@@ -164,13 +164,17 @@ def plan(family: str, request: str, answers: dict[str, str] | None, questions_as
         chosen = (r["your_call"] if own_words else r["default"]) if value == YOUR_CALL else value
         decisions.append({"id": i, "kind": r["kind"], "value": chosen, "instruction": instruction})
         texts.append(instruction)
+        # The gap check reads only the chosen option: for 'your call', the option its default names
+        # (every option's text joined made a gap of 'your_call' on subtitles).
+        option = key if key is not None else (_match(r, chosen.rstrip(".")) if value == YOUR_CALL else None)
+        picked.append(r["answers"][option] if option is not None else "")
 
     fam = all_sheets[family]
     settings = fam.get("settings", {})
     named = _tools_named(texts + list(settings))
     tool_notes = {t: {k: v for k, v in notes()["tools"][t].items() if k in
                       ("family", "type", "antitype", "limits", "best_settings", "preferred")} for t in named}
-    gaps = [d["id"] for d in decisions if "GAP" in d["instruction"]
+    gaps = [d["id"] for d, text in zip(decisions, picked) if "GAP" in text
             or ("GAP" in rows[d["id"]]["why"] and d["instruction"] != "Stop.")]
     return {"ready": True, "stage": "plan", "family": family, "request": request, "decisions": decisions,
             "settings": settings, "free_models": notes().get("free_models", {}), "tools": tool_notes,

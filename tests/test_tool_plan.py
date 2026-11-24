@@ -106,6 +106,13 @@ class PlanTests(unittest.TestCase):
             "subtitle_language": "translated", "has_speech": "n/a", "sound_on_video": "n/a", "logo_or_card": "n/a"})
         self.assertIn("subtitle_language", out["gaps"])
 
+    def test_your_call_is_a_gap_only_when_its_option_is(self):
+        """The gap check read every option's text: 'your_call' on subtitles gave a gap, though the value is the spoken language."""
+        out = tool_plan.plan("change_video", "add subtitles to my video", {
+            "keep_or_remake": "keep", "subtitle_language": "your_call", "has_speech": "your_call"})
+        self.assertEqual(next(d for d in out["decisions"] if d["id"] == "subtitle_language")["value"], "Spoken language.")
+        self.assertEqual(out["gaps"], [])
+
     def test_music_on_the_users_video_plans_add_sound_to_video(self):
         """No longer a gap."""
         out = tool_plan.plan("change_video", "add warm music to this clip, keep my voice", {
