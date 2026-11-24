@@ -326,11 +326,16 @@ def front(family: str, request: str, answers: dict[str, str] | None = None, ques
     short_or_film = (answers or {}).get(SHORT_OR_FILM["id"])
     if short_or_film is not None:   # the user's answer to the "short or longer?" check, not a sheet row
         answers = {k: v for k, v in answers.items() if k != SHORT_OR_FILM["id"]}
-        said = re.sub(r"\b(?:not|no|never|without|n't \w+)\s+(?:(?:a|an|the)\s+)?(?:long|longer|film|story|ad|several)\b", "",
-                      str(short_or_film), flags=re.I)   # "short, not an ad" stays short
-        if re.search(r"\b(?:long|longer|film|story|ad|several)\b", said, re.I):
+        # "short, not an ad" and "not too long" stay short; a length ("5 seconds long", "as long as the song") is no film
+        said = re.sub(r"\b(?:not|no|never|without|n't \w+)\s+(?:(?:a|an|the|too|very|that|so|any)\s+)*(?:long|longer|film|story|ad|several)\b"
+                      r"|\b[\w.,]+\s*-?\s*(?:secs?|seconds?)\s+long\b|\b\d+(?:[.,]\d+)?\s*s\s+long\b|\bas long as\b", "",
+                      str(short_or_film), flags=re.I)
+        # a short ad is still a film; "long" with "short" or "one clip" is not
+        if re.search(r"\b(?:film|story|ad|several)\b", said, re.I) or (
+                re.search(r"\b(?:long|longer)\b", said, re.I) and not re.search(r"\b(?:short|one clip)\b", said, re.I)):
             return {"ready": False, "stage": "switch_family", "family": family,
-                    "next": "The user wants a longer film: call plan_conversation again with family film and the same request."}
+                    "next": ("The user wants a longer film: call plan_conversation again with family film and the same request. "
+                             "Pass questions_asked=true on every film call: the user was asked once already.")}
     if family == "new_video" and answers and answers.get("sound") == ASK:   # sound is implied, never asked
         answers = {**answers, "sound": YOUR_CALL}
         changed.append("sound 'ask' became 'your_call': sound is implied (on unless the user asks for silence), not asked.")

@@ -80,6 +80,15 @@ class ConversationFrontTests(unittest.TestCase):
         ad = front("new_video", "a ufo over a city", {"from_picture": "words", "short_or_film": "an ad for my shop"}, questions_asked=True)
         assert ad["stage"] == "switch_family"
 
+    def test_a_length_or_too_long_in_the_short_answer_is_no_film(self):
+        """'5 seconds long' and 'not too long' switched to the film family, which then asked a second batch."""
+        for short in ("one short clip, 5 seconds long", "short, not too long", "a 10s long clip", "one clip, as long as the song"):
+            kept = front("new_video", "a ufo over a city", {"from_picture": "words", "short_or_film": short}, questions_asked=True)
+            assert kept["stage"] != "switch_family", short
+        for film in ("a longer film please", "just a short clip for my ad"):   # a short ad is still a film
+            out = front("new_video", "a ufo over a city", {"from_picture": "words", "short_or_film": film}, questions_asked=True)
+            assert out["stage"] == "switch_family" and "questions_asked=true" in out["next"], film
+
     def test_a_skipped_product_picture_is_a_real_photo_and_words_is_the_users_choice(self):
         # no user wants a worse version; the look-alike is only the user's choice
         skipped = front("film", "an ad for my bottle", {"kind": "ad", "product_picture": "ask"}, questions_asked=True)
