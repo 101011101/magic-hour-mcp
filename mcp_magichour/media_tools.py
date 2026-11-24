@@ -34,23 +34,33 @@ def have_ffmpeg() -> bool:
     return ffmpeg_exe() is not None
 
 
+FFMPEG_TIMEOUT = 600   # seconds; an ffmpeg run still going after this is stopped (one call cannot run for ever)
+
+
+def _run(command: list, **options) -> subprocess.CompletedProcess:
+    """subprocess.run with the time limit; a run past FFMPEG_TIMEOUT is stopped and raises RuntimeError."""
+    try:
+        return subprocess.run(command, timeout=FFMPEG_TIMEOUT, stdin=subprocess.DEVNULL, **options)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"{Path(command[0]).name} ran longer than {FFMPEG_TIMEOUT} s and was stopped") from None
+
+
 def _ffmpeg(args: list[str], capture: bool = False) -> str:
     exe = ffmpeg_exe()
     if exe is None:
         raise RuntimeError("ffmpeg is not available")
     if capture:
         # errors="replace": a tag in another encoding (a Latin-1 title) is read, not raised
-        return subprocess.run([exe, "-hide_banner", *args], capture_output=True, text=True, errors="replace",
-                              stdin=subprocess.DEVNULL).stderr
-    subprocess.check_call([exe, "-v", "error", "-y", *args], stdin=subprocess.DEVNULL)
+        return _run([exe, "-hide_banner", *args], capture_output=True, text=True, errors="replace").stderr
+    _run([exe, "-v", "error", "-y", *args], check=True)
     return ""
 
 
 def probe(file: Path) -> dict:
     """Length, size and whether there is a sound track. With ffprobe when it exists, else from ffmpeg's own report."""
     if shutil.which("ffprobe"):
-        raw = subprocess.check_output(["ffprobe", "-v", "error", "-show_entries", "format=duration:stream=codec_type,width,height",
-                                       "-of", "json", str(file)])
+        raw = _run(["ffprobe", "-v", "error", "-show_entries", "format=duration:stream=codec_type,width,height",
+                    "-of", "json", str(file)], check=True, stdout=subprocess.PIPE).stdout
         data = json.loads(raw)
         video = next((s for s in data["streams"] if s["codec_type"] == "video"), {})   # a voice track has no picture
         return {"seconds": float(data["format"].get("duration") or 0), "width": video.get("width", 0), "height": video.get("height", 0),
@@ -170,11 +180,8 @@ def join(files: list[Path], out: Path, audio: bool | list[bool] = True, seconds:
         sound = ["-i", str(file)] if keep[i] and info["audio"] else silent
         cut = ["-t", f"{seconds[i]:.3f}"] if seconds[i] and info["seconds"] > seconds[i] + 0.05 else []
         graph, _ = frame_filter(info["width"], info["height"], width, height)
-        subprocess.check_call([
-            ffmpeg_exe() or "ffmpeg", "-v", "error", "-y", *sound, *cut,
-            "-vf", f"{graph},fps=24,format=yuv420p",
-            "-c:v", "libx264", "-crf", "18", "-c:a", "aac", "-ar", "48000", "-ac", "2", str(part),
-        ])
+        _ffmpeg([*sound, *cut, "-vf", f"{graph},fps=24,format=yuv420p",
+                 "-c:v", "libx264", "-crf", "18", "-c:a", "aac", "-ar", "48000", "-ac", "2", str(part)])
         parts.append(part)
     listing = out.with_suffix(".txt")
     listing.write_text("".join(f"file '{p.resolve()}'\n" for p in parts))
@@ -253,8 +260,8 @@ FLOOR_MAX_CUT_DB = 12.0
 def floor_db(file: Path, seconds: float | None = None) -> float | None:
     """The quiet level of a clip's sound: the 10th percentile of its 0.25 s levels (the background between words)."""
     cut = ["-t", f"{seconds:.3f}"] if seconds else []
-    raw = subprocess.run([ffmpeg_exe() or "ffmpeg", "-v", "error", "-i", str(file), *cut, "-vn", "-ac", "1", "-ar", "8000", "-f", "f32le", "-"],
-                         capture_output=True).stdout
+    raw = _run([ffmpeg_exe() or "ffmpeg", "-v", "error", "-i", str(file), *cut, "-vn", "-ac", "1", "-ar", "8000", "-f", "f32le", "-"],
+               capture_output=True).stdout
     samples = array.array("f", raw[: len(raw) - len(raw) % 4])
     if len(samples) < 4000:
         return None
@@ -309,10 +316,15 @@ def join_audio(files: list[Path], out: Path, gap: float = 0.0) -> Path:
     return out
 
 
+MIX_MAX_SECONDS = 600   # the longest mix (a mix padded to seconds=1e6 wrote a 63 GB file)
+
+
 def mix_audio(tracks: list[dict], out: Path, seconds: float | None = None, fade_out: float = 0.0) -> Path:
     """Sound files laid over each other into one sound file (a voice over music, no picture).
     tracks: [{file, at (seconds into the mix), volume (1 = as it is), fade_in (seconds)}]. seconds: the mix length
-    (default: to the end of the longest track). fade_out: seconds of fade at the end of the mix."""
+    (default: to the end of the longest track), at most MIX_MAX_SECONDS. fade_out: seconds of fade at the end of the mix."""
+    if (seconds is not None and seconds <= 0) or fade_out < 0:
+        raise ValueError("seconds must be more than 0, and fade_out 0 or more")
     inputs, chain = [], []
     for i, t in enumerate(tracks):
         inputs += ["-i", str(t["file"])]
@@ -322,7 +334,9 @@ def mix_audio(tracks: list[dict], out: Path, seconds: float | None = None, fade_
         steps.append(f"adelay={int(float(t.get('at', 0)) * 1000)}:all=1")
         chain.append(f"[{i}:a]{','.join(steps)}[t{i}]")
     total = seconds or max(float(t.get("at", 0)) + probe(Path(t["file"]))["seconds"] for t in tracks)
-    end = f",afade=t=out:st={max(0, total - fade_out):.2f}:d={fade_out:.2f}" if fade_out else ""
+    if total > MIX_MAX_SECONDS:
+        raise ValueError(f"The mix would be {total:.0f} s long; the most is {MIX_MAX_SECONDS} s.")
+    end =f",afade=t=out:st={max(0, total - fade_out):.2f}:d={fade_out:.2f}" if fade_out else ""
     # apad: a `seconds` longer than the tracks ends in silence (a line padded to the video's length)
     chain.append("".join(f"[t{i}]" for i in range(len(tracks))) + f"amix=inputs={len(tracks)}:duration=longest:normalize=0,apad,atrim=0:{total:.2f}{end}[a]")
     codec = {".wav": ["-c:a", "pcm_s16le"], ".mp3": ["-c:a", "libmp3lame", "-q:a", "2"]}.get(out.suffix.lower(), ["-c:a", "aac", "-b:a", "192k"])
