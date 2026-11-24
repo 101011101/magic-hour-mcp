@@ -294,6 +294,34 @@ if __name__ == "__main__":
     unittest.main()
 
 
+def similar_faces(size, n, face):
+    """A photo of n faces in a row that look alike on a small copy (one skin colour, two dark eyes), each with its own
+    fine texture. Returns (photo, the face boxes with a small margin, as face detection cuts them)."""
+    import random
+    from PIL import Image, ImageChops, ImageDraw, ImageFilter
+    rand = random.Random(3)
+
+    def noise(w, h, spread):
+        return Image.frombytes("L", (w, h), bytes(max(0, min(255, round(rand.gauss(128, spread)))) for _ in range(w * h))).convert("RGB")
+
+    width, height = size
+    photo = ImageChops.add(noise(width // 4, height // 4, 25).resize(size).filter(ImageFilter.GaussianBlur(6)),
+                           Image.new("RGB", size, (40, 60, 80)))
+    boxes = []
+    for i in range(n):
+        fw, fh = face, round(face * 1.2)
+        x, y = round(width * (i + 0.5) / n - fw / 2), round(height * 0.45) + rand.randint(-40, 40)
+        skin = ImageChops.add(noise(fw, fh, 18).filter(ImageFilter.GaussianBlur(1.5)), Image.new("RGB", (fw, fh), (120, 80, 60)))
+        oval = Image.new("L", (fw, fh), 0)
+        ImageDraw.Draw(oval).ellipse((0, 0, fw - 1, fh - 1), fill=255)
+        photo.paste(skin, (x, y), oval)
+        draw = ImageDraw.Draw(photo)
+        for ex in (0.25, 0.65):
+            draw.ellipse((x + fw * ex, y + fh * 0.35, x + fw * (ex + 0.1), y + fh * 0.45), fill=(20, 20, 20))
+        boxes.append((x - fw // 10, y - fh // 10, fw + fw // 5, fh + fh // 5))
+    return photo, boxes
+
+
 class HeadSwapPhotoTests(unittest.TestCase):
     """swap_heads_in_photo helpers."""
 
@@ -330,6 +358,13 @@ class HeadSwapPhotoTests(unittest.TestCase):
         new = Image.new("RGB", (box[2] - box[0], box[3] - box[1]), (0, 255, 0))
         pasted = put_head_back(photo, new, box, 0, [face])
         self.assertEqual(pasted.size, photo.size)
+
+    def test_each_of_several_similar_faces_is_found_where_it_was_cut(self):
+        """Faces that look alike on the small copy all landed on the same box."""
+        from mcp_magichour.tool_media import locate_face
+        photo, boxes = similar_faces((1600, 1200), 4, 60)
+        for x, y, w, h in boxes:
+            self.assertEqual(locate_face(photo, photo.crop((x, y, x + w, y + h))), (x, y, w, h))
 
     def test_tool_is_listed_with_person_places(self):
         async def tools():
@@ -500,6 +535,14 @@ class SwapHeadsToolTests(unittest.TestCase):
             self.assertTrue(error, text)
             self.assertIn("Nothing was charged", text)
             self.assertEqual(api.charged, 0)
+
+    def test_two_detected_faces_placed_on_one_face_are_refused_before_any_charge(self):
+        """Two face crops placed on the same box made the person numbers wrong: the wrong person was charged for."""
+        api = FakeMagicHour([self.boxes[0], self.boxes[0], self.boxes[1], self.boxes[2]])
+        error, text = api.swap(self.photo, [{"person": 3, "head": "https://h/a.png"}])
+        self.assertTrue(error, text)
+        self.assertIn("Nothing was charged", text)
+        self.assertEqual(api.charged, 0)
 
     def test_a_face_too_small_to_swap_is_refused_before_any_charge(self):
         """A 9x11 px face crashed after the person before it was charged."""

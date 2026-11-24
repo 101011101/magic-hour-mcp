@@ -243,29 +243,41 @@ def _diff_score(big, small, x: int, y: int) -> float:
     return sum(ImageStat.Stat(d).mean)
 
 
+COARSE_PLACES = 8   # places on the small copy that get the fine search, at the photo's own size
+
+
 def locate_face(photo, crop) -> tuple[int, int, int, int]:
     """Where a face crop from face detection sits in the photo: (x, y, width, height). The crops are cut from the
     photo at its own size; other sizes are tried when the match is poor."""
     from PIL import Image
 
     best = None
+    k = max(1, round(max(photo.size) / 200))   # coarse search on a photo about 200 px wide
+    small_photo = photo.resize((max(1, photo.width // k), max(1, photo.height // k)), Image.BILINEAR)
     for scale in (1.0, 0.9, 1.1, 0.8, 1.25, 0.67, 1.5, 0.5, 2.0):
         c = crop.resize((max(8, round(crop.width * scale)), max(8, round(crop.height * scale))))
         if c.width > photo.width or c.height > photo.height:
             continue
-        k = max(1, round(max(photo.size) / 200))   # coarse search on a photo about 200 px wide
-        small_photo = photo.resize((max(1, photo.width // k), max(1, photo.height // k)), Image.BILINEAR)
         small_crop = c.resize((max(1, c.width // k), max(1, c.height // k)), Image.BILINEAR)
-        _, cx, cy = min((_diff_score(small_photo, small_crop, x, y), x, y)
+        coarse = sorted((_diff_score(small_photo, small_crop, x, y), x, y)
                         for x in range(small_photo.width - small_crop.width + 1)
                         for y in range(small_photo.height - small_crop.height + 1))
-        fine = min((_diff_score(photo, c, x, y), x, y)
-                   for x in range(max(0, cx * k - k), min(photo.width - c.width, cx * k + k) + 1)
-                   for y in range(max(0, cy * k - k), min(photo.height - c.height, cy * k + k) + 1))
-        if best is None or fine[0] < best[0]:
-            best = (fine[0], fine[1], fine[2], c.width, c.height)
-        if best[0] < 3:   # a near-exact match: stop
-            break
+        # on the small copy, similar faces score alike and the best place was often another face: at the photo's own
+        # size the fine search looks at the best few places, each apart from the ones before (other sizes: one place)
+        places = []
+        for _, x, y in coarse:
+            if all(abs(x - px) * 2 >= small_crop.width or abs(y - py) * 2 >= small_crop.height for px, py in places):
+                places.append((x, y))
+                if len(places) == (COARSE_PLACES if scale == 1.0 else 1):
+                    break
+        for cx, cy in places:
+            fine = min((_diff_score(photo, c, x, y), x, y)
+                       for x in range(max(0, cx * k - k), min(photo.width - c.width, cx * k + k) + 1)
+                       for y in range(max(0, cy * k - k), min(photo.height - c.height, cy * k + k) + 1))
+            if best is None or fine[0] < best[0]:
+                best = (fine[0], fine[1], fine[2], c.width, c.height)
+            if best[0] < 3:   # a near-exact match: stop
+                return best[1:]
     return best[1:]
 
 
@@ -538,6 +550,9 @@ def register_tool_media(mcp: FastMCP) -> None:
                 photo.save(photo_file)
                 crops = await _detected_faces(await _upload(photo_file), f)
                 found = sorted([await asyncio.to_thread(locate_face, photo, Image.open(c).convert("RGB")) for c in crops])
+                if len(set(found)) < len(found):   # two crops placed on one face: the person numbers would be wrong
+                    raise ToolError("Two faces from face detection were placed on the same face in the photo, so the "
+                                    "person numbers cannot be trusted. Nothing was charged.")
             faces = []
             for i, s in enumerate(swaps):
                 if s.get("face"):
