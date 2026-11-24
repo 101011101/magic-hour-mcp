@@ -148,6 +148,18 @@ class DryRunFixTests(unittest.TestCase):
             out = tool_plan.plan("new_picture", "a photo of a cat sleeping on a sofa", answers, questions_asked=asked)
             self.assertEqual(next(d for d in out["decisions"] if d["id"] == "exact_words")["value"], "No words.")
 
+    def test_no_text_on_the_words_row_means_no_words(self):
+        """exact_words 'no text' (a poster 'of a mountain, no text') was taken as the words to show."""
+        answers = {"look": "snowy peak at dawn", "shape": "9:16", "set": "one", "transparent": "no"}
+        for value in ("no text", "No words.", "nothing", "no", "no text at all"):
+            out = tool_plan.plan("new_picture", "a poster of a mountain, no text", {**answers, "exact_words": value})
+            d = next(d for d in out["decisions"] if d["id"] == "exact_words")
+            self.assertIn("say 'no text' in the prompt", d["instruction"], value)
+        sign = tool_plan.plan("new_picture", "a sign that says NO ENTRY", {**answers, "exact_words": "NO ENTRY"})
+        self.assertIn("exact words in the prompt", next(d for d in sign["decisions"] if d["id"] == "exact_words")["instruction"])
+        clip = tool_plan.plan("new_video", "a 5 s clip of rain, no text", {"from_picture": "words", "length": "5", "exact_words": "no text"})
+        self.assertEqual(next(d for d in clip["decisions"] if d["id"] == "exact_words")["instruction"], "No words in the prompt.")
+
     def test_consent_none_is_an_option(self):
         out = tool_plan.plan("faces", "my face", {"consent": "none", "photo_or_video": "photo", "which_person": "n/a",
                              "which_part": "n/a", "headshot_look": "n/a"})

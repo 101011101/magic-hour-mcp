@@ -66,12 +66,18 @@ def options(row: dict) -> list[str]:
     return list(row.get("answers", {}))
 
 
+# On a words row, these mean its 'none' option ("no text" was taken as the words to show).
+NO_WORDS = re.compile(r"(?:none|nothing|no(?: (?:text|words?|title|lettering|captions?))?(?: at all)?)\W*")
+
+
 def _match(row: dict, value: str) -> str | None:
     """The answers key the value names, or None."""
     v = value.strip().lower()
     for key in options(row):
         if key.lower() == v:
             return key
+    if "none" in options(row) and _words_option(row) and NO_WORDS.fullmatch(v):
+        return "none"
     return None
 
 
