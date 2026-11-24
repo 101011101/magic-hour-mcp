@@ -67,13 +67,14 @@ def _quarter_turn(rotation) -> bool:
 def probe(file: Path) -> dict:
     """Length, size and whether there is a sound track. With ffprobe when it exists, else from ffmpeg's own report.
     The size is the size shown: a phone video stored 640x360 with a rotation of 90 is 360x640, as ffmpeg turns
-    its frames before any filter."""
+    its frames before any filter. Album art in a sound file (an "attached pic") is not a picture track."""
     if shutil.which("ffprobe"):
         raw = _run(["ffprobe", "-v", "error", "-show_entries",
-                    "format=duration:stream=codec_type,width,height:stream_side_data=rotation:stream_tags=rotate",
-                    "-of", "json", str(file)], check=True, stdout=subprocess.PIPE).stdout
+                    "format=duration:stream=codec_type,width,height:stream_side_data=rotation:stream_tags=rotate"
+                    ":stream_disposition=attached_pic", "-of", "json", str(file)], check=True, stdout=subprocess.PIPE).stdout
         data = json.loads(raw)
-        video = next((s for s in data["streams"] if s["codec_type"] == "video"), {})   # a voice track has no picture
+        video = next((s for s in data["streams"] if s["codec_type"] == "video"
+                      and not (s.get("disposition") or {}).get("attached_pic")), {})   # a voice track has no picture
         width, height = video.get("width", 0), video.get("height", 0)
         turns = [d.get("rotation") for d in video.get("side_data_list", [])] + [(video.get("tags") or {}).get("rotate")]
         if any(_quarter_turn(t) for t in turns):
@@ -84,7 +85,7 @@ def probe(file: Path) -> dict:
     duration = re.search(r"Duration: (\d+):(\d+):(\d+\.?\d*)", report)
     # one block for each stream: its "Stream #" line and the lines under it (the rotation is in the video's block)
     streams = re.split(r"\n(?=\s*Stream #)", report)[1:]
-    video = next((s for s in streams if "Video:" in s.split("\n", 1)[0]), "")
+    video = next((s for s in streams if "Video:" in s.split("\n", 1)[0] and "(attached pic)" not in s.split("\n", 1)[0]), "")
     size = re.search(r"Video: .*? (\d{2,5})x(\d{2,5})", video)
     if not (size or "Audio:" in report):
         raise RuntimeError(f"ffmpeg could not read {file.name}")

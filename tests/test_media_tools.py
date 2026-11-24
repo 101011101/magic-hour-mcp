@@ -93,6 +93,26 @@ class PhoneVideoTests(MediaTest):
                 self.assertEqual((m.probe(self.dir / "words.mp4")["width"], m.probe(self.dir / "words.mp4")["height"]), (72, 128))
 
 
+class AlbumArtTests(MediaTest):
+    def with_cover(self, suffix):
+        tone, cover, song = self.dir / f"tone{suffix}", self.dir / "cover.png", self.dir / f"song{suffix}"
+        self.ff("-f", "lavfi", "-i", "sine=d=1", str(tone))
+        self.ff("-f", "lavfi", "-i", "testsrc=s=96x96", "-frames:v", "1", str(cover))
+        self.ff("-i", str(tone), "-i", str(cover), "-map", "0", "-map", "1", "-c:a", "copy", "-c:v", "png",
+                "-disposition:v", "attached_pic", str(song))
+        return tone, song
+
+    def test_album_art_is_not_a_picture_track(self):
+        for suffix in (".mp3", ".m4a"):
+            tone, song = self.with_cover(suffix)
+            for name, path in probe_paths():
+                with self.subTest(suffix=suffix, path=name), path():
+                    info = m.probe(song)
+                    self.assertEqual((info["width"], info["height"], info["audio"]), (0, 0, True))
+                    joined = m.join([song, tone], self.dir / "joined.m4a")   # sound files are joined as sound
+                    self.assertAlmostEqual(m.probe(joined)["seconds"], 2.0, delta=0.15)
+
+
 class LimitTests(MediaTest):
     def test_an_ffmpeg_run_past_the_time_limit_is_stopped_with_a_clear_error(self):
         slow = ["-re", "-f", "lavfi", "-i", "anullsrc=r=8000:cl=mono", "-t", "3", "-f", "null", "-"]   # 3 s at real speed
