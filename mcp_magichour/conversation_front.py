@@ -278,6 +278,18 @@ def _shape(w: int, h: int) -> str:
 _MEDIA_CACHE: dict[str, dict] = {}
 
 
+def _picture_facts(file: Path) -> dict | None:
+    """Size and shape when the file is a picture, by its content (an image URL with no suffix was read as a 0 s video)."""
+    from PIL import Image
+
+    try:
+        with Image.open(file) as image:
+            w, h = image.size
+    except OSError:   # not a picture PIL can read
+        return None
+    return {"kind": "image", "width": w, "height": h, "shape": _shape(w, h)}
+
+
 async def media_facts(attachments: list[dict]) -> list[dict]:
     """Length, size, shape and sound of each attached file with a file_path, read by code (free). Never fails the plan."""
     from . import media_helpers_tool, media_tools
@@ -291,12 +303,10 @@ async def media_facts(attachments: list[dict]) -> list[dict]:
             try:
                 with tempfile.TemporaryDirectory() as tmp:
                     file, picture = await media_helpers_tool._fetch_media(fp, Path(tmp), ("image", "video", "audio"))
-                    if picture:
-                        from PIL import Image
-
-                        w, h = Image.open(file).size
-                        fact = {"kind": "image", "width": w, "height": h, "shape": _shape(w, h)}
-                    else:
+                    fact = _picture_facts(file)
+                    if fact is None and picture:
+                        raise ValueError("not a picture")
+                    if fact is None:
                         info = await asyncio.to_thread(media_tools.probe, file)
                         fact = {"kind": "video" if info["width"] else "audio", "seconds": round(info["seconds"], 2)}
                         if info["width"]:

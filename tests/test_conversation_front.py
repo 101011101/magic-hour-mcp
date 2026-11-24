@@ -131,6 +131,19 @@ class ConversationFrontTests(unittest.TestCase):
         out = front("change_video", "trim the whole clip to vertical", {}, attachments=[{"name": "clip.mp4", "kind": "video"}], media=media)
         assert out["media"] == media and "never guess a length" in out["next"]
 
+    def test_media_facts_read_a_picture_by_its_content(self):
+        """An image URL with no extension (/photo-123?w=800) was read as a video of 0 s."""
+        from PIL import Image
+        photo = Path(tempfile.mkdtemp()) / "source.mp4"   # the name the download gets with no suffix
+        Image.new("RGB", (1080, 1920), "red").save(photo, format="JPEG")
+
+        async def fake_fetch(media, folder, kinds=("image", "video")):
+            return photo, False
+        self.enterContext(patch.object(media_helpers_tool, "_fetch_media", fake_fetch))
+        conversation_front._MEDIA_CACHE.clear()
+        media = asyncio.run(conversation_front.media_facts([{"name": "a.jpg", "kind": "image", "file_path": "https://example.com/photo-123?w=800"}]))
+        assert media == [{"name": "a.jpg", "kind": "image", "width": 1080, "height": 1920, "shape": "9:16"}]
+
     def test_media_facts_never_fail_the_plan(self):
         async def broken(media, folder, kinds=("image", "video")):
             raise RuntimeError("down")
