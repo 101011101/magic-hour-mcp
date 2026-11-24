@@ -333,6 +333,8 @@ MEDIA_NEXT = (" Media facts (`media`) are read from the files: use their exact s
 def front(family: str, request: str, answers: dict[str, str] | None = None, questions_asked: bool = False,
           attachments: list[dict] | None = None, media: list[dict] | None = None) -> dict:
     attachments = attachments or []
+    if answers and "file" in answers:   # the answer to a "Please attach" question is the attachment, not a row
+        answers = {k: v for k, v in answers.items() if k != "file"}
     files = _files(family, attachments, request, answers)
     if family == "film":
         out = _film(request, answers, questions_asked, files)

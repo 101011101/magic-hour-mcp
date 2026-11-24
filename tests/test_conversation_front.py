@@ -22,6 +22,18 @@ class ConversationFrontTests(unittest.TestCase):
         ids = [q["id"] for q in out["questions"]]
         assert "which_person" in ids and "file" in ids
 
+    def test_the_answer_to_a_file_question_is_left_out(self):
+        """The plan asks with id 'file'; the answer 'file': 'beach.jpg' was refused as an unknown row."""
+        answers = {"keep_or_redraw": "keep", "colour_only": "warmer"}
+        asked = front("change_picture", "make my photo warmer", answers)
+        assert [q["id"] for q in asked["questions"]] == ["file"]
+        beach = [{"name": "beach.jpg", "kind": "image"}]
+        out = front("change_picture", "make my photo warmer", {**answers, "file": "beach.jpg"}, questions_asked=True, attachments=beach)
+        assert out["stage"] == "plan"
+        film = front("film", "an ad for my bottle", {"kind": "ad", "file": "bottle.jpg"}, questions_asked=True,
+                     attachments=[{"name": "bottle.jpg", "kind": "image"}])
+        assert film["stage"] == "plan"
+
     def test_file_still_missing_after_the_batch_makes_nothing(self):
         out = front("change_picture", "make this warmer", {}, questions_asked=True, attachments=[])
         assert out["stage"] == "missing_file" and not out["ready"]
