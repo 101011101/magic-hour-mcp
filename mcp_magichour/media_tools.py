@@ -681,12 +681,13 @@ def merge_spans(spans: list[tuple[float, float]], bridge: float = DUCK_BRIDGE) -
 
 
 def _inside(spans: list[tuple[float, float]], ramp: float = DUCK_RAMP) -> str:
-    """An ffmpeg expression of t: 1 inside the spans, 0 outside, with a linear ramp at each edge."""
-    expr = "0"
-    for start, end in spans:
-        one = f"clip(min((t-{start - ramp:.3f})/{ramp},({end + ramp:.3f}-t)/{ramp}),0,1)"
-        expr = one if expr == "0" else f"max({expr},{one})"
-    return expr
+    """An ffmpeg expression of t: 1 inside the spans, 0 outside, with a linear ramp at each edge.
+    The spans are joined by max() in pairs, then pairs of pairs: one max() in another for each span went past
+    ffmpeg's depth limit at about 95 spans (a 4-minute talk)."""
+    terms = [f"clip(min((t-{start - ramp:.3f})/{ramp},({end + ramp:.3f}-t)/{ramp}),0,1)" for start, end in spans]
+    while len(terms) > 1:
+        terms = [f"max({terms[i]},{terms[i + 1]})" if i + 1 < len(terms) else terms[i] for i in range(0, len(terms), 2)]
+    return terms[0] if terms else "0"
 
 
 def _gain(lowered: str, db: float, kept: str = "0") -> str:
@@ -774,8 +775,19 @@ def add_sound(film: Path, out: Path, narration: Path | None = None, parts: list[
     film's own sound). music_first: the music is never lowered (a music video). layers: a folder that keeps each layer
     as its own file, so a later mix can use them again. music_at: the second the music starts (the whoosh first,
     then the music). Returns what was done and measured."""
-    seconds = probe_seconds(film)
     folder = layers or Path(tempfile.mkdtemp())
+    try:
+        return _add_sound(film, out, folder, narration, parts, music, spoken, music_first, layers, music_swell, music_at)
+    finally:
+        if not layers:   # the working files are removed, also when a step fails (a failed mix left 92 MB)
+            shutil.rmtree(folder, ignore_errors=True)
+
+
+def _add_sound(film: Path, out: Path, folder: Path, narration: Path | None, parts: list[dict] | None, music: Path | None,
+               spoken: list[tuple[float, float]] | None, music_first: bool, layers: Path | None, music_swell: bool,
+               music_at: float) -> dict:
+    """add_sound's work, with its files in `folder`."""
+    seconds = probe_seconds(film)
     folder.mkdir(parents=True, exist_ok=True)
     parts = parts if narration and parts else []
     narrated = merge_spans([(p["at"], p["at"] + (p["end"] - p["start"]) / p.get("tempo", 1.0)) for p in parts])
@@ -855,8 +867,6 @@ def add_sound(film: Path, out: Path, narration: Path | None = None, parts: list[
         (layers / "layers.json").write_text(json.dumps({
             "priority": ["speech", "music", "effects"], "music_first": music_first, "music_swell": music_swell, "speech": speech, "spoken": talk,
             "files": {k: files[k].name for k in order}, "gain_db": round(gain, 2), "target_lufs": TARGET_LUFS}, indent=1))
-    else:
-        shutil.rmtree(folder, ignore_errors=True)
     return {"lufs_before": before, "lufs": loudness(out), "speech": speech, "layers": order}
 
 

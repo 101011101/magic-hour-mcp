@@ -320,6 +320,38 @@ class ManyCaptionsTests(MediaTest):
                 self.assertGreater(self.changed(out, film, (30, 60)), 20)
 
 
+class ManySpansTests(MediaTest):
+    """A 4-minute talk has about 100 spoken lines; each is one span in the level expression."""
+
+    spans = [(i * 2.4, i * 2.4 + 1.5) for i in range(200)]
+
+    @staticmethod
+    def value(expr, t):
+        clip = lambda x, low, high: min(max(x, low), high)
+        return eval(expr, {"__builtins__": {}}, {"max": max, "min": min, "clip": clip, "t": t})
+
+    def test_ffmpeg_reads_the_level_for_many_spans(self):
+        level = m._inside(self.spans)
+        m._ffmpeg(["-f", "lavfi", "-i", "sine=r=8000:d=0.2", "-af", f"volume='{level}':eval=frame", "-f", "null", "-"])
+
+    def test_the_level_is_1_inside_0_outside_and_ramps_at_the_edges(self):
+        level, ramp = m._inside(self.spans), m.DUCK_RAMP
+        for t, expected in ((0.75, 1), (2.4 * 57 + 0.75, 1), (1.5 + ramp + 0.01, 0), (2.4 * 199 + 1.5 + ramp / 2, 0.5),
+                            (2.4 * 120 - ramp / 2, 0.5), (-5, 0), (1e4, 0)):
+            with self.subTest(t=t):
+                self.assertAlmostEqual(self.value(level, t), expected, places=2)
+        self.assertEqual(m._inside([]), "0")
+
+    def test_the_working_folder_is_removed_when_a_step_fails(self):
+        folder = self.dir / "work"
+        with mock.patch.object(m.tempfile, "mkdtemp", side_effect=lambda: (folder.mkdir(), str(folder))[1]), \
+                mock.patch.object(m, "probe_seconds", return_value=1.0), \
+                mock.patch.object(m, "_ffmpeg", side_effect=RuntimeError("ffmpeg failed")):
+            with self.assertRaises(RuntimeError):
+                m.add_sound(self.dir / "film.mp4", self.dir / "out.mp4")
+        self.assertFalse(folder.exists())
+
+
 class LimitTests(MediaTest):
     def test_an_ffmpeg_run_past_the_time_limit_is_stopped_with_a_clear_error(self):
         slow = ["-re", "-f", "lavfi", "-i", "anullsrc=r=8000:cl=mono", "-t", "3", "-f", "null", "-"]   # 3 s at real speed
