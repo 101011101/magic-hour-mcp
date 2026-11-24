@@ -58,6 +58,14 @@ class ConversationFrontTests(unittest.TestCase):
         out = front("film", "a silent film of a forest", {"kind": "story_mood", "sound": "silent", "who_speaks": "nobody"})
         assert {d["id"]: d["value"] for d in out["decisions"]}["sound"] == "silent"
 
+    def test_a_silent_request_with_the_sound_row_open_decides_silent(self):
+        """The silence in the words changed only `next`: the decision said sound 'on.' and `next` said audio false."""
+        for answers in ({"kind": "story_mood"}, {"kind": "story_mood", "sound": "your_call"}):
+            out = front("film", "a silent film of a forest at dawn", answers)
+            assert next(d for d in out["decisions"] if d["id"] == "sound")["value"] == "silent" and "audio` is false" in out["next"]
+        loud = front("film", "a film of a forest at dawn", {"kind": "story_mood"})
+        assert next(d for d in loud["decisions"] if d["id"] == "sound")["value"] == "on."
+
     def test_video_with_no_length_checks_short_or_film_once(self):
         out = front("new_video", "a ufo over a city", {"from_picture": "words", "length": "your_call", "shape": "16:9"})
         assert out["stage"] == "ask_the_user" and [q["id"] for q in out["questions"]] == ["short_or_film"]

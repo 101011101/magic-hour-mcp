@@ -243,6 +243,8 @@ def _film(request: str, answers: dict[str, str] | None, questions_asked: bool, f
         value = answers.get(i, YOUR_CALL)
         if value == YOUR_CALL and i in answers and "your_call" in r:   # the user handed it over (not a skipped question)
             decisions.append({"id": i, "value": r["your_call"]})
+        elif value in (ASK, YOUR_CALL) and i == "sound" and silent:   # the words ask for silence: the decision says so, as `next` does
+            decisions.append({"id": i, "value": "silent", "instruction": r["answers"]["silent"]})
         elif value in (ASK, YOUR_CALL) and i == "product_picture" and any(g["kind"] == "image" for g in files["given"]):
             # the user attached a picture: the default is their photo, not one from the web
             decisions.append({"id": i, "value": "photo", "instruction": r["answers"]["photo"]})
