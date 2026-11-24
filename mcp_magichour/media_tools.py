@@ -195,7 +195,9 @@ def frame_filter(width: int, height: int, target_w: int, target_h: int, how: str
     if how == "pad":
         return f"{inside},pad={target_w}:{target_h}:(ow-iw)/2:(oh-ih)/2:color={color}", "pad"
     cover = f"scale={target_w}:{target_h}:force_original_aspect_ratio=increase,crop={target_w}:{target_h}"
-    return f"split[a][b];[a]{cover},boxblur=20:2[bg];[b]{inside}[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2", "fill"
+    # boxblur's radius must be under half the colour planes' short side (a quarter of the frame's in 4:2:0)
+    blur = max(1, min(20, min(target_w, target_h) // 8))
+    return f"split[a][b];[a]{cover},boxblur={blur}:2[bg];[b]{inside}[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2", "fill"
 
 
 def size_for(aspect: str, like: dict | None = None) -> tuple[int, int]:

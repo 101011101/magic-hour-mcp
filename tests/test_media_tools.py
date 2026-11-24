@@ -206,6 +206,16 @@ class OddSizeTests(MediaTest):
                 self.assertEqual((info["width"], info["height"]), (160, 90))
 
 
+class SmallFrameTests(MediaTest):
+    def test_a_small_frame_can_be_filled_with_a_blur(self):
+        tall = self.dir / "tall.mp4"
+        self.ff("-f", "lavfi", "-i", "testsrc=s=72x128:r=24:d=1", "-pix_fmt", "yuv420p", str(tall))
+        made = m.reframe(tall, "16:9", self.dir / "wide.mp4", how="fill")
+        self.assertEqual((made["width"], made["height"], made["way"]), (128, 72, "fill"))
+        joined = m.join([tall], self.dir / "joined.mp4", size=(128, 72))
+        self.assertEqual((m.probe(joined)["width"], m.probe(joined)["height"]), (128, 72))
+
+
 class LimitTests(MediaTest):
     def test_an_ffmpeg_run_past_the_time_limit_is_stopped_with_a_clear_error(self):
         slow = ["-re", "-f", "lavfi", "-i", "anullsrc=r=8000:cl=mono", "-t", "3", "-f", "null", "-"]   # 3 s at real speed
