@@ -1095,21 +1095,45 @@ def stack_lines(lines: list[dict]) -> list[dict]:
 def draw_captions(film: Path, timed: list[dict], out: Path) -> Path:
     """Draw exact words on the picture. timed: [{"text", "start", "end", "place"?: top|middle|bottom, "large"?: bool}].
     Lines at the same place should not overlap in time. Needs Pillow."""
+    from PIL import Image
+
     info = probe(film)
+    size = (info["width"], info["height"])
     timed = stack_lines(timed)
-    inputs, chain, last, pngs = ["-i", str(film)], [], "0:v", []
-    for i, line in enumerate(timed):
-        pngs.append(_caption_png(line["text"], (info["width"], info["height"]), out.with_name(f"{out.stem}-caption{i}.png"),
-                                 **word_style(line)))
-        # -loop 1 and shortest=1: a single-frame picture was dropped when the film's video started a moment after 0 s
-        # (the join's file starts at 0.021 s; words_drawn 3, none on screen)
-        inputs += ["-loop", "1", "-i", str(pngs[-1])]
-        chain.append(f"[{last}][{i + 1}:v]overlay=shortest=1:enable='between(t,{line['start']:.2f},{line['end']:.2f})'[v{i}]")
-        last = f"v{i}"
-    chain.append(f"[{last}]{EVEN_SIZE},format=yuv420p[even]")
-    last = "even"
-    _ffmpeg([*inputs, "-filter_complex", ";".join(chain), "-map", f"[{last}]", "-map", "0:a?",
-                           "-c:v", "libx264", "-crf", "18", "-c:a", "copy", str(out)])
-    for png in pngs:
-        png.unlink()
+    pngs = [_caption_png(line["text"], size, out.with_name(f"{out.stem}-caption{i}.png"), **word_style(line))
+            for i, line in enumerate(timed)]
+    # All captions are one input: a list of pictures, each shown from one caption change to the next (ffmpeg's concat
+    # list). One full-frame picture input for each caption was decoded for the whole film, and 25 captions on a 30 s
+    # 1080x1920 film took 2.6 GB of memory or more.
+    times = sorted({0.0, *(max(0.0, float(t)) for line in timed for t in (line["start"], line["end"]) if t < info["seconds"])})
+    times.append(max(info["seconds"], times[-1]) + 1)   # the last picture runs past the film's end
+    made, listing = {}, ["ffconcat version 1.0"]
+    for k, at in enumerate(times):
+        on = tuple(i for i, line in enumerate(timed) if line["start"] <= at < line["end"])
+        if on not in made:
+            if len(on) == 1:
+                made[on] = pngs[on[0]]
+            else:   # no caption (a clear picture), or the captions on at the same time put in one picture
+                picture = Image.new("RGBA", size, (0, 0, 0, 0))
+                for i in on:
+                    picture.alpha_composite(Image.open(pngs[i]).convert("RGBA"))
+                made[on] = out.with_name(f"{out.stem}-captions{len(made)}.png")
+                picture.save(made[on])
+        listing.append("file '" + made[on].name.replace("'", "'\\''") + "'")
+        if k + 1 < len(times):
+            listing.append(f"duration {times[k + 1] - at:.3f}")
+    pictures = out.with_name(f"{out.stem}-captions.txt")
+    pictures.write_text("\n".join(listing) + "\n")
+    inputs, chain = ["-i", str(film)], []
+    if timed:
+        # eof_action=pass: after the last picture the film goes on as it is
+        inputs += ["-f", "concat", "-safe", "0", "-i", str(pictures)]
+        chain.append("[0:v][1:v]overlay=eof_action=pass[words]")
+    chain.append(f"[{'words' if timed else '0:v'}]{EVEN_SIZE},format=yuv420p[even]")
+    try:
+        _ffmpeg([*inputs, "-filter_complex", ";".join(chain), "-map", "[even]", "-map", "0:a?",
+                 "-c:v", "libx264", "-crf", "18", "-c:a", "copy", str(out)])
+    finally:
+        for png in {*pngs, *made.values(), pictures}:
+            png.unlink(missing_ok=True)
     return out

@@ -265,6 +265,61 @@ class LongWordTests(unittest.TestCase):
         self.assertEqual(load.call_args.args[0], 27)
 
 
+class ManyCaptionsTests(MediaTest):
+    """The film the join makes: 3 s, 160x90, its picture starting a moment after 0 s. A still picture (bars), so a
+    frame taken a moment off is the same."""
+
+    def film(self):
+        clips = []
+        for i in range(2):
+            clips.append(self.dir / f"clip{i}.mp4")
+            self.ff("-f", "lavfi", "-i", "smptebars=s=160x90:r=24:d=1.5", "-f", "lavfi", "-i", "sine=d=1.5", "-pix_fmt", "yuv420p", str(clips[-1]))
+        return m.join(clips, self.dir / "film.mp4")
+
+    def changed(self, a, b, rows):
+        from PIL import Image
+        shots = []
+        for video, name in ((a, "a.png"), (b, "b.png")):
+            self.ff("-ss", f"{self.at:.3f}", "-i", str(video), "-frames:v", "1", str(self.dir / name))
+            shots.append(Image.open(self.dir / name).convert("RGB"))
+        return sum(1 for y in range(*rows) for x in range(160)
+                   if sum(abs(p - q) for p, q in zip(shots[0].getpixel((x, y)), shots[1].getpixel((x, y)))) > 60)
+
+    def frames(self, video):
+        report = m._ffmpeg(["-i", str(video), "-map", "0:v:0", "-f", "null", "-"], capture=True)
+        return int(m.re.findall(r"frame=\s*(\d+)", report)[-1])
+
+    def test_all_captions_are_one_input_to_ffmpeg(self):
+        film = self.film()
+        timed = [{"text": f"Line {i}", "start": i * 0.25, "end": i * 0.25 + 0.2} for i in range(12)]
+        with mock.patch.object(m, "_ffmpeg", wraps=m._ffmpeg) as run:
+            m.draw_captions(film, timed, self.dir / "out.mp4")
+        drawn = [c.args[0] for c in run.call_args_list if not c.kwargs.get("capture")]
+        self.assertEqual(drawn[-1].count("-i"), 2)   # the film and one stream of caption pictures
+        self.assertEqual(self.frames(self.dir / "out.mp4"), self.frames(film))
+        self.assertEqual([p.name for p in self.dir.iterdir() if p.name.startswith("out")], ["out.mp4"])
+
+    def test_each_caption_is_shown_in_its_own_time(self):
+        film = self.film()
+        timed = [{"text": "One", "start": 0.5, "end": 1.0}, {"text": "Two", "place": "top", "start": 0.8, "end": 2.0},
+                 {"text": "Three", "start": 2.2, "end": 2.6}]
+        out = m.draw_captions(film, timed, self.dir / "out.mp4")
+        top, bottom = (5, 25), (62, 82)
+        for at, shown in ((0.05, ""), (0.6, "b"), (0.9, "tb"), (1.5, "t"), (2.1, ""), (2.4, "b"), (2.9, "")):
+            self.at = at
+            with self.subTest(at=at):
+                self.assertEqual(self.changed(out, film, top) > 20, "t" in shown)
+                self.assertEqual(self.changed(out, film, bottom) > 20, "b" in shown)
+        self.assertTrue(m.probe(out)["audio"])
+
+    def test_words_with_no_end_are_on_from_the_first_frame_to_the_last(self):
+        film = self.film()
+        out = m.draw_words(film, [{"text": "SALE", "place": "middle", "size": "large"}], self.dir / "words.mp4", False)
+        for self.at in (0.0, 1.5, 2.95):
+            with self.subTest(at=self.at):
+                self.assertGreater(self.changed(out, film, (30, 60)), 20)
+
+
 class LimitTests(MediaTest):
     def test_an_ffmpeg_run_past_the_time_limit_is_stopped_with_a_clear_error(self):
         slow = ["-re", "-f", "lavfi", "-i", "anullsrc=r=8000:cl=mono", "-t", "3", "-f", "null", "-"]   # 3 s at real speed
