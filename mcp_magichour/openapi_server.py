@@ -67,6 +67,7 @@ from .project_result_app import (
     install_ui_read_origin,
     read_mcp_app_html,
 )
+from .gates import MODE as GATES_MODE, register_gates
 from . import kept_files
 from .plan_request import register_plan_request
 from .tool_logging import ToolCallLoggingMiddleware
@@ -194,6 +195,13 @@ def build_api_client() -> httpx.AsyncClient:
     )
 
 
+GATES_INSTRUCTIONS = (
+    "\n\nEvery request that makes or changes media starts with start_request, then classify_request. A hard request "
+    "then needs submit_plan and review_plan before any create tool, and final_check before delivery. Pass the approved "
+    "token as plan_token to every create tool."
+)
+
+
 def create_mcp() -> FastMCP:
     """Create a server and API client for one application lifecycle."""
     spec_path = os.getenv("MAGIC_HOUR_OPENAPI_PATH", str(DEFAULT_OPENAPI_PATH))
@@ -216,7 +224,7 @@ def create_mcp() -> FastMCP:
         version=MCP_SERVER_VERSION,
         website_url=MCP_WEBSITE_URL,
         icons=MCP_SERVER_ICONS,
-        instructions=MCP_SERVER_INSTRUCTIONS,
+        instructions=MCP_SERVER_INSTRUCTIONS + (GATES_INSTRUCTIONS if GATES_MODE in ("warn", "refuse") else ""),
         route_maps=[
             *[
                 RouteMap(methods=["POST"], pattern=f"^{re.escape(path)}$", mcp_type=MCPType.TOOL, mcp_tags={"read-operation"})
@@ -244,6 +252,8 @@ def create_mcp() -> FastMCP:
 def register_custom_tools(mcp: FastMCP) -> None:
     register_workflow_guidance(mcp)
     register_plan_request(mcp)
+    if GATES_MODE in ("warn", "refuse"):
+        register_gates(mcp, GATES_MODE)
 
     @mcp.tool(
         name="upload_chatgpt_image",
