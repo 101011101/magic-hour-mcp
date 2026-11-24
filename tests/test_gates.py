@@ -83,6 +83,18 @@ class BackstopTests(unittest.TestCase):
         self.assertIn(("sound", "no music"), kinds)   # "No music" asks for no music
         self.assertNotIn(("sound", "says"), kinds)
 
+    def test_brief_items_read_a_length_stated_as_a_length(self):
+        # "80s" is a decade, "the story of" names no shape, minutes are 60 s each (advise reads these on the default path)
+        for request, item in [("A perfume ad in 80s VHS style for TikTok, four seasons, 20 seconds", ("seconds", "20")),
+                              ("A 2 minute film about our bakery, 16:9", ("seconds", "120")),
+                              ("A 20 second YouTube ad that tells the story of our perfume", ("aspect", "16:9"))]:
+            with self.subTest(request=request):
+                values = {(i["kind"], i["value"]) for i in gates.brief_items(request, [])}
+                self.assertIn(item, values)
+                self.assertEqual(len([k for k, _ in values if k == item[0]]), 1)
+        values = {(i["kind"], i["value"]) for i in gates.brief_items("A perfume ad in 80s VHS style for TikTok, four seasons", [])}
+        self.assertNotIn("seconds", {k for k, _ in values})
+
 
 class TokenTests(unittest.TestCase):
     def test_round_trip_and_tamper(self):

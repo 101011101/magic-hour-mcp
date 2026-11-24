@@ -28,7 +28,7 @@ from mcp.types import TextContent, ToolAnnotations
 from pydantic import BaseModel, Field
 
 from .gates_docs import COMPARISON, notes_for
-from .plan_request import QUESTIONS, parse_aspect, parse_seconds
+from .plan_request import QUESTIONS, parse_aspect, parse_seconds, stated_lengths
 
 MODE = os.getenv("MAGIC_HOUR_GATES", "off")
 
@@ -80,8 +80,8 @@ LENGTH = re.compile(r"(\d+(?:\.\d+)?)[\s-]*(?:s\b|sec\b|seconds?\b)", re.I)
 def brief_items(original: str, attachments: list[str]) -> list[dict]:
     """The things the user's words name that a checklist must carry: quoted words, length, shape, files, sound."""
     items = [{"kind": "words", "value": q.strip()} for q in QUOTED.findall(original)]
-    lengths = [float(x) for x in LENGTH.findall(original)]
-    seconds, aspect = (int(max(lengths) + 0.5) if lengths else None), parse_aspect(original)
+    lengths = stated_lengths(original)   # "80s VHS style" is a decade, "2 minutes" is 120 s
+    seconds, aspect = (max(lengths) if lengths else None), parse_aspect(original)
     if seconds:
         items.append({"kind": "seconds", "value": str(seconds)})
     if aspect:
