@@ -14,9 +14,11 @@ import asyncio
 import re
 import base64
 import hashlib
+import ipaddress
 import json
 import os
 import shutil
+import socket
 import tempfile
 import time
 import uuid
@@ -430,11 +432,89 @@ CUT_OVERLAP = 0.08   # seconds of sound overlap at each cut
 USER_AGENT = "magic-hour-mcp/1.0 (https://github.com/magichourhq/magic-hour-mcp)"
 
 
-async def _download(url: str, out: Path) -> Path:
-    async with httpx.AsyncClient(timeout=httpx.Timeout(120.0), follow_redirects=True, headers={"User-Agent": USER_AGENT}) as client:
-        response = await client.get(url)
-        response.raise_for_status()
-        out.write_bytes(response.content)
+DOWNLOAD_MAX_BYTES = 300 * 1024 * 1024
+DOWNLOAD_SECONDS = 300
+
+
+def _private_urls_allowed() -> bool:
+    """A local test server (for example fixtures on 127.0.0.1) needs this switch. A hosted server leaves it off."""
+    return os.getenv("MAGIC_HOUR_ALLOW_PRIVATE_URLS", "").strip().lower() in {"1", "on", "true", "yes"}
+
+
+class _PublicHostsOnly(httpx.AsyncBaseTransport):
+    """Connects only to public addresses. The host is resolved once and checked, and the request goes to that address,
+    so a second DNS answer cannot point it inside the network. Each redirect comes back through here."""
+
+    def __init__(self) -> None:
+        self._inner = httpx.AsyncHTTPTransport()
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        url = request.url
+        if url.scheme not in ("http", "https"):
+            raise ToolError(f"{url} is not an http or https link.")
+        if not _private_urls_allowed():
+            port = url.port or (443 if url.scheme == "https" else 80)
+            try:
+                found = await asyncio.get_running_loop().getaddrinfo(url.host, port, type=socket.SOCK_STREAM)
+            except socket.gaierror:
+                raise httpx.ConnectError(f"{url.host} has no address", request=request) from None
+            addresses = []
+            for *_, address in found:
+                ip = ipaddress.ip_address(address[0].split("%")[0])
+                ip = getattr(ip, "ipv4_mapped", None) or ip
+                if not ip.is_global:
+                    raise ToolError(f"{url.host} is a private or local address. Give a public link, or upload the file with upload_media.")
+                addresses.append(ip)
+            pinned = next((ip for ip in addresses if ip.version == 4), addresses[0])
+            request.url = url.copy_with(host=str(pinned))
+            request.extensions = {**request.extensions, "sni_hostname": url.host}   # the certificate is still checked for the name
+        return await self._inner.handle_async_request(request)
+
+    async def aclose(self) -> None:
+        await self._inner.aclose()
+
+
+def _refuse_text(file: Path, source: str) -> None:
+    """Refuse a playlist (HLS, ffconcat, DASH): ffmpeg follows its entries to files on this server, other accounts'
+    kept copies too. Refuse a web page: it is an error page, not the media."""
+    with file.open("rb") as f:
+        head = f.read(1024).lstrip(b"\xef\xbb\xbf \t\r\n").lower()
+    if head.startswith((b"#extm3u", b"#ext-x-", b"#extinf", b"ffconcat", b"[playlist]", b"<!doctype html", b"<html")) or b"<mpd" in head:
+        raise ToolError(f"{source} is a playlist or a web page, not a picture, video or sound file.")
+
+
+async def _download(url: str, out: Path, max_bytes: int = DOWNLOAD_MAX_BYTES) -> Path:
+    """Fetch a media file from a public link, streamed to `out`, at most `max_bytes` and DOWNLOAD_SECONDS.
+    A link to a film on this server is read from this server's folder."""
+    base = os.getenv("MAGIC_HOUR_MCP_PUBLIC_URL", "http://127.0.0.1:8000").rstrip("/") + FILMS_PATH + "/"
+    if url.startswith(base):
+        film = film_file(url[len(base):].split("?")[0])
+        if not film:
+            raise ToolError(f"{url} is not on this server any more. Make it again, or pass the clips it came from.")
+        await asyncio.to_thread(shutil.copyfile, film, out)
+        return out
+
+    async def fetch() -> None:
+        async with httpx.AsyncClient(transport=_PublicHostsOnly(), timeout=httpx.Timeout(120.0), follow_redirects=True,
+                                     max_redirects=5, headers={"User-Agent": USER_AGENT}) as client:
+            async with client.stream("GET", url) as response:
+                response.raise_for_status()
+                size = response.headers.get("content-length", "")
+                if size.isdigit() and int(size) > max_bytes:
+                    raise ToolError(f"{url} is {int(size) // 2**20} MB; this server takes at most {max_bytes // 2**20} MB.")
+                got = 0
+                with out.open("wb") as f:
+                    async for chunk in response.aiter_bytes():
+                        got += len(chunk)
+                        if got > max_bytes:
+                            raise ToolError(f"{url} is more than {max_bytes // 2**20} MB; this server takes at most that.")
+                        f.write(chunk)
+
+    try:
+        await asyncio.wait_for(fetch(), DOWNLOAD_SECONDS)
+    except asyncio.TimeoutError:
+        raise ToolError(f"The download of {url} took more than {DOWNLOAD_SECONDS} s.") from None
+    _refuse_text(out, url)
     return out
 
 
@@ -466,7 +546,9 @@ async def _account_id() -> str:
 async def _read_kept(file_path: str, out: Path) -> Path:
     """This server's copy of an upload, only for the account that uploaded it."""
     try:
-        return await asyncio.to_thread(kept_files.read, file_path, out, await _account_id())
+        file = await asyncio.to_thread(kept_files.read, file_path, out, await _account_id())
+        _refuse_text(file, file_path)
+        return file
     except kept_files.NotYours:
         raise ToolError(kept_files.not_yours_message(file_path)) from None
     except kept_files.NotKept:

@@ -1,6 +1,8 @@
 """plan_video_production through the MCP server, and the answer parsers of plan_request. No network, no credits."""
 
+import asyncio
 import json
+import socket
 import os
 import unittest
 from pathlib import Path
@@ -768,6 +770,70 @@ class DownloadTests(unittest.IsolatedAsyncioTestCase):
             seen["ua"] = request.headers.get("user-agent")
             return httpx.Response(200, content=b"jpg")
         real = httpx.AsyncClient
-        with patch.object(vpt.httpx, "AsyncClient", lambda **kw: real(transport=httpx.MockTransport(answer), **kw)), tempfile.TemporaryDirectory() as d:
+        with patch.object(vpt.httpx, "AsyncClient", lambda **kw: real(**{**kw, "transport": httpx.MockTransport(answer)})), tempfile.TemporaryDirectory() as d:
             await vpt._download("https://commons.wikimedia.org/wiki/Special:FilePath/x.jpg", Path(d) / "x.jpg")
         self.assertEqual(seen["ua"], vpt.USER_AGENT)
+
+
+class PublicLinkTests(unittest.IsolatedAsyncioTestCase):
+    """The server fetches links the host passes. A link must not reach the server's own network."""
+
+    async def asyncSetUp(self):
+        import tempfile
+        self.folder = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        self.enterContext(patch.dict(os.environ, {"MAGIC_HOUR_ALLOW_PRIVATE_URLS": ""}))
+
+    def resolving(self, answers):
+        """getaddrinfo that gives each host the addresses in `answers`."""
+        async def getaddrinfo(host, port, **kw):
+            return [(socket.AF_INET6 if ":" in a else socket.AF_INET, socket.SOCK_STREAM, 6, "", (a, port)) for a in answers[host]]
+        loop = asyncio.get_running_loop()
+        return patch.object(loop, "getaddrinfo", getaddrinfo)
+
+    async def test_a_link_to_a_private_or_local_address_is_refused(self):
+        from mcp_magichour import video_production_tool as vpt
+        for host, address in [("metadata.test", "169.254.169.254"), ("local.test", "127.0.0.1"), ("lan.test", "10.0.0.7"),
+                              ("v6.test", "::1"), ("mapped.test", "::ffff:127.0.0.1")]:
+            with self.subTest(address), self.resolving({host: [address]}), self.assertRaises(ToolError) as caught:
+                await vpt._download(f"http://{host}/x.mp4", self.folder / "x.mp4")
+            self.assertIn("private or local", str(caught.exception))
+
+    async def test_a_redirect_to_a_private_address_is_refused(self):
+        from mcp_magichour import video_production_tool as vpt
+        sent = []
+
+        async def inner(request):
+            sent.append((str(request.url), request.headers["host"], request.extensions.get("sni_hostname")))
+            return httpx.Response(302, headers={"location": "http://inside.test/secret"})
+        with self.resolving({"cdn.test": ["93.184.215.14"], "inside.test": ["192.168.1.5"]}), \
+                patch.object(httpx.AsyncHTTPTransport, "handle_async_request", lambda self, request: inner(request)), \
+                self.assertRaises(ToolError):
+            await vpt._download("https://cdn.test/a.mp4", self.folder / "a.mp4")
+        # The first hop went to the checked address, with the name kept for the certificate; the second never left.
+        self.assertEqual(sent, [("https://93.184.215.14/a.mp4", "cdn.test", "cdn.test")])
+
+    async def test_a_download_stops_at_the_size_limit_and_a_web_page_is_refused(self):
+        from mcp_magichour import video_production_tool as vpt
+        real = httpx.AsyncClient
+
+        def client(body, length=None):
+            headers = {"content-length": str(length)} if length else {}
+            return patch.object(vpt.httpx, "AsyncClient", lambda **kw: real(**{**kw, "transport": httpx.MockTransport(lambda r: httpx.Response(200, content=body, headers=headers))}))
+        with client(b"\x00" * 2048), self.assertRaises(ToolError) as caught:
+            await vpt._download("https://cdn.test/big.mp4", self.folder / "big.mp4", max_bytes=1024)
+        self.assertIn("at most", str(caught.exception))
+        with client(b"#EXTM3U\n#EXTINF:2,\n/tmp/magic-hour-kept/another-account.mp4\n"), self.assertRaises(ToolError) as caught:
+            await vpt._download("https://cdn.test/x.m3u8", self.folder / "x.mp4")
+        self.assertIn("playlist", str(caught.exception))
+        with client(b"\x00\x00\x00\x20ftypisom" + b"\x00" * 100):
+            await vpt._download("https://cdn.test/ok.mp4", self.folder / "ok.mp4")
+
+    async def test_a_link_to_this_servers_own_film_is_read_from_its_folder(self):
+        from mcp_magichour import video_production_tool as vpt
+        name = "ab" * 16 + ".mp4"
+        with patch.object(vpt, "FILMS_DIR", self.folder), patch.dict(os.environ, {"MAGIC_HOUR_MCP_PUBLIC_URL": "http://127.0.0.1:8000"}):
+            (self.folder / name).write_bytes(b"\x00film")
+            out = await vpt._download(f"http://127.0.0.1:8000/films/{name}", self.folder / "copy.mp4")
+            self.assertEqual(out.read_bytes(), b"\x00film")
+            with self.assertRaises(ToolError):
+                await vpt._download("http://127.0.0.1:8000/films/../secret.mp4", self.folder / "copy2.mp4")
