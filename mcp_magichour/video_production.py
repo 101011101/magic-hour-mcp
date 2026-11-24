@@ -211,7 +211,7 @@ def validate_story(story: dict) -> list[str]:
         for sid in beat.get("subjects", []):
             if sid not in ids:
                 problems.append(f"beat {i}: unknown subject {sid}")
-        problems += _reference_problems(story, i, beat.get("reference"))
+        problems += _reference_problems(story, i, beat.get("reference"), beat.get("clip"))
         if beat.get("words_route") not in (None, *WORD_ROUTES):
             problems.append(f"beat {i}: words_route must be one of {', '.join(WORD_ROUTES)}")
         if beat.get("model") not in (None, *MODEL_MAX_SECONDS):
@@ -235,12 +235,18 @@ def validate_story(story: dict) -> list[str]:
     return problems
 
 
-def _reference_problems(story: dict, i: int, reference: dict | None) -> list[str]:
+def _reference_problems(story: dict, i: int, reference: dict | None, clip: int | None = None) -> list[str]:
     if not reference:
         return []
     kind, pictured = reference.get("kind"), {s["id"]: s for s in story.get("subjects", []) if s.get("picture")}
     if kind not in ("none", "picture", "last_frame", "file"):
         return [f"beat {i}: reference kind must be none, picture, last_frame or file"]
+    if kind == "last_frame":   # the last frame of a clip made before this one; beat 1 is always in clip 1
+        own, of = (1 if i == 1 else clip), reference.get("of_clip")
+        if own == 1:
+            return [f"beat {i}: reference last_frame needs an earlier clip, and clip 1 has none; use none, picture or file"]
+        if of is not None and (not isinstance(of, int) or isinstance(of, bool) or of < 1 or (own is not None and of >= own)):
+            return [f"beat {i}: reference of_clip must be an earlier clip" + (f" (1 to {own - 1})" if own and own > 2 else " (clip 1)" if own else "")]
     if kind == "picture" and reference.get("subject") not in pictured:
         return [f"beat {i}: reference picture needs `subject`: a subject that has a picture ({', '.join(pictured) or 'none has one'})"]
     if kind == "file" and not str(reference.get("file", "")).strip():
@@ -677,8 +683,12 @@ def plan(story: dict, strategy: str = "idea", max_seconds: int = TRIGGER_SECONDS
         "ok": True, "strategy": strategy, "max_seconds": max_seconds,
         "seconds": sum(c["seconds"] for c in out),
         "credits": sum(s["credits"] for c in out for s in c["steps"]),
-        "clips": out, "join": [c["n"] for c in out], "rounds": rounds(out),
+        "clips": out, "join": [c["n"] for c in out], "rounds": [],
     }
+    try:
+        result["rounds"] = rounds(out)
+    except ValueError:   # a clip waits for a clip that is not made before it: check_plan names it
+        pass
     sound = plan_sound(story, clips)
     if sound:
         result["sound"] = sound

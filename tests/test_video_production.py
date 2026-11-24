@@ -400,6 +400,27 @@ class PlanTests(unittest.TestCase):
         s["seconds"] = 42
         self.assertTrue(any("more than minimax-h3 makes" in p for p in plan(s, "one")["problems"]))
 
+    def test_a_last_frame_with_no_earlier_clip_is_a_problem_not_a_crash(self):
+        def two_clips(reference, on_beat, clips=True):
+            beats = [{"seconds": 5, "text": "A woman walks to the door."}, {"seconds": 5, "text": "She opens it.", "link": "new"}]
+            if clips:
+                beats[0]["clip"], beats[1]["clip"] = 1, 2
+            beats[on_beat - 1]["reference"] = reference
+            return {"title": "Door", "aspect": "16:9", "setting": "A quiet hall.", "beats": beats}
+
+        cases = {
+            "first clip, no of_clip": (two_clips({"kind": "last_frame"}, 1), "manual"),
+            "its own clip": (two_clips({"kind": "last_frame", "of_clip": 2}, 2), "manual"),
+            "a clip that is not there": (two_clips({"kind": "last_frame", "of_clip": 9}, 2), "manual"),
+            "a negative clip": (two_clips({"kind": "last_frame", "of_clip": -1}, 2), "manual"),
+            "no clip numbers, a later clip": (two_clips({"kind": "last_frame", "of_clip": 5}, 2, clips=False), "shot"),
+        }
+        for name, (s, strategy) in cases.items():
+            with self.subTest(name):
+                p = plan(s, strategy, cuts=[2])
+                self.assertFalse(p["ok"])
+                self.assertTrue(p["problems"])
+
 
 class OutputCheckTests(unittest.TestCase):
     def test_a_short_clip_a_missing_clip_and_mixed_sizes_are_reported(self):
