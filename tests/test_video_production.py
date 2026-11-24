@@ -465,6 +465,17 @@ class HeldCardMergeTests(unittest.TestCase):
         voice = next(line for line in plan(answered, "manual", cuts=[])["checklist"] if line["id"] == "voice")
         self.assertIn("Meet Acme. Built to last.", voice["want"])
 
+    def test_a_merge_longer_than_one_call_is_not_made_by_code(self):
+        self.assertEqual(vp.held_merges(logo_reveal()), {"held-2": "merge"})
+        s = logo_reveal(reveal_seconds=28, card_seconds=4)   # 32 s: more than minimax-h3 makes in one call
+        self.assertEqual(vp.held_merges(s), {})
+        self.assertIn("held-2", [q["id"] for q in vp.questions(s, plan(s, "manual", cuts=[2]))])
+        kept, _ = vp.apply_answers(s, {"held-2": "keep"})
+        self.assertTrue(plan(kept, "manual", cuts=[2])["ok"])
+        for beat in s["beats"]:   # with no clip numbers the split rule cuts the long reveal, and the card fits
+            beat.pop("clip")
+        self.assertEqual(vp.held_merges(s, "person", 15), {"held-2": "merge"})
+
 
 class WordMatchTests(unittest.TestCase):
     def test_a_script_in_another_alphabet_is_compared_word_by_word(self):

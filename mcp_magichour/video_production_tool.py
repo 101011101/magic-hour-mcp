@@ -289,7 +289,7 @@ def register_video_production(mcp: FastMCP) -> None:
         data = story.model_dump(exclude_none=True)
         answer_problems: list[str] = []
         # A held still of the picture the scene before forms is merged by code, first, whatever the host answers.
-        merged = held_merges(data)
+        merged = held_merges(data, SPLIT_STRATEGY, SPLIT_MAX_SECONDS)
         answers = {**merged, **{k: v for k, v in (answers or {}).items() if k not in merged}} or None
         if answers:
             if host_cuts(data) is None:   # the answers keep the clips as they are: number them first

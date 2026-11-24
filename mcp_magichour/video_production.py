@@ -1236,18 +1236,31 @@ def _held_after_reveal(story: dict, beat: dict, before: dict | None) -> bool:
                 and beat["picture"] in _beat_pictures(story, before) and not beat.get("held_route"))
 
 
-def held_merges(story: dict) -> dict[str, str]:
+def held_merges(story: dict, strategy: str = "idea", max_seconds: int = TRIGGER_SECONDS) -> dict[str, str]:
     """The held cards the plan merges into the scene before, with no question: {"held-N": "merge"}.
 
     The video makes the logo from its reference picture, in one clip. A held still after the
     reveal reads as a pasted picture. Hosts kept the card when they were asked ("keep", the user's "stays exactly
     as in the file") or went around the question. An end card the user asked for ("card" in the beat's text)
-    stays a question."""
+    stays a question. So does a merge that makes the reveal's clip too long for one call: the host can keep the card.
+    strategy, max_seconds: the split rule that groups beats with no `clip`."""
     beats, out = story["beats"], {}
     for n, beat in enumerate(beats, start=1):
-        if _held_after_reveal(story, beat, beats[n - 2] if n > 1 else None) and "card" not in beat.get("text", "").lower():
+        if (_held_after_reveal(story, beat, beats[n - 2] if n > 1 else None) and "card" not in beat.get("text", "").lower()
+                and _merge_fits(story, n, strategy, max_seconds)):
             out[f"held-{n}"] = "merge"
     return out
+
+
+def _merge_fits(story: dict, n: int, strategy: str, max_seconds: int) -> bool:
+    """The clip that ends on beat n - 1, with card n's seconds added, fits in one call of the reference model
+    (the reveal is made from the picture)."""
+    if validate_story(story):
+        return True   # the plan names the story's problems
+    cuts = host_cuts(story)
+    clips = split(story, "manual" if cuts is not None else strategy, max_seconds, cuts)
+    reveal = next(c for c in reversed(clips) if n - 1 in c["beats"])
+    return reveal["seconds"] + story["beats"][n - 1]["seconds"] <= MODEL_MAX_SECONDS[REFERENCE_MODEL]
 
 
 def _beat_pictures(story: dict, beat: dict) -> set[str]:

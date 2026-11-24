@@ -112,6 +112,22 @@ class VideoProductionToolTests(unittest.IsolatedAsyncioTestCase):
         await self.plan("c5")
         self.assertEqual(self.requests, [])
 
+    async def answer(self, s, answers=None):
+        return data(await self.caller.call_tool("plan_video_production", {"story": s, **({"answers": answers} if answers else {})}))
+
+    async def test_a_held_card_too_long_to_merge_is_asked_and_can_be_kept(self):
+        logo = "https://example.com/logo.png"
+        s = {"title": "Acme", "aspect": "16:9", "setting": "A white studio.",
+             "subjects": [{"id": "logo", "role": "product", "words": "the Acme logo, a blue triangle", "picture": logo}],
+             "beats": [{"seconds": 28, "text": "The Acme logo forms slowly from blue light.", "subjects": ["logo"], "clip": 1},
+                       {"seconds": 4, "kind": "card", "text": "The logo held still.", "picture": logo, "clip": 2}]}
+        first = await self.answer(s)
+        self.assertEqual([q["id"] for q in first["questions"]], ["held-2"])
+        kept = await self.answer(s, {"held-2": "keep"})
+        self.assertTrue(kept["ok"], kept["problems"])
+        self.assertEqual([c["kind"] for c in kept["clips"]], ["scene", "card"])
+        self.assertIn("production", kept)
+
 
 class TranscribeTests(unittest.IsolatedAsyncioTestCase):
     async def test_the_word_check_does_not_force_english(self):
