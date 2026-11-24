@@ -12,7 +12,7 @@ Code: `media_helpers_tool.py`, `kept_files.py`, `media_tools.py`, `video_product
 | `join_videos` | Joins videos end to end with hard cuts. `silent` removes all sound. | 0 |
 
 - A video input: a finished project id, a URL, or a kept `file_path`.
-- ffmpeg on the server: the one on PATH, else the `imageio-ffmpeg` copy. Install: `pip install -e ".[production]"`.
+- ffmpeg on the server: the one on PATH, else the `imageio-ffmpeg` copy. Install: `pip install -e .` (imageio-ffmpeg and Pillow are main dependencies since 2026-11-23).
 
 ## The user's own files (user, 2026-11-11: option 1 with a clean fallback)
 

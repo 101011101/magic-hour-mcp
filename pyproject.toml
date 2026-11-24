@@ -12,11 +12,10 @@ dependencies = [
     "posthog==7.51.2",
     "starlette>=1.0.1",
     "uvicorn>=0.35.0",
+    # ffmpeg (joins, trims, frames) and Pillow (head swap, captions, cards); the hosted server needs both.
+    "imageio-ffmpeg>=0.5",
+    "pillow>=10.1",
 ]
-
-[project.optional-dependencies]
-# For a server that makes multi-clip films (the join step): ffmpeg when none is installed, and caption drawing.
-production = ["imageio-ffmpeg>=0.5", "pillow>=10.1"]
 
 [build-system]
 requires = ["setuptools>=61.0"]

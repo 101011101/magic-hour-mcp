@@ -392,14 +392,14 @@ Character Replace
 - `name` (string, optional) default=Character Replace - dateTime: Give your video a custom name for easy identification.
 - `start_seconds` (number, optional) default=0 range=[0,None]: Start time of your clip (seconds). Must be ≥ 0.
 - `end_seconds` (number, required) range=[0.1,None]: End time of your clip (seconds). Must be greater than start_seconds.
-- `model` (string, optional) enum=['wan-animate', 'kling-3.0', 'minimax-h3'] default=wan-animate: Model to use. Defaults to `wan-animate`.
+- `model` (string, optional) enum=['wan-animate', 'kling-3.0', 'kling-4.0', 'minimax-h3'] default=wan-animate: Model to use. Defaults to `wan-animate`.
 - `resolution` (string, optional) enum=['480p', '720p', '1080p']: Output video resolution. Must be supported by `model`. Defaults to the lowest resolution available on your plan for that model.
 - `assets` (object, required): Source video and reference character image for the job.
   - `video_file_path` (string, required): Source video containing the subject to replace or animate. This value is either - a direct URL to the file. The URL path must end in a supported file extension. - `file_path` field from the response of the [upload urls...
   - `image_file_path` (string, required): Reference character image used as the replacement or animation target. This value is either - a direct URL to the file. The URL path must end in a supported file extension. - `file_path` field from the response of the...
 - `style` (object, optional): Optional style controls for replace vs animate mode and subject selection.
   - `mode` (string, optional) enum=['replace', 'animate']: Processing mode. `replace` swaps the detected subject with your reference character. `animate` transfers motion from the video onto your character image.
-  - `prompt` (string, optional): Optional direction. Supported by kling-3.0, minimax-h3. For MiniMax H3 in replace mode, ignored and not saved when `selection_mode` is `point`; applies only to automatic person selection.
+  - `prompt` (string, optional): Optional direction. Supported by kling-3.0, kling-4.0, minimax-h3. For MiniMax H3 in replace mode, ignored and not saved when `selection_mode` is `point`; applies only to automatic person selection.
   - `selection_mode` (string, optional) enum=['auto', 'point']: How to locate the subject in the source video. `auto` detects a person automatically. `point` uses your `points` to mark the subject and is supported by `wan-animate`, `minimax-h3`. `minimax-h3` subject `points` are...
   - `points` (array, optional): On-frame markers for manual subject selection. Required when `selection_mode` is `point`. Ignored when `selection_mode` is `auto` or omitted. Rejected for models without subject selection (supported by `wan-animate`,...
     items:
@@ -667,7 +667,7 @@ AI Image Editor
 **Request Body:**
 - `name` (string, optional) default=Ai Image Editor - dateTime: Give your image a custom name for easy identification.
 - `image_count` (number, optional) enum=[1, 4, 9, 16] default=1: Number of images to generate. Maximum varies by model. Defaults to 1 if not specified.
-- `model` (string, optional) enum=[16 values, e.g. ['default', 'qwen-image-2.1', 'gpt-image-2', 'flux-2-klein', 'nano-banana-pro', 'seedream-v5-pro'], ...]: The AI model to use for image editing. Each model has different capabilities and costs.
+- `model` (string, optional) enum=[17 values, e.g. ['default', 'qwen-image-2.1', 'gpt-image-2', 'flux-2-klein', 'flux-3-klein', 'nano-banana-pro'], ...]: The AI model to use for image editing. Each model has different capabilities and costs.
 - `aspect_ratio` (string, optional) enum=['auto', '16:9', '9:16', '4:3', '3:2', '1:1', '4:5', '2:3']: The aspect ratio of the output image(s). If not specified, defaults to `auto`. Ignored for `krea-2` and `flux-2-klein` when an input image is provided; the output keeps the source image's aspect ratio.
 - `resolution` (string, optional) enum=['auto', '640px', '1k', '2k', '4k']: Maximum resolution (longest edge) for the output image.
 - `style` (object, required):
@@ -689,7 +689,7 @@ AI Image Generator
 **Request Body:**
 - `name` (string, optional) default=Ai Image - dateTime: Give your image a custom name for easy identification.
 - `image_count` (integer, required) range=[1,16]: Number of images to generate. Maximum varies by model.
-- `model` (string, optional) enum=[18 values, e.g. ['default', 'z-image-turbo', 'gpt-image-2', 'qwen-image-2.1', 'flux-2-klein', 'nano-banana-2.1'], ...]: The AI model to use for image generation. Each model has different capabilities and costs.
+- `model` (string, optional) enum=[19 values, e.g. ['default', 'z-image-turbo', 'gpt-image-2', 'qwen-image-2.1', 'flux-2-klein', 'flux-3-klein'], ...]: The AI model to use for image generation. Each model has different capabilities and costs.
 - `aspect_ratio` (string, optional) enum=['1:1', '16:9', '9:16']: The aspect ratio of the output image(s). If not specified, defaults to `1:1` (square).
 - `resolution` (string, optional) enum=['auto', '640px', '1k', '2k', '4k'] default=auto: Maximum resolution (longest edge) for the output image.
 - `style` (object, required): The art style to use for image generation.

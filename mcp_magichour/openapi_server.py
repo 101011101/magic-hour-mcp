@@ -123,8 +123,8 @@ When exposed, use a matching estimate with the exact create body; resolve blocke
 get_workflow_guide gives static inputs/docs/review, not account eligibility.
 After creation, use matching wait_for_*_project with the returned id.
 For *_file_path, never send sandbox paths (/mnt/data/...). Upload native attachments with upload_chatgpt_image or upload_chatgpt_media; use returned file_path. PUT other local bytes via get_upload_urls. Public URLs must fetch raw bytes. Preserve signed URLs and query parameters; never append expiry metadata.
-Omit unrequested options only when defaults are eligible. Image Editor defaults to paid-tier nano-banana.
-On Free, use Image Editor model=flux-2-klein, resolution=640px, image_count=1 only if suitable. Balance does not unlock restricted settings.
+Omit unrequested options only when defaults are eligible. Image Editor defaults fit the plan; omit model, resolution and count unless the user chose them.
+Balance does not unlock restricted settings.
 On tier restrictions, explain the block; never retry unchanged or blindly remove fields.
 
 Choose video from inputs:
@@ -250,7 +250,7 @@ def create_mcp() -> FastMCP:
     install_structured_tool_errors(mcp, current_tool_replacements(source_spec))
     analytics.instrument_mcp(mcp)
     install_ui_read_origin(mcp)
-    mcp.add_middleware(_VideoProjectCard())
+    mcp.add_middleware(_ProjectResultCard())
     return mcp
 
 
@@ -478,10 +478,10 @@ def _register_media_fetch_tool(mcp: FastMCP, media_type: ProjectType) -> None:
         "configured Magic Hour media host. Read-only; inline content is limited to 8 MiB, or a smaller requested "
         "max_bytes. Returns the original-file download link when the media exceeds this limit."
     )
-    if media_type == "video":
+    if media_type in {"video", "image", "audio"}:
         description += (
             " For playback or downloads in ChatGPT, open Magic Hour’s result card with "
-            "get_video_project or wait_for_video_project using the existing project ID. "
+            f"get_{media_type}_project or wait_for_{media_type}_project using the existing project ID. "
             "When this tool shows a result card in ChatGPT, use its Download control. Do not put the signed URL in a chat link."
         )
 
@@ -869,7 +869,7 @@ def _project_download_urls(project: dict[str, Any]) -> list[str]:
     return urls
 
 
-class _VideoProjectCard(ToolMiddleware):
+class _ProjectResultCard(ToolMiddleware):
     async def on_call_tool(
         self,
         context: MiddlewareContext[mt.CallToolRequestParams],
@@ -877,11 +877,16 @@ class _VideoProjectCard(ToolMiddleware):
     ) -> ToolResult:
         result = await call_next(context)
         project = result.structured_content
-        if context.message.name == "get_video_project" and project and project.get("id"):
+        project_type = {
+            "get_video_project": "video",
+            "get_image_project": "image",
+            "get_audio_project": "audio",
+        }.get(context.message.name)
+        if project_type and project and project.get("id"):
             structured = _project_structured_content_for_agent(project)
             if "downloads" in project:
                 structured["downloads"] = project["downloads"]
-            result.structured_content = {**structured, "project_type": "video"}
+            result.structured_content = {**structured, "project_type": project_type}
         return result
 
 
