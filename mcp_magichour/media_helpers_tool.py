@@ -16,7 +16,7 @@ import re
 import tempfile
 import uuid
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 from urllib.parse import urlparse
 
 from fastmcp import FastMCP
@@ -66,23 +66,56 @@ class Words(BaseModel):
     end: float | None = None
 
 
+MIX_MAX_SECONDS = 600   # ten minutes: a film's sound bed fits, and one call's ffmpeg work stays bounded
+
+
 class Track(BaseModel):
     media: str
-    at: float = Field(default=0, ge=0)
+    at: float = Field(default=0, ge=0, le=MIX_MAX_SECONDS)
     volume: float = Field(default=1, ge=0, le=4)
-    fade_in: float = Field(default=0, ge=0)
+    fade_in: float = Field(default=0, ge=0, le=MIX_MAX_SECONDS)
 
 
-IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg", ".webp")
 AUDIO_SUFFIXES = tuple(f".{e}" for e in KINDS["audio"])
+PICTURE_FORMATS = {"PNG": ".png", "JPEG": ".jpg", "MPO": ".jpg", "WEBP": ".webp", "BMP": ".png", "TIFF": ".png"}
+
+
+def _by_content(file: Path, media: str, kinds: tuple[str, ...]) -> tuple[Path, bool]:
+    """Decide what a fetched file is from its bytes, not from the link: a link can have no suffix, or a wrong one.
+    A picture gets its own suffix (BMP and TIFF are saved as PNG), so the next step reads it as a picture."""
+    from PIL import Image, UnidentifiedImageError
+
+    try:
+        with Image.open(file) as image:
+            found = image.format
+            if found in ("BMP", "TIFF"):
+                target = file.with_suffix(".png")
+                image.convert("RGBA" if "A" in image.getbands() else "RGB").save(target)
+                return target, True
+    except Image.DecompressionBombError:
+        raise ToolError(f"{media} is a picture too large to read.") from None
+    except (UnidentifiedImageError, OSError):
+        found = None
+    if found in PICTURE_FORMATS:
+        target = file.with_suffix(PICTURE_FORMATS[found])
+        file.replace(target)
+        return target, True
+    try:
+        facts = media_tools.probe(file)
+    except Exception:
+        raise ToolError(f"{media} is not a picture, video or sound file that this server can read.") from None
+    if not facts["width"] and "audio" not in kinds:
+        raise ToolError(f"{media} is a sound file with no picture; this tool takes a picture or a video.")
+    return file, False
 
 
 async def _fetch_media(media: str, folder: Path, kinds: tuple[str, ...] = ("image", "video")) -> tuple[Path, bool]:
     """A picture, a video (or a sound) by URL, file_path or finished project id. Returns (file, is_picture)."""
     suffix = Path(urlparse(media).path).suffix.lower()
     if media.startswith(("http://", "https://")) or kept_files.is_file_path(media):
-        picture = suffix in IMAGE_SUFFIXES
-        return await _fetch(media, folder / f"source{suffix or '.mp4'}"), picture
+        known = {f".{e}" for kind in KINDS.values() for e in kind}
+        file = await _fetch(media, folder / f"source{suffix if suffix in known else '.mp4'}")
+        return await asyncio.to_thread(_by_content, file, media, kinds)
     for kind in kinds:
         try:
             project = await _api("GET", f"/v1/{kind}-projects/{media}")
@@ -314,12 +347,13 @@ def register_media_helpers(mcp: FastMCP) -> None:
             "a jingle. `tracks`: [{media, at, volume, fade_in}]: media is a URL, a file_path, or a finished audio or video "
             "project id; at = seconds into the mix where it starts (for example music at 0, the voice at 3 for a "
             "music-only opening); volume 1 = as it is (music under a voice: about 0.25); fade_in in seconds. `seconds`: "
-            "the length of the mix (default: to the end of the longest track; longer than the tracks ends in silence). `fade_out`: seconds of fade at the end. "
+            "the length of the mix, at most 600 (default: to the end of the longest track; longer than the tracks ends in silence). `fade_out`: seconds of fade at the end. "
             "`format`: m4a, mp3 or wav. Returns download_url, seconds, loudness_db and audio_file_path. Spends no credits."
         ),
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True),
     )
-    async def mix_audio(tracks: list[Track], seconds: float | None = None, fade_out: float = 0.0,
+    async def mix_audio(tracks: list[Track], seconds: Annotated[float, Field(gt=0, le=MIX_MAX_SECONDS)] | None = None,
+                        fade_out: Annotated[float, Field(ge=0, le=MIX_MAX_SECONDS)] = 0.0,
                         format: Literal["m4a", "mp3", "wav"] = "m4a") -> dict:
         _need_ffmpeg()
         if not tracks:
@@ -332,6 +366,12 @@ def register_media_helpers(mcp: FastMCP) -> None:
                 if picture:
                     raise ToolError(f"track {i + 1} is a picture, not a sound.")
                 laid.append({"file": file, "at": t.at, "volume": t.volume, "fade_in": t.fade_in})
+            if seconds is None:
+                lengths = [await asyncio.to_thread(media_tools.probe_seconds, t["file"]) for t in laid]
+                longest = max(t["at"] + length for t, length in zip(laid, lengths))
+                if longest > MIX_MAX_SECONDS:
+                    raise ToolError(f"The mix would be {longest:.0f} s; mix_audio makes at most {MIX_MAX_SECONDS} s. "
+                                    "Pass a shorter `seconds`, or trim the tracks with trim_media.")
             out = Path(folder) / f"mix.{format}"
             await asyncio.to_thread(media_tools.mix_audio, laid, out, seconds, fade_out)
             return await _deliver(out, False)
