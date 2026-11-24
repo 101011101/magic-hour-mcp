@@ -156,7 +156,7 @@ API_TOOL_METADATA = {
         "photo into a video when their hair, skin or build differ a lot from the person in the video: "
         "a face swap keeps the video person's hair and skin. The whole person is replaced, so the "
         "clothes may change to the photo's; tell the user. For one of several people, use point "
-        "selection (selection_mode points) at that person's position in the first frame, not auto: "
+        "selection (selection_mode point) at that person's position in the first frame, not auto: "
         "with auto the model chooses the person. One person per call: run it again on "
         "the result for a second person, with that person's points. Starts a background job that costs credits (about 48 per second at 480p); "
         "returns a project id for wait_for_video_project. Head swap in a video (the user's face and hair, everything else "

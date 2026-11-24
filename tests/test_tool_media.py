@@ -233,3 +233,18 @@ class HeadSwapPhotoTests(unittest.TestCase):
             listed = asyncio.run(tools())
         self.assertIn("swap_heads_in_photo", listed)
         self.assertIn("1 = the leftmost face", listed["swap_heads_in_photo"].description)
+
+
+class CharacterReplaceTextTests(unittest.TestCase):
+    def test_the_selection_mode_named_in_the_description_is_an_allowed_value(self):
+        """The text said 'selection_mode points'; the API takes only auto or point."""
+        import json
+        import re
+        from mcp_magichour.openapi_policies import apply_magic_hour_policies
+        spec = apply_magic_hour_policies(json.loads((ROOT / "docs" / "openapi.json").read_text()))
+        operation = spec["paths"]["/v1/character-replace"]["post"]
+        style = operation["requestBody"]["content"]["application/json"]["schema"]["properties"]["style"]
+        allowed = set(style["properties"]["selection_mode"]["enum"])
+        named = re.findall(r"selection_mode (\w+)", operation["description"])
+        self.assertTrue(named)
+        self.assertLessEqual(set(named), allowed)
