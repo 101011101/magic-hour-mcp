@@ -781,3 +781,40 @@ class ShapeWordsTests(unittest.TestCase):
                 result = plan_sheet([user("A 10 second widescreen TikTok of a fox in the snow with music")], "create_video_from_text",
                                     FOX + [{"name": "aspect", "value": host, "source": "user"}])
                 self.assertEqual(sheet_rows(result)["aspect"]["value"], expected)
+
+
+from mcp_magichour.plan_request import parse_seconds  # noqa: E402
+
+
+class LengthWordsTests(unittest.TestCase):
+    """A length is a number stated as a length: never a shape, a decade or a count of things."""
+
+    def test_a_shape_answer_is_not_a_length(self):
+        for answer in ["16:9", "9:16", "1:1 please"]:
+            with self.subTest(answer=answer):
+                self.assertIsNone(parse_seconds(answer))
+                result = plan_sheet([user("Make a video of a fox in the snow with soft music"),
+                                     assistant(QUESTIONS["aspect"] + " " + QUESTIONS["seconds"]), user(answer)], "create_video_from_text",
+                                    [FOX[0], FOX[2], {"name": "seconds", "value": None, "source": "missing"},
+                                     {"name": "aspect", "value": None, "source": "missing"}])
+                self.assertEqual(sheet_rows(result)["seconds"]["source"], "missing")
+                self.assertEqual([q["param"] for q in result["questions"]], ["seconds"])
+
+    def test_minutes_are_sixty_seconds_each(self):
+        for text, seconds in {"1 minute": 60, "2 mins": 120, "a 2 minute video": 120, "make it 1.5 minutes": 90, "1:30": 90,
+                              "about 1:30": 90, "a 1:30 promo video": 90, "doors open at 7:30": None, "Friday 7:30": None}.items():
+            with self.subTest(text=text):
+                self.assertEqual(parse_seconds(text), seconds)
+
+    def test_a_decade_or_a_count_of_things_is_not_a_length(self):
+        for text, seconds in {"80s synthwave": None, "1990s": None, "music from the 90s": None, "'80s": None,
+                              "A perfume ad in 80s VHS style for TikTok, four seasons, 20 seconds": 20, "a 30s ad": 30,
+                              "3 secret recipes": None, "3 cats": None, "10": 10, "about 15": 15, "20 sounds good": 20}.items():
+            with self.subTest(text=text):
+                self.assertEqual(parse_seconds(text), seconds)
+
+    def test_story_hints_a_length_only_after_a_platform_name(self):
+        for text, seconds in {"the history of Rome": None, "the story of how my parents met": None, "an Instagram story": 15,
+                              "a reel": 15, "make a short clip of her": 8}.items():
+            with self.subTest(text=text):
+                self.assertEqual(parse_seconds(text), seconds)

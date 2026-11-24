@@ -161,13 +161,45 @@ def parse_aspect(text: str) -> str | None:
     return found[0] if found else None
 
 
+# A number with a unit: "20 seconds", "a 30s ad", "2 mins". "3 secret recipes" is not "3 sec".
+STATED = re.compile(r"(?<![\d.:'’])(\d{1,4}(?:\.\d{1,2})?)[\s-]*(s|secs?|seconds?|mins?|minutes?)\b", _I)
+# "80s synthwave", "the 90s", "1990s" and "'80s" are decades, not lengths.
+DECADE_AFTER = re.compile(r"[\s-]*(?:style|look|vibe|aesthetic|era|feel|retro|vintage|vhs|synth\w*|disco|fashion|nostalgi\w*|neon"
+                          r"|grunge|punk|rock|pop|hip|music|songs?)\b", _I)
+# "1:30" is a length as the whole answer ("about 1:30") or before a length word ("a 1:30 promo"). "Friday 7:30" is a time.
+CLOCK = re.compile(r"(?<![\d.:])(\d{1,2}):([0-5]\d)(?![\d:])(?!\s*(?:am|pm|a\.m|p\.m)\b)", _I)
+CLOCK_LENGTH = re.compile(r"\s*(?:min\w*|long|video|clip|film|ad|promo|spot|trailer|reel|cut|edit)\b", _I)
+CLOCK_ONLY = re.compile(r"(?:\W*\b(?:about|around|roughly|approx\w*|maybe|like|exactly|just|make|it|max|tops|please|long|total)\b)*\W*", _I)
+# A bare number in a short answer, never part of "16:9", "7:30", "20%" or "1.5". "3 cats" is not 3 seconds.
+BARE = re.compile(r"(?<![\w:./])(\d{1,3})(?![\w:./%])", _I)
+BARE_THEN = {"please", "pls", "max", "maximum", "tops", "or", "to", "ish", "is", "sounds", "works", "ok", "okay", "thanks", "thx",
+             "then", "long", "total", "at", "segundos", "segundo", "sekunden", "sekunde", "secondes", "seconde", "secondi", "seconden"}
+
+
+def stated_lengths(text: str) -> list[int]:
+    """Every length the words state as a length, in order, in seconds: "20 seconds", "a 30s ad", "2 minutes", "1:30"."""
+    text = RATIO.sub(lambda m: " " * len(m[0]), text)   # "16:9" and "1:1" are shapes
+    found = []
+    for m in STATED.finditer(text):
+        value, unit = float(m[1]), m[2].lower()
+        decade = unit == "s" and (len(m[1]) == 4 or (value in (20, 30, 40, 50, 60, 70, 80, 90) and (
+            re.search(r"\bthe\s+$", text[max(0, m.start() - 6):m.start()], _I) or DECADE_AFTER.match(text, m.end()))))
+        if not decade:
+            found.append((m.start(), value * 60 if unit.startswith("min") else value))
+    for m in CLOCK.finditer(text):
+        if (len(text) <= 60 and CLOCK_ONLY.fullmatch(text[:m.start()] + " " + text[m.end():])) or CLOCK_LENGTH.match(text, m.end()):
+            found.append((m.start(), int(m[1]) * 60 + int(m[2])))
+    return [max(1, int(value + 0.5)) for _, value in sorted(found)]
+
+
 def parse_seconds(text: str) -> int | None:
     """A length from one message. A bare number counts only in a short answer ("10", "about 15"), never "20% off"."""
-    stated = re.search(r"(\d+(?:\.\d+)?)[\s-]*(s\b|sec|seconds?)", text, _I)
+    stated = stated_lengths(text)
     if stated:
-        return max(1, int(float(stated[1]) + 0.5))
-    bare = re.search(r"\b(\d{1,3})\b(?!\s*%)", text, re.ASCII)
-    if bare and len(text.split()) <= 3:
+        return stated[0]
+    bare = BARE.search(text)
+    then = re.match(r"\W*([a-z]+)", text[bare.end():], _I) if bare else None
+    if bare and len(text.split()) <= 3 and (not then or then[1].lower() in BARE_THEN):
         return max(1, int(bare[1]))
     if re.search(r"half a minute", text, _I):
         return 30
@@ -175,7 +207,7 @@ def parse_seconds(text: str) -> int | None:
         return 60
     if re.search(r"short|quick|brief", text, _I):
         return 8
-    if re.search(r"reel|tiktok|story", text, _I):
+    if re.search(r"\b(?:reels?\b|tiktok|" + STORY + ")", text, _I):
         return 15
     return None
 
