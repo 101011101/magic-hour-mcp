@@ -330,11 +330,40 @@ def _beats_that_fit(story: dict, max_seconds: int, person_seconds: int | None = 
         base, extra = divmod(beat["seconds"], parts)
         for p in range(parts):
             out.append({
-                **deepcopy(beat), "n": n, "kind": beat.get("kind", "scene"),
+                **_part(beat, p), "n": n, "kind": beat.get("kind", "scene"),
                 "seconds": base + (1 if p < extra else 0),
                 "link": link if p == 0 else "continues",
             })
     return out
+
+
+def _part(beat: dict, p: int) -> dict:
+    """Part p of a beat cut into parts. The line and the voice-over are said once, in the first part."""
+    out = deepcopy(beat)
+    if p:
+        out.pop("says", None)
+        out.pop("spoken", None)
+    return out
+
+
+def pin_clips(story: dict, strategy: str = "idea", max_seconds: int = TRIGGER_SECONDS) -> tuple[dict, list[int]]:
+    """The story with each beat's `clip` set as the split rule groups it, so that answers keep the clips. A beat the
+    rule cut into parts becomes one beat per part. Returns (story, each beat's number in the story given)."""
+    numbers = list(range(1, len(story["beats"]) + 1))
+    if validate_story(story):
+        return story, numbers   # the plan names the story's problems
+    story, beats, numbers, seen = deepcopy(story), [], [], {}
+    for clip in split(story, strategy, max_seconds):
+        for part in clip["parts"]:
+            n = part["n"]
+            p = seen[n] = seen.get(n, -1) + 1
+            beat = {**_part(story["beats"][n - 1], p), "seconds": part["seconds"], "clip": clip["n"]}
+            if p:
+                beat["link"] = "continues"
+            beats.append(beat)
+            numbers.append(n)
+    story["beats"] = beats
+    return story, numbers
 
 
 def pictured_people(story: dict, parts: list[dict]) -> set[str]:
@@ -1121,10 +1150,14 @@ def questions(story: dict, planned: dict, numbers: list[int | None] | None = Non
     answer added. The questions name the beats by these numbers, the numbers the answers are read by."""
     out: list[dict] = []
     beats = story["beats"]
-    own = numbers or list(range(1, len(beats) + 1))
+    # a later part of a beat cut into parts (the same number again) is asked about with its first part
+    own = [x if x not in numbers[:i] else None for i, x in enumerate(numbers)] if numbers else list(range(1, len(beats) + 1))
+    worded: set[int] = set()   # a merged card's words are on the last part only: any part asks, once
     for n, beat in enumerate(beats, start=1):
-        k = own[n - 1]
-        if k and beat.get("kind", "scene") == "scene" and beat.get("exact_words") and not beat.get("words_route"):
+        k = numbers[n - 1] if numbers else n
+        if (k and k not in worded and beat.get("kind", "scene") == "scene" and beat.get("exact_words")
+                and not beat.get("words_route")):
+            worded.add(k)
             words = " and ".join(f'"{w}"' for w in beat["exact_words"])
             out.append({
                 "id": f"words-{k}", "beat": k,
@@ -1159,7 +1192,8 @@ def questions(story: dict, planned: dict, numbers: list[int | None] | None = Non
     joined: list[dict] = []   # the clip of the beat before, with the joins recommended so far (they add up)
     for n, beat in enumerate(beats, start=1):
         before = beats[n - 2] if n > 1 else None
-        k, j = own[n - 1], (own[n - 2] if n > 1 else None)   # this beat and the beat before, as the host numbered them
+        k = own[n - 1]
+        j = (numbers[n - 2] if numbers else n - 1) if n > 1 else None   # the beat before, as the host numbered it
         if not k:
             continue
         if _held_after_reveal(story, beat, before):
@@ -1311,12 +1345,15 @@ def _answer_order(item: tuple[str, str]) -> tuple[int, int]:
     return 1, 0
 
 
-def answer_story(story: dict, answers: dict[str, str]) -> tuple[dict, list[str], list[int | None]]:
+def answer_story(story: dict, answers: dict[str, str],
+                 numbers: list[int | None] | None = None) -> tuple[dict, list[str], list[int | None]]:
     """apply_answers, and for each beat of the story that comes back its number in the story given (None: a card an
-    answer added). An answer whose beat is not what its question is about is refused: it was not asked."""
+    answer added). An answer whose beat is not what its question is about is refused: it was not asked.
+    numbers: the host's number of each beat, when the story is not the host's (pin_clips cut a beat into parts).
+    An answer names the host's beat, and is made to all its parts."""
     story = deepcopy(story)
     beats, problems = story["beats"], []
-    numbers: list[int | None] = list(range(1, len(beats) + 1))
+    numbers = list(numbers) if numbers else list(range(1, len(beats) + 1))
     groups = [b.get("clip") for b in beats]   # the host's grouping, kept while beats are added or split off
     inserts: list[tuple[int, dict]] = []
     drops: list[int] = []   # beats removed by an answer (index), after the answers are read
@@ -1364,14 +1401,15 @@ def answer_story(story: dict, answers: dict[str, str]) -> tuple[dict, list[str],
             else:
                 problems.append("voice: choose sample or video")
             continue
-        if not num.isdigit() or not 1 <= int(num) <= len(beats):
+        parts = [i for i, x in enumerate(numbers) if num.isdigit() and x == int(num)]
+        if not parts:
             problems.append(f"no question {key}")
             continue
-        beat = beats[int(num) - 1]
+        beat, last = beats[parts[0]], beats[parts[-1]]
         # the beat before, as the questions saw it: a held card merged into its reveal is gone
-        at = next((i for i in range(int(num) - 2, -1, -1) if i not in drops), None)
+        at = next((i for i in range(parts[0] - 1, -1, -1) if i not in drops), None)
         before = beats[at] if at is not None else None
-        asked = {"words": lambda: beat.get("kind", "scene") == "scene" and bool(beat.get("exact_words")),
+        asked = {"words": lambda: any(beats[i].get("kind", "scene") == "scene" and beats[i].get("exact_words") for i in parts),
                  "held": lambda: _holds_reveal(story, beat, before),
                  "together": lambda: _cut_in_one_idea(story, beat, before),
                  "line": lambda: bool(beat.get("spoken"))}
@@ -1382,16 +1420,19 @@ def answer_story(story: dict, answers: dict[str, str]) -> tuple[dict, list[str],
             if choice not in WORD_ROUTES:
                 problems.append(f"{key}: choose one of {', '.join(WORD_ROUTES)}")
                 continue
-            beat["words_route"] = choice
-            if choice == "model":
-                beat["model"] = REFERENCE_MODEL
-            if choice == "card":
-                take = min(2, beat["seconds"] - 1) if beat["seconds"] > 1 else 0
-                words = beat.pop("exact_words")
-                beat["seconds"] -= take
+            for i in parts:
+                beats[i]["words_route"] = choice
+                if choice == "model":
+                    beats[i]["model"] = REFERENCE_MODEL
+            if choice == "card":   # one card after the last part, its seconds taken from that part
+                take = min(2, last["seconds"] - 1) if last["seconds"] > 1 else 0
+                words = next(beats[i]["exact_words"] for i in parts if beats[i].get("exact_words"))
+                for i in parts:
+                    beats[i].pop("exact_words", None)
+                last["seconds"] -= take
                 # A card is generated (qwen-image-2.1 spells the quoted
                 # words), not drawn by code, also with an exact colour or a picture.
-                inserts.append((int(num), {"seconds": take or 1, "kind": "card", "exact_words": words, "words_route": "card",
+                inserts.append((parts[-1] + 1, {"seconds": take or 1, "kind": "card", "exact_words": words, "words_route": "card",
                                            "text": "A designed title card in the film's style: bold, clean lettering reading exactly "
                                                    + " and ".join(f'"{w}"' for w in words) + ", large and centred.",
                                            "_own": True}))
@@ -1399,22 +1440,23 @@ def answer_story(story: dict, answers: dict[str, str]) -> tuple[dict, list[str],
             if choice not in ("merge", "keep"):
                 problems.append(f"{key}: choose merge or keep")
                 continue
-            beat["held_route"] = choice
+            for i in parts:
+                beats[i]["held_route"] = choice
             if choice == "merge":
-                before["seconds"] += beat["seconds"]
+                before["seconds"] += sum(beats[i]["seconds"] for i in parts)
                 before["exact_words"] = before.get("exact_words", []) + beat.get("exact_words", [])
                 for field in ("says", "spoken", "sounds", "in_scene_words"):   # what is heard or seen on the card stays
                     if beat.get(field):
                         before[field] = before.get(field, []) + beat[field]
                 before["text"] = before["text"].rstrip() + " It ends on the finished picture, held centred and still."
-                drops.append(int(num) - 1)
+                drops.extend(parts)
         elif kind == "together":
             if choice not in ("join", "keep"):
                 problems.append(f"{key}: choose join or keep")
                 continue
             beat["together_route"] = choice
-            if choice == "join":
-                groups[int(num) - 1] = groups[at]
+            if choice == "join":   # the first part: the question counted its seconds
+                groups[parts[0]] = groups[at]
         elif kind == "line":
             if choice not in ("split", "keep"):
                 problems.append(f"{key}: choose split or keep")

@@ -33,7 +33,7 @@ from mcp.types import ToolAnnotations
 from pydantic import BaseModel, Field
 
 from . import kept_files, media_tools
-from .video_production import word_match, ROUTING_RULE, advise, answer_story, held_merges, host_cuts, plan, questions, spoken_slots
+from .video_production import word_match, ROUTING_RULE, advise, answer_story, held_merges, host_cuts, pin_clips, plan, questions, spoken_slots
 
 FILMS_PATH = "/films"
 FILMS_DIR = Path(os.getenv("MAGIC_HOUR_FILMS_DIR", Path(tempfile.gettempdir()) / "magic-hour-films"))
@@ -294,11 +294,9 @@ def register_video_production(mcp: FastMCP) -> None:
         numbers = None   # the host's number of each beat, after answers added or removed beats
         if answers:
             if host_cuts(data) is None:   # the answers keep the clips as they are: number them first
-                first = plan_story(data)
-                for clip in first.get("clips", []):
-                    for n in clip["beats"]:
-                        data["beats"][n - 1]["clip"] = clip["n"]
-            data, answer_problems, numbers = answer_story(data, answers)
+                # a beat the split rule cut into parts stays in its clips (one clip number per beat joined them)
+                data, numbers = pin_clips(data, SPLIT_STRATEGY, SPLIT_MAX_SECONDS)
+            data, answer_problems, numbers = answer_story(data, answers, numbers)
         planned = plan_story(data)
         # The questions name the beats as the host wrote them: the next answers are read against the same story.
         open_questions = questions(data, planned, numbers) if planned.get("clips") else []

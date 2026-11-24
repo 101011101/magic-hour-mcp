@@ -150,6 +150,21 @@ class VideoProductionToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(sorted(answers), ["continuity", "words-1", "words-3"])
         self.assertIn("production", p)
 
+    async def test_a_beat_the_split_rule_cuts_keeps_its_clips_after_an_answer(self):
+        maya = {"id": "maya", "role": "person", "words": "Maya, a woman with a red coat"}
+        for seconds, parts in ((40, [14, 13, 13]), (70, [14, 14, 14, 14, 14])):
+            with self.subTest(seconds=seconds):
+                s = {"title": "River", "aspect": "16:9", "setting": "A river path at dusk.", "subjects": [maya],
+                     "beats": [{"seconds": seconds, "text": "Maya walks along the river and talks.", "subjects": ["maya"],
+                                "spoken": ["What a lovely evening."], "says": ["Maya walks home."]}]}
+                first = await self.answer(s)
+                self.assertEqual([c["seconds"] for c in first["clips"]], parts)
+                p, answers = await self.recommended_until_done(s)
+                self.assertTrue(p["ok"], p.get("problems"))
+                self.assertEqual([c["seconds"] for c in p["clips"]], parts)
+                prompts = [step.get("prompt", "") for c in p["clips"] for step in c.get("steps", [])]
+                self.assertEqual(sum("What a lovely evening." in t for t in prompts), 1, "the line is said once")
+
     async def test_a_card_an_answer_adds_does_not_move_the_question_ids(self):
         s = {"title": "Day", "aspect": "16:9", "setting": "A sunny park.",
              "beats": [{"seconds": 4, "text": "A girl runs.", "clip": 1},

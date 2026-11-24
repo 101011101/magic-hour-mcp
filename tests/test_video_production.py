@@ -532,6 +532,46 @@ class AnswerIdTests(unittest.TestCase):
         self.assertEqual((problems, [b["clip"] for b in joined["beats"]]), ([], [1, 1]))
 
 
+class CutBeatTests(unittest.TestCase):
+    def story(self, **beat):
+        return {"title": "River", "aspect": "16:9", "setting": "A river path at dusk.",
+                "subjects": [{"id": "maya", "role": "person", "words": "Maya, a woman with a red coat"}],
+                "beats": [{"seconds": 40, "text": "Maya walks along the river and talks.", "subjects": ["maya"],
+                           "spoken": ["What a lovely evening."], "says": ["Maya walks home."], **beat}]}
+
+    def test_a_cut_beat_says_its_line_and_voice_over_in_its_first_part_only(self):
+        parts = [p for c in vp.split(self.story(), "person", 15) for p in c["parts"]]
+        self.assertEqual([p["seconds"] for p in parts], [14, 13, 13])
+        self.assertEqual([(bool(p.get("spoken")), bool(p.get("says"))) for p in parts], [(True, True), (False, False), (False, False)])
+
+    def test_pinned_clips_keep_the_parts_and_number_them_by_the_host_beat(self):
+        pinned, numbers = vp.pin_clips(self.story(exact_words=["Home"]), "person", 15)
+        self.assertEqual(numbers, [1, 1, 1])
+        self.assertEqual([(b["seconds"], b["clip"], b.get("link")) for b in pinned["beats"]],
+                         [(14, 1, None), (13, 2, "continues"), (13, 3, "continues")])
+        self.assertEqual(vp.host_cuts(pinned), [2, 3])
+        asked = [q["id"] for q in vp.questions(pinned, plan(pinned, "manual", cuts=[2, 3]), numbers)]
+        self.assertEqual(asked.count("words-1"), 1)
+        carded, problems, after = vp.answer_story(pinned, {"words-1": "card"}, numbers)
+        self.assertEqual(problems, [])
+        self.assertEqual(after, [1, 1, 1, None])
+        self.assertEqual([(b["seconds"], b.get("kind", "scene"), bool(b.get("exact_words"))) for b in carded["beats"]],
+                         [(14, "scene", False), (13, "scene", False), (11, "scene", False), (2, "card", True)])
+
+    def test_a_merged_cards_words_on_a_cut_reveal_are_asked_about_once(self):
+        s = logo_reveal(reveal_seconds=20, card_seconds=2, exact_words=["Acme"])
+        for b in s["beats"]:
+            b.pop("clip")
+        merges = vp.held_merges(s, "person", 15)
+        pinned, numbers = vp.pin_clips(s, "person", 15)
+        self.assertEqual((list(merges), numbers), (["held-2"], [1, 1, 2]))
+        merged, problems, after = vp.answer_story(pinned, merges, numbers)
+        asked = [q["id"] for q in vp.questions(merged, plan(merged, "manual", cuts=vp.host_cuts(merged)), after)]
+        self.assertEqual((problems, after, asked.count("words-1")), ([], [1, 1], 1))
+        done, problems, _ = vp.answer_story(pinned, {**merges, "words-1": "overlay"}, numbers)
+        self.assertEqual((problems, [b.get("words_route") for b in done["beats"]]), ([], ["overlay", "overlay"]))
+
+
 class WordMatchTests(unittest.TestCase):
     def test_a_script_in_another_alphabet_is_compared_word_by_word(self):
         self.assertEqual(vp.word_match("Привет, мир. Как дела?", "Привет, мир! Как дела?"), 1.0)
