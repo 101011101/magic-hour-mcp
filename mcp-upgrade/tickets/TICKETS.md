@@ -376,7 +376,12 @@ Later, after composition. Each new tool goes in a new file of tool management, n
   - Jobs with no tool: mix music under the user's video (E27a/b/c), replace its soundtrack (E28b/c), put a logo or watermark on it (E29a/c), join the user's stills into a video (D20a/b), put photos side by side (G35a/b), change colour only (B07c, J49a), take a still frame from a video (G33b), edit one masked part (B07d).
   - `media_tools.add_sound` already mixes sound into a film. Only the production join uses it. No tool exposes it.
 - [ ] **MCP-12 · Trim.** Later (user, 2026-11-11). No trim tool exists. `plan_request` still plans `trim_video` and marks it ready, so the host calls a tool that is not there ("Unknown tool": E26a, E26b, 2026-11-11). Build it on the kept copy (ffmpeg, 0 credits), or make `plan_request` say there is no tool. PRD: [media files](../prd/shared/media-files.md).
-- [ ] **MCP-13 · Storage of kept files.** Later (user, 2026-11-11). Reminder: kept copies of users' files go to public Vercel Blob (`kept/`). Move to private storage. One module: `kept_files.py`.
+- [x] **MCP-13 · Storage of kept files.** Done 2026-11-24 (user: private store, 7 days, owner check in).
+  - Kept copies go to a private Vercel Blob store (`KEPT_BLOB_READ_WRITE_TOKEN`), never the public store of finished files. Without it: the local folder.
+  - Each copy expires 7 days after upload (Blob `x-ttl-days`, rounded up to UTC midnight; the folder by file age).
+  - Owner check: a copy is read only for the account the file_path names (`GET /v1/account`, cached 5 min).
+  - Tests: `tests/test_kept_files.py` (9). Live check on test store mh-kept-test (Vercel project mh-kept-test): upload, private read, no-token read 403, last frame from the copy, another account refused. 0 credits.
+  - Deploy: create a private Blob store, connect it with the variable `KEPT_BLOB_READ_WRITE_TOKEN`.
 - [x] **MCP-14 · The user's own clip in a production.** Approved by the user 2026-11-11 (E28 films); checked again in the next benchmark. Beat fields `source` (the user's clip: file_path, URL or project id) and `source_sound`; the clip is a clip of its own, 0 credits; the join uses it as it is. Tests: `tests/test_video_production_tool.py` (3 new). Shown: fx4 (E28a/b/c × 3 users: 9 of 9 used `source`, 9 films with narration on the user's clip, 1,571 credits) and demo1 (A3: original 6 s unchanged + 6 s new from its last frame, 144 credits instead of 288). Check in the next run: [benchmark 02](../benchmark/02-next.md). A plan cannot take the user's clip as a piece, so a voice-over or music on the user's clip (E28a) and continuing a given clip (A3) have no path. The join can read the clip since 2026-11-11 (MCP-01 line, `kept_files.py`).
 
 ## Done

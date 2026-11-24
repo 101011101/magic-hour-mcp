@@ -1,6 +1,6 @@
 """plan_tool_call: the tool-management planner (MCP-TOOLS-23).
 
-Tool management is separate from video composition (mcp-upgrade/prd/tool-management/README.md, Isolation): this
+Tool management is kept separate from video composition: this
 module imports nothing from plan_request, video_production, video_production_tool or gates.
 
 The host model fills a question sheet (question_sheets.json) from the user's words; this code checks it and returns

@@ -12,10 +12,12 @@ from __future__ import annotations
 import asyncio
 import re
 import base64
+import hashlib
 import json
 import os
 import shutil
 import tempfile
+import time
 import uuid
 import zlib
 from pathlib import Path
@@ -35,7 +37,7 @@ FILMS_DIR = Path(os.getenv("MAGIC_HOUR_FILMS_DIR", Path(tempfile.gettempdir()) /
 STILL_WAIT_SECONDS = 120
 STILL_TRIES = 3   # a still whose words are misspelled is made again, at most this many stills in all
 
-# The split rule the tool applies. Set from the split benchmark (scripts/split_bench.py), not by the host.
+# The split rule the tool applies. Chosen by benchmark, not by the host.
 # 2026-11-05, C4 and C5, one run each: cut at a new idea and at 15 s. A cut at every event did worse on C4
 # (more last-frame handoffs: the framing locks, the colour drifts).
 # User, 2026-11-05: first keep a pictured person's shots in one call; then cut at key ideas.
@@ -441,9 +443,32 @@ def _with_sources(planned: dict, made: dict[str, str]) -> dict[str, str]:
     return {**{str(c["n"]): c["steps"][0]["source"] for c in planned["clips"] if c.get("made_by") == "user"}, **made}
 
 
-def _read_kept(file_path: str, out: Path) -> Path:
+_ACCOUNTS: dict[str, tuple[str, float]] = {}   # sha256 of the caller's Authorization header -> (account id, when read)
+ACCOUNT_SECONDS = 300
+
+
+async def _account_id() -> str:
+    """The id of the account that owns the caller's key (GET /v1/account). It is the <account> in that account's
+    file_paths (api-assets/<account>/...)."""
+    from . import openapi_server as server
+
+    caller = hashlib.sha256(server.current_authorization_header().encode()).hexdigest()
+    hit = _ACCOUNTS.get(caller)
+    if hit and time.monotonic() - hit[1] < ACCOUNT_SECONDS:
+        return hit[0]
+    account = str((await _api("GET", "/v1/account")).get("id") or "")
+    if len(_ACCOUNTS) > 10_000:
+        _ACCOUNTS.clear()
+    _ACCOUNTS[caller] = (account, time.monotonic())
+    return account
+
+
+async def _read_kept(file_path: str, out: Path) -> Path:
+    """This server's copy of an upload, only for the account that uploaded it."""
     try:
-        return kept_files.read(file_path, out)
+        return await asyncio.to_thread(kept_files.read, file_path, out, await _account_id())
+    except kept_files.NotYours:
+        raise ToolError(kept_files.not_yours_message(file_path)) from None
     except kept_files.NotKept:
         raise ToolError(kept_files.not_kept_message(file_path)) from None
 
@@ -456,7 +481,7 @@ async def _finished_video(made: dict[str, str], n: int, folder: Path) -> Path:
     if made[str(n)].startswith(("http://", "https://")):
         return await _download(made[str(n)], folder / f"clip-{n}.mp4")
     if kept_files.is_file_path(made[str(n)]):
-        return _read_kept(made[str(n)], folder / f"clip-{n}.mp4")
+        return await _read_kept(made[str(n)], folder / f"clip-{n}.mp4")
     project = await _api("GET", f"/v1/video-projects/{made[str(n)]}")
     if project.get("status") != "complete" or not project.get("downloads"):
         raise ToolError(f"clip {n} (project {made[str(n)]}) is {project.get('status')}. Wait for it with wait_for_video_project.")

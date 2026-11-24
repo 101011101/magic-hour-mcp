@@ -1,11 +1,11 @@
 """New media tools for tool management (MCP-TOOLS-29 to MCP-TOOLS-35): jobs no existing tool does.
 
-Tool management is separate from video composition (mcp-upgrade/prd/tool-management/README.md, Isolation). This module
+Tool management is kept separate from video composition: this module
 changes no shared file. It reuses, unchanged, the shared media code: media_tools (ffmpeg work) and media_helpers_tool
 (fetch a user's file, deliver a made file). It imports nothing directly from plan_request, video_production,
 video_production_tool or gates.
 Registered with the planner's switch MAGIC_HOUR_TOOL_PLAN=on, or with the conversation front (on unless MAGIC_HOUR_CONVERSATION=off)
-(2026-11-20 audit: its sheets route to these tools). Both off (the default), the server is as before.
+(its sheets route to these tools). With both off, the server is as before.
 """
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ def mix_onto_video(film: Path, out: Path, music: Path | None = None, voice: Path
         raise ValueError("give music, a voice, or both")
     work = Path(tempfile.mkdtemp())
     if original == "replace":
-        silent = work / "silent.mp4"   # not media_tools.join: it calls "ffmpeg" by name (notes-for-ray.md)
+        silent = work / "silent.mp4"
         media_tools._ffmpeg(["-i", str(film), "-an", "-c:v", "copy", str(silent)])
         film = silent
     seconds = media_tools.probe_seconds(film)
@@ -162,7 +162,7 @@ def overlay_picture(base: Path, picture: Path, out: Path, place: str = "top_righ
 
 def attach_card(video: Path, card: Path, out: Path, position: str = "after") -> Path:
     """The user's clip with the card before or after it, one file, the clip's size; the clip's sound kept, the card
-    silent. Not media_tools.join: it calls "ffmpeg" by name (notes-for-ray.md), which failed in run wnew (E29b)."""
+    silent."""
     info = media_tools.probe(video)
     w, h = info["width"] - info["width"] % 2, info["height"] - info["height"] % 2
     sound = ["-f", "lavfi", "-t", f"{info['seconds']:.3f}", "-i", "anullsrc=r=48000:cl=stereo"] if not info["audio"] else []

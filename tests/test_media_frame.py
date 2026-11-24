@@ -260,7 +260,7 @@ class TicketTests(unittest.TestCase):
 
 class FfmpegByPathTest(unittest.TestCase):
     def test_no_step_starts_ffmpeg_by_name_alone(self):
-        # William, notes-for-ray §3 (2026-11-14): join() started "ffmpeg" from the PATH and failed on a server without it
+        # 2026-11-14: join() started "ffmpeg" from the PATH and failed on a server without it
         import inspect
         from mcp_magichour import media_tools
         source = inspect.getsource(media_tools)

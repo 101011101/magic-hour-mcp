@@ -130,6 +130,8 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
                 return httpx.Response(200, content=b"video-bytes")
             if path == "/v1/files/upload-urls":
                 return httpx.Response(200, json={"items": [{"upload_url": "https://storage.example.test/frame.jpg", "file_path": "api-assets/test/frame.jpg"}]})
+            if path == "/v1/account":   # MCP-13: whose key it is; kept copies are read only for that account
+                return httpx.Response(200, json={"id": "test"})
             if request.method == "POST":
                 self.posts.append((path, json.loads(request.content)))
                 return httpx.Response(200, json={"id": f"job-{len(self.posts)}", "credits_charged": 10 if "image-generator" in path else 144})
@@ -455,9 +457,9 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(list(self.kept.iterdir())[0].read_bytes(), b"video-bytes")
 
     async def test_a_file_uploaded_around_the_server_fails_clearly_and_spends_nothing(self):
-        for name, arguments in [("join_videos", {"videos": ["api-assets/acct/never-seen.mp4"]}),
-                                ("get_last_frame", {"video": "api-assets/acct/never-seen.mp4"})]:
-            with self.subTest(tool=name), self.assertRaisesRegex(ToolError, "upload_media"):
+        for name, arguments in [("join_videos", {"videos": ["api-assets/test/never-seen.mp4"]}),
+                                ("get_last_frame", {"video": "api-assets/test/never-seen.mp4"})]:
+            with self.subTest(tool=name), self.assertRaisesRegex(ToolError, "uploaded straight to Magic Hour.*upload_media"):
                 await self.call(name, **arguments)
         self.assertFalse([p for p in self.paths if "never-seen" in p])
         self.assertEqual(self.posts, [])

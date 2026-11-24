@@ -1,6 +1,6 @@
 """Contract tests for `plan_request` (MCP-01), written before the code.
 
-In-memory API, no network, 0 credits. Spec: mcp-upgrade/prd/MCP-01-conversation.md.
+In-memory API, no network, 0 credits.
 Until `plan_request` is built, each test fails in setup with "tool not found".
 
 Where each expected value comes from (agent repo, folder V4):

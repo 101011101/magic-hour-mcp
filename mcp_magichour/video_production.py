@@ -1,7 +1,7 @@
 """Plan a multi-clip video: story -> clips -> one reference per clip -> ordered calls.
 
-Pure code. No network, no model, no credits. The split rule is a parameter so the
-benchmark can compare the candidates (scripts/split_bench.py).
+Pure code. No network, no model, no credits. The split rule is a parameter so a
+benchmark can compare candidate rules.
 
 Story (a dict, JSON in and out):
     title, aspect ("16:9" | "9:16" | "1:1"), audio (bool), setting (words reused in every clip),

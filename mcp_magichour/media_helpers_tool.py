@@ -45,7 +45,7 @@ async def _fetch(video: str, out: Path) -> Path:
     if video.startswith(("http://", "https://")):
         return await _download(video, out)
     if kept_files.is_file_path(video):
-        return _read_kept(video, out)
+        return await _read_kept(video, out)
     project = await _api("GET", f"/v1/video-projects/{video}")
     if project.get("status") != "complete" or not project.get("downloads"):
         raise ToolError(f"video project {video} is {project.get('status')}. Wait for it first, or pass a URL.")

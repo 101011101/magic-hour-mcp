@@ -5,7 +5,6 @@ only when the user gave it or it follows from the user's words, and returns a qu
 fixed set for each value that is still missing. No model, no network, no credits.
 
 Ported from the V4 reference agent (agent/intent.js, agent/questions.js, agent/catalogue.js).
-Spec: mcp-upgrade/prd/MCP-01-conversation.md.
 """
 
 from __future__ import annotations
