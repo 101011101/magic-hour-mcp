@@ -59,6 +59,32 @@ class FetchedByContentTests(unittest.TestCase):
         assert "that this server can read" in str(caught.exception)
 
 
+class UploadKindTests(unittest.TestCase):
+    def setUp(self):
+        self.dir = Path(self.enterContext(tempfile.TemporaryDirectory()))
+
+    def test_the_bytes_must_be_the_kind_the_name_says(self):
+        # In testing, 'hello world' as x.png was uploaded as an image; the generation that read it failed later.
+        (self.dir / "x.png").write_bytes(b"hello world")
+        with self.assertRaisesRegex(ToolError, "not a picture, video or sound file"):
+            helpers._check_kind(self.dir / "x.png", "image")
+        Image.new("RGB", (32, 32), "red").save(self.dir / "red.png")
+        helpers._check_kind(self.dir / "red.png", "image")
+        with self.assertRaisesRegex(ToolError, "bytes are a picture, but its name says a video"):
+            helpers._check_kind(self.dir / "red.png", "video")
+        media_tools._ffmpeg(["-f", "lavfi", "-i", "sine=frequency=440:duration=1", str(self.dir / "tone.mp3")])
+        helpers._check_kind(self.dir / "tone.mp3", "audio")
+        with self.assertRaisesRegex(ToolError, "bytes are a sound file, but its name says a video"):
+            helpers._check_kind(self.dir / "tone.mp3", "video")
+        (self.dir / "page.mp4").write_bytes(b"<!DOCTYPE html><html>sign in</html>")
+        with self.assertRaisesRegex(ToolError, "web page"):
+            helpers._check_kind(self.dir / "page.mp4", "video")
+
+    def test_a_name_with_no_extension_says_so(self):
+        with self.assertRaisesRegex(ToolError, "has no extension"):
+            helpers._kind("")
+
+
 class MixLengthTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.dir = Path(self.enterContext(tempfile.TemporaryDirectory()))

@@ -156,6 +156,8 @@ class ProductionRunTests(unittest.IsolatedAsyncioTestCase):
         self.enterContext(patch.dict(os.environ, {"MAGIC_HOUR_KEPT_DIR": str(self.kept)}))
         self.enterContext(patch.dict(os.environ, {"BLOB_READ_WRITE_TOKEN": ""}))
         self.enterContext(patch.dict(os.environ, {"MAGIC_HOUR_VOICE_OVER": "video"}))   # these tests cover the video-model narration; the cloner test sets its own
+        from mcp_magichour import media_helpers_tool
+        self.enterContext(patch.object(media_helpers_tool, "_check_kind", lambda file, kind: None))   # fake bytes; tests/test_fetched_media.py checks it
 
         def fake_join(files, out, audio=True, seconds=None, size=None, overlap=0.0, even=False):
             self.joined.append(([f.name for f in files], audio))

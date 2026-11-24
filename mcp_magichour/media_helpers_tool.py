@@ -28,7 +28,7 @@ from mcp.types import ToolAnnotations
 from pydantic import BaseModel, Field
 
 from . import kept_files, media_tools
-from .video_production_tool import FILMS_DIR, _api, _download, _need_ffmpeg, _read_kept, _upload
+from .video_production_tool import FILMS_DIR, _api, _download, _need_ffmpeg, _read_kept, _refuse_text, _upload
 
 UPLOAD_MAX_BYTES = 100 * 1024 * 1024
 KINDS = {
@@ -42,7 +42,37 @@ def _kind(extension: str) -> str:
     for kind, extensions in KINDS.items():
         if extension in extensions:
             return kind
+    if not extension:
+        raise ToolError("`file_name` has no extension. Give the file's name with its extension, for example photo.jpg.")
     raise ToolError(f"Unknown file type .{extension}. Give an image, video or audio file name with its extension.")
+
+
+def _check_kind(file: Path, kind: str) -> None:
+    """The bytes must be the kind that the name says. Magic Hour takes any bytes as an upload, and the generation
+    that reads them fails later. Without ffmpeg only the picture check runs."""
+    from PIL import Image
+
+    _refuse_text(file, "The file")
+    try:
+        with Image.open(file) as image:
+            image.verify()
+        found = "image"
+    except Image.DecompressionBombError:
+        raise ToolError("The file is a picture too large to read.") from None
+    except Exception:
+        found = None
+    if found is None and media_tools.ffmpeg_exe():
+        try:
+            facts = media_tools.probe(file)
+        except Exception:
+            raise ToolError("The file is not a picture, video or sound file that this server can read.") from None
+        if not (facts["width"] or facts["audio"]):   # ffmpeg names a stream it cannot read (a text file called .png)
+            raise ToolError("The file is not a picture, video or sound file that this server can read.")
+        found = "audio" if not facts["width"] else ("video" if kind != "image" else "image")
+    if found and found != kind:
+        names = {"image": "a picture", "video": "a video", "audio": "a sound file"}
+        raise ToolError(f"The file's bytes are {names[found]}, but its name says {names[kind]}. "
+                        "Give the file's real name, or the file the name says.")
 
 
 async def _fetch(video: str, out: Path) -> Path:
@@ -107,6 +137,8 @@ def _by_content(file: Path, media: str, kinds: tuple[str, ...]) -> tuple[Path, b
         facts = media_tools.probe(file)
     except Exception:
         raise ToolError(f"{media} is not a picture, video or sound file that this server can read.") from None
+    if not (facts["width"] or facts["audio"]):
+        raise ToolError(f"{media} is not a picture, video or sound file that this server can read.")
     if not facts["width"] and "audio" not in kinds:
         raise ToolError(f"{media} is a sound file with no picture; this tool takes a picture or a video.")
     return file, False
@@ -202,7 +234,9 @@ def register_media_helpers(mcp: FastMCP) -> None:
             "Upload the user's image, video or audio to Magic Hour through this server. Give `url` (a link the server "
             "can download) or `data_base64` (the file's bytes) with `file_name` (for its type). Returns `file_path` for "
             "any Magic Hour tool. Use this, not get_upload_urls, for a file you may later join, trim or take a frame "
-            "from: this server keeps a copy, and Magic Hour never hands an upload back. Up to 100 MB. Spends no credits."
+            "from: this server keeps a copy, and Magic Hour never hands an upload back. Up to 100 MB by `url`. "
+            "`data_base64` travels inside the request, and a hosted server takes about 4 MB per request: give a `url` "
+            "for a file over 3 MB. Spends no credits."
         ),
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True),
     )
@@ -225,6 +259,7 @@ def register_media_helpers(mcp: FastMCP) -> None:
             size = file.stat().st_size
             if not size or size > UPLOAD_MAX_BYTES:
                 raise ToolError(f"The file is {size} bytes; give one between 1 byte and 100 MB.")
+            await asyncio.to_thread(_check_kind, file, kind)
             return {"file_path": await _upload(file, kind), "kind": kind, "bytes": size}
 
     @mcp.tool(
