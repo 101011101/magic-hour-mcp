@@ -930,9 +930,9 @@ def fit_picture(source: Path, background: str | None, size: tuple[int, int], out
     """The picture unchanged, never cropped. With `background` (a logo, a screenshot): 80% of the frame, centred on that
     colour. Without it (a photo): as large as fits, over a blurred copy of itself that fills the frame.
     words: drawn exactly over the lower part of the picture, one line each, in the title look."""
-    from PIL import Image, ImageFilter
+    from PIL import Image, ImageFilter, ImageOps
 
-    picture = Image.open(source).convert("RGBA")
+    picture = ImageOps.exif_transpose(Image.open(source)).convert("RGBA")   # a phone photo stored on its side is turned up
     room = 0.8 if background else 1.0
     scale = min(size[0] * room / picture.width, size[1] * room / picture.height)
     if background and picture.width <= size[0] and picture.height <= size[1]:
@@ -1035,9 +1035,9 @@ def draw_words(source: Path, words: list[dict], out: Path, picture: bool) -> Pat
     """Exact words on a picture or a video. words: [{text, place, start?, end?, large?}]."""
     words = stack_lines(words)
     if picture:
-        from PIL import Image
+        from PIL import Image, ImageOps
 
-        frame = Image.open(source).convert("RGBA")
+        frame = ImageOps.exif_transpose(Image.open(source)).convert("RGBA")   # a phone photo stored on its side is turned up
         for i, line in enumerate(words):
             band = out.with_name(f"{out.stem}-w{i}.png")
             _caption_png(line["text"], frame.size, band, **word_style(line))

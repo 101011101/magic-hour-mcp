@@ -216,6 +216,37 @@ class SmallFrameTests(MediaTest):
         self.assertEqual((m.probe(joined)["width"], m.probe(joined)["height"]), (128, 72))
 
 
+class PhonePhotoTests(MediaTest):
+    """A phone photo stored on its side, with an EXIF orientation that says to turn it a quarter turn to the right."""
+
+    def photo(self):
+        from PIL import Image
+        stored = Image.new("RGB", (160, 80), "red")
+        stored.paste((0, 0, 255), (80, 0, 160, 80))   # stored: red left, blue right; shown: red top, blue bottom
+        exif = Image.Exif()
+        exif[0x0112] = 6
+        stored.save(self.dir / "photo.jpg", exif=exif, quality=95)
+        return self.dir / "photo.jpg"
+
+    def assertColour(self, pixel, colour):
+        self.assertLess(sum(abs(a - b) for a, b in zip(pixel, colour)), 90, (pixel, colour))
+
+    def test_a_photo_is_fitted_the_way_up_it_is_shown(self):
+        from PIL import Image
+        out = m.fit_picture(self.photo(), "white", (200, 200), self.dir / "fitted.png")
+        frame = Image.open(out).convert("RGB")   # shown 80x160, centred: x 60-140, y 20-180
+        self.assertColour(frame.getpixel((100, 40)), (255, 0, 0))
+        self.assertColour(frame.getpixel((100, 160)), (0, 0, 255))
+        self.assertColour(frame.getpixel((30, 100)), (255, 255, 255))
+
+    def test_words_on_a_photo_keep_the_way_up_it_is_shown(self):
+        from PIL import Image
+        out = m.draw_words(self.photo(), [{"text": "Hi", "place": "middle"}], self.dir / "words.png", True)
+        frame = Image.open(out).convert("RGB")
+        self.assertEqual(frame.size, (80, 160))
+        self.assertColour(frame.getpixel((40, 10)), (255, 0, 0))
+
+
 class LimitTests(MediaTest):
     def test_an_ffmpeg_run_past_the_time_limit_is_stopped_with_a_clear_error(self):
         slow = ["-re", "-f", "lavfi", "-i", "anullsrc=r=8000:cl=mono", "-t", "3", "-f", "null", "-"]   # 3 s at real speed
