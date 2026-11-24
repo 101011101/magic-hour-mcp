@@ -352,6 +352,38 @@ class ManySpansTests(MediaTest):
         self.assertFalse(folder.exists())
 
 
+class AlignPartsTests(unittest.TestCase):
+    def assertInOrder(self, got, spans):
+        edges = [a for a, _ in got] + [got[-1][1]]
+        self.assertEqual(edges, sorted(edges), got)
+        self.assertEqual((edges[0], edges[-1]), (spans[0][0], spans[-1][1]))
+        self.assertTrue(all(b > a for a, b in got[:-1]), got)
+
+    def test_a_short_part_after_a_late_cut_keeps_its_own_line(self):
+        spans = [(0, 1.06), (1.8, 4.02), (4.78, 5.26), (5.95, 8.59), (9.42, 12.24)]
+        parts = ["Hello my friend.", "This is the best day of this year.", "Truly yes.",
+                 "We have built a phone that lasts a whole week lon.", "Come and see it in every store this winter, starting today, all you."]
+        got = m.align_parts(spans, parts)
+        self.assertInOrder(got, spans)
+        self.assertLessEqual(got[2][0], 4.78)
+        self.assertGreaterEqual(got[2][1], 5.26)   # "Truly yes." is the line said at 4.78-5.26
+
+    def test_the_parts_are_in_order_for_any_narration(self):
+        import random
+        rng, out_of_order = random.Random(1), []
+        for trial in range(3000):
+            texts = [" ".join("x" * rng.randint(1, 8) for _ in range(rng.randint(1, 12))) for _ in range(rng.randint(2, 5))]
+            spans, at = [], 0.0
+            for text in texts:   # each part read at about 0.07 s a letter, with a pause after it
+                spans.append((at, at + m.letters(text) * 0.07 * rng.uniform(0.75, 1.25)))
+                at = spans[-1][1] + rng.uniform(0.15, 1.0)
+            try:
+                self.assertInOrder(m.align_parts(spans, texts), spans)
+            except AssertionError:
+                out_of_order.append(trial)
+        self.assertEqual(out_of_order, [])
+
+
 class LimitTests(MediaTest):
     def test_an_ffmpeg_run_past_the_time_limit_is_stopped_with_a_clear_error(self):
         slow = ["-re", "-f", "lavfi", "-i", "anullsrc=r=8000:cl=mono", "-t", "3", "-f", "null", "-"]   # 3 s at real speed

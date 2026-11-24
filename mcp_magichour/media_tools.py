@@ -588,6 +588,9 @@ def align_parts(spans: list[tuple[float, float]], parts: list[str], fine: list[t
             position -= end - start
         return spans[-1][1]
 
+    def spoken_at(t: float) -> float:   # how much speech has been heard at this clock time
+        return sum(max(0.0, min(end, t) - start) for start, end in spans)
+
     def pauses(of: list[tuple[float, float]]) -> list[tuple[float, float]]:
         return [(of[i][1], of[i + 1][0]) for i in range(len(of) - 1)]
 
@@ -600,11 +603,14 @@ def align_parts(spans: list[tuple[float, float]], parts: list[str], fine: list[t
         used += said(part)
         guess = at_spoken(spoken * used / total_letters)
         after = cuts[-1] if cuts else spans[0][0]
+        if guess <= after:   # the cut before moved past this part's share: the share is counted from that cut
+            guess = at_spoken(spoken_at(after) + spoken * said(part) / total_letters)
         # a sentence ends on a real pause; a breath inside a sentence is used only when no real pause is near
         # ("F-35A" is short in letters, long when read; the cut fell on a breath 1.4 s early)
         best = (pick(pauses(spans), guess, 0.6, after) or pick(pauses(spans), guess, 1.5, after)
                 or pick(pauses(fine or []), guess, 0.9, after))
-        cuts.append((best[0] + best[1]) / 2 if best else guess)
+        cut = (best[0] + best[1]) / 2 if best else guess
+        cuts.append(min(max(cut, after + 0.05), spans[-1][1]))   # each part starts after the one before, never before it
     edges = [spans[0][0], *cuts, spans[-1][1]]
     return [(edges[i], edges[i + 1]) for i in range(len(parts))]
 
