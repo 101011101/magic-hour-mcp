@@ -154,6 +154,32 @@ class NoDurationTests(MediaTest):
                 self.assertEqual(m.probe(self.dir / "p.png")["seconds"], 0)
 
 
+class LongSoundTests(MediaTest):
+    """A clip whose sound runs on past its picture: 2 s of picture, 3 s of sound."""
+
+    def clip(self):
+        clip = self.dir / "long-sound.mp4"
+        self.ff("-f", "lavfi", "-i", "testsrc=s=160x90:r=24:d=2", "-f", "lavfi", "-i", "sine=d=3", "-pix_fmt", "yuv420p", str(clip))
+        return clip
+
+    def frames(self, video):
+        report = m._ffmpeg(["-i", str(video), "-map", "0:v:0", "-f", "null", "-"], capture=True)
+        return int(m.re.findall(r"frame=\s*(\d+)", report)[-1])
+
+    def test_the_last_frame_is_the_pictures_last_frame(self):
+        clip = self.clip()
+        last, first = m.last_frame(clip, self.dir / "last.jpg"), m.first_frame(clip, self.dir / "first.jpg")
+        self.assertTrue(last.stat().st_size)
+        self.assertNotEqual(last.read_bytes(), first.read_bytes())
+
+    def test_a_clip_fitted_to_its_slot_keeps_that_much_picture(self):
+        clip = self.clip()
+        for how in ("speed", "head"):
+            with self.subTest(how=how):
+                fitted = m.fit_length(clip, 1.5, how, self.dir / f"fit-{how}.mp4")
+                self.assertAlmostEqual(self.frames(fitted) / 24, 1.5, delta=0.05)
+
+
 class LimitTests(MediaTest):
     def test_an_ffmpeg_run_past_the_time_limit_is_stopped_with_a_clear_error(self):
         slow = ["-re", "-f", "lavfi", "-i", "anullsrc=r=8000:cl=mono", "-t", "3", "-f", "null", "-"]   # 3 s at real speed

@@ -140,9 +140,25 @@ def store(file: Path, name: str, local_dir: Path, public_base: str) -> str:
     return f"{public_base.rstrip('/')}/films/{name}"
 
 
+def _picture_seconds(video: Path) -> float:
+    """Where a video's picture ends, read by decoding it. Its sound can run on longer, and the file's length is
+    then the sound's."""
+    report = _ffmpeg(["-i", str(video), "-map", "0:v:0", "-f", "null", "-"], capture=True)
+    played = re.findall(r"time=(\d+):(\d+):(\d+\.?\d*)", report)
+    h, m, sec = played[-1] if played else (0, 0, 0)
+    return int(h) * 3600 + int(m) * 60 + float(sec)
+
+
 def last_frame(video: Path, out: Path) -> Path:
-    _ffmpeg(["-sseof", "-0.15", "-i", str(video), "-frames:v", "1", "-update", "1",
-                           "-q:v", "2", str(out)])
+    out.unlink(missing_ok=True)
+    try:
+        _ffmpeg(["-sseof", "-0.15", "-i", str(video), "-frames:v", "1", "-update", "1", "-q:v", "2", str(out)])
+    except subprocess.CalledProcessError:
+        pass
+    if not out.exists() or not out.stat().st_size:
+        # the sound runs on past the picture, so the file's last 0.15 s has no frame: seek from the picture's own end
+        start = max(0.0, _picture_seconds(video) - 0.15)
+        _ffmpeg(["-ss", f"{start:.3f}", "-i", str(video), "-frames:v", "1", "-update", "1", "-q:v", "2", str(out)])
     return out
 
 
@@ -241,12 +257,15 @@ def fit_length(file: Path, seconds: float, how: str, out: Path) -> Path:
     how="head": cut the extra time from the start. how="speed": play it faster (both ends are joints), at most FIT_MAX_SPEED;
     a longer clip is cut at the head after that."""
     info = probe(file)
-    extra = info["seconds"] - seconds
+    length = info["seconds"]
+    if info["audio"]:   # a sound track that runs on past the picture made the clip look longer than its picture
+        length = min(length, _picture_seconds(file) or length)
+    extra = length - seconds
     if extra <= 0.05:
         shutil.copy(file, out)
         return out
-    speed = min(FIT_MAX_SPEED, info["seconds"] / seconds) if how == "speed" else 1.0
-    start = max(0.0, info["seconds"] - seconds * speed)
+    speed = min(FIT_MAX_SPEED, length / seconds) if how == "speed" else 1.0
+    start = max(0.0, length - seconds * speed)
     video = f"setpts=(PTS-STARTPTS)/{speed:.5f}" if speed > 1 else "setpts=PTS-STARTPTS"
     sound = (["-af", f"asetpts=PTS-STARTPTS,atempo={speed:.5f}"] if speed > 1 else []) if info["audio"] else ["-an"]
     _ffmpeg(["-ss", f"{start:.3f}", "-i", str(file), "-vf", video, *sound, "-t", f"{seconds:.3f}",
