@@ -869,3 +869,19 @@ class NoTextWordsTests(unittest.TestCase):
                                                        {"name": "exact_words", "value": answer, "source": "user"}])
                 self.assertEqual(sheet_rows(result)["exact_words"]["value"], [])
                 self.assertTrue(result["ready"])
+
+
+class AnyScriptWordsTests(unittest.TestCase):
+    """Exact words in any script are compared letter by letter; they never shrink to an empty string that matches anything."""
+
+    def test_words_the_user_did_not_say_are_asked_in_any_script(self):
+        for brief, said, invented in [('Сделай постер 9:16 со словами "Добро пожаловать"', "Добро пожаловать", "Счастливого пути"),
+                                      ("做一张 9:16 海报，写上「新年快乐」", "新年快乐", "恭喜发财"),
+                                      ('A 9:16 poster that says "★★★"', "★★★", "☆☆☆")]:
+            for words, ready in [([said], True), ([invented], False)]:
+                with self.subTest(words=words):
+                    result = plan_sheet([user(brief)], "generate_image", [
+                        {"name": "subject", "value": "a poster", "source": "user"}, {"name": "aspect", "value": "9:16", "source": "user"},
+                        {"name": "exact_words", "value": words, "source": "user"}])
+                    self.assertEqual(result["ready"], ready)
+                    self.assertEqual(sheet_rows(result)["exact_words"]["source"], "user" if ready else "missing")

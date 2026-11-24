@@ -263,9 +263,17 @@ def as_word_list(value: Any, quoted: list[str] = ()) -> list[str] | None:
 
 
 def _plain(text: Any) -> str:
-    """Words compared without case, quotes, punctuation or a list number in front: "1 Clear your desk" is "Clear your desk"."""
+    """Words compared without case, quotes, punctuation or a list number in front: "1 Clear your desk" is "Clear your desk".
+    Letters of every script count: "Добро пожаловать" stays, it does not become ""."""
     text = re.sub(r"^\s*(?:\d+[.)]?|[-•*])\s+", "", str(text))
-    return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
+    return re.sub(r"[\W_]+", " ", text.casefold()).strip()
+
+
+def _said(word: str, said: str, raw: str) -> bool:
+    """The word line is in the user's words (`said` is their plain form). A line with no letters or digits ("★★★") is
+    compared as typed: an empty plain line would match anything."""
+    plain = _plain(word)
+    return plain in said if plain else bool(str(word).strip()) and str(word).strip() in raw
 
 
 def asked_about(name: str, message: str) -> bool:
@@ -352,10 +360,10 @@ def plan_sheet(messages: list[dict], tool: str, params: list[dict], attachments:
     #    they are the words the assistant proposed and the user approved, or the user let us write them.
     words = sheet.get("exact_words")
     if words and words["source"] != "missing" and words["value"]:
-        said = _plain(all_user)
+        said, raw = _plain(all_user), all_user
         if last_asked and (AFFIRM.search(newest) or your_call):
-            said += " " + _plain(last_asked)
-        not_said = words["source"] == "user" and not all(_plain(w) in said for w in words["value"])
+            said, raw = said + " " + _plain(last_asked), raw + "\n" + last_asked
+        not_said = words["source"] == "user" and not all(_said(w, said, raw) for w in words["value"])
         if (words["source"] == "derived" or not_said) and not delegated:
             missing("exact_words", ask=True)
     designed = tool == "generate_image" and DESIGNED_PIECE.search(all_user)
