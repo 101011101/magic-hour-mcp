@@ -840,3 +840,32 @@ class SoundWordsTests(unittest.TestCase):
                             "create_video_from_text", [FOX[0], FOX[1], {"name": "aspect", "value": "16:9", "source": "user"},
                                                        {"name": "sound", "value": None, "source": "missing"}])
         self.assertEqual((sheet_rows(result)["sound"]["value"], sheet_rows(result)["sound"]["source"]), ("music", "derived"))
+
+
+class NoTextWordsTests(unittest.TestCase):
+    """A quoted slogan with "no words" in it is the words; a short "no" to the words question is no words."""
+
+    def poster(self, brief, words, source="user"):
+        return plan_sheet([user(brief)], "generate_image", [
+            {"name": "subject", "value": "campaign poster", "source": "user"}, {"name": "aspect", "value": "1:1", "source": "user"},
+            {"name": "exact_words", "value": words, "source": source}])
+
+    def test_a_quoted_slogan_with_no_words_in_it_is_the_words(self):
+        for slogan in ["No Words, No Problem", "No text messages after 9pm", "Text-free Tuesday"]:
+            brief = f'Make an Instagram poster for our campaign with the headline "{slogan}" in big letters'
+            with self.subTest(slogan=slogan):
+                result = self.poster(brief, [slogan])
+                self.assertEqual(sheet_rows(result)["exact_words"]["value"], [slogan])
+                self.assertTrue(result["ready"])
+                left_open = self.poster(brief, None, "missing")
+                self.assertNotEqual(sheet_rows(left_open)["exact_words"]["from"], "the user asked for no text")
+
+    def test_a_short_no_to_the_words_question_is_no_words(self):
+        for answer in ["no", "No thanks", "nope", "No."]:
+            with self.subTest(answer=answer):
+                result = plan_sheet([user("Make an Instagram poster for our bake sale"), assistant(QUESTIONS["exact_words"]), user(answer)],
+                                    "generate_image", [{"name": "subject", "value": "bake sale poster", "source": "user"},
+                                                       {"name": "aspect", "value": "1:1", "source": "user"},
+                                                       {"name": "exact_words", "value": answer, "source": "user"}])
+                self.assertEqual(sheet_rows(result)["exact_words"]["value"], [])
+                self.assertTrue(result["ready"])

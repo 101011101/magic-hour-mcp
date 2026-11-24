@@ -106,7 +106,10 @@ NO_TEXT = re.compile(
     r"\b(?:no|without|zero)\s+(?:(?:added|extra|any|on-?screen|visible|overlaid|written|printed)\s+){0,3}(?:text|words?|captions?|lettering|writing)\b"
     r"|\b(?:don'?t|do not|never)\s+(?:want|need|include|add|put|use|have|show)\s+(?:any\s+)?(?:text|words?|captions?|lettering|writing)\b"
     r"|\btext[- ]free\b", _I)
-NONE_VALUE = re.compile(r"\W*(?:none|nothing|n/?a)\W*", _I)
+# "None", or a short "no" to the words question: no words.
+NONE_VALUE = re.compile(r"\W*(?:none|nothing|n/?a|no|nope|nah|no,? thanks?|no thank you)\W*", _I)
+# Words the user put in quotes: a slogan such as "No Words, No Problem" is the words, not a request for no text.
+QUOTED_SPAN = re.compile(r"\"([^\"\n]*)\"|“([^”\n]*)”|‘([^’\n]*)’|(?<!\w)'([^'\n]*)'(?!\w)")
 # What each question is about, so "your call" answers a question the host reworded (a host rarely repeats the set word for word).
 ASKED_ABOUT = {
     "aspect": r"shown|posted|vertical|square|wide|shape|platform|instagram|tiktok|youtube",
@@ -243,8 +246,9 @@ def _first(parser, texts: list[str]):
     return next((value for value in map(parser, texts) if value is not None), None)
 
 
-def as_word_list(value: Any) -> list[str] | None:
-    """exact_words arrives as a list, as one string, or as "No text". Always a list of lines; [] means the user wants no words."""
+def as_word_list(value: Any, quoted: list[str] = ()) -> list[str] | None:
+    """exact_words arrives as a list, as one string, or as "No text". Always a list of lines; [] means the user wants no words.
+    A line inside words the user quoted (`quoted`, compared plain) is always words."""
     if value is None:
         return None
     items = [value] if isinstance(value, str) else list(value.values()) if isinstance(value, dict) else list(value) if isinstance(value, (list, tuple)) else [value]   # a dict is text slots: {"top": ..., "bottom": ...}
@@ -252,7 +256,8 @@ def as_word_list(value: Any) -> list[str] | None:
     for item in items:
         for line in str(item).splitlines():
             line = line.strip()
-            if line and not ((NO_TEXT.search(line) and len(line.split()) <= 10) or NONE_VALUE.fullmatch(line)):
+            user_quoted = bool(_plain(line)) and any(f" {_plain(line)} " in f" {q} " for q in quoted)
+            if line and (user_quoted or not ((NO_TEXT.search(line) and len(line.split()) <= 10) or NONE_VALUE.fullmatch(line))):
                 words.append(line)
     return words
 
@@ -291,6 +296,8 @@ def plan_sheet(messages: list[dict], tool: str, params: list[dict], attachments:
     users = [ATTACHED.sub(" ", m["text"]) for m in messages if m["role"] == "user"]
     asked = [m["text"] for m in messages if m["role"] == "assistant"]
     newest, all_user = (users[-1] if users else ""), "\n".join(users)
+    quoted = [_plain(next(g for g in m.groups() if g is not None)) for m in QUOTED_SPAN.finditer(all_user)]
+    unquoted_user = QUOTED_SPAN.sub(" ", all_user)   # "no text" inside a quoted slogan is not a request for no text
     your_call = bool(YOUR_CALL.search(newest))
 
     last_asked = asked[-1] if asked else ""
@@ -308,7 +315,7 @@ def plan_sheet(messages: list[dict], tool: str, params: list[dict], attachments:
         if name == "sound" and isinstance(value, bool):
             value = "ambient" if value else "none"
         if name == "exact_words":
-            value = as_word_list(value)
+            value = as_word_list(value, quoted)
         if name in uses and name not in sheet:
             sheet[name] = {"name": name, "value": value, "source": p["source"], "from": p.get("from") or ""}
     must_ask: set[str] = set()
@@ -329,7 +336,7 @@ def plan_sheet(messages: list[dict], tool: str, params: list[dict], attachments:
             missing(name)
 
     # 1b. The user said "no text": that is the answer for the words. Nothing to ask, nothing to draw.
-    if "exact_words" in uses and NO_TEXT.search(all_user) and (
+    if "exact_words" in uses and NO_TEXT.search(unquoted_user) and (
             "exact_words" not in sheet or sheet["exact_words"]["source"] in ("missing", "default") or not sheet["exact_words"]["value"]):
         fill("exact_words", [], "user", "the user asked for no text")
 
