@@ -1,0 +1,48 @@
+# Puts the next part of the video production stack up for review when the part before it merges upstream.
+# The steps are in .github/stack/advance.py. A run that cannot finish fails, and GitHub emails the repo owner.
+name: Stack advance
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Do everything except the push and the PR"
+        type: boolean
+        default: true
+      pretend_merged:
+        description: "Dry runs only: part numbers to count as merged, for example 1"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stack-advance
+  cancel-in-progress: false
+
+jobs:
+  advance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.STACK_TOKEN || github.token }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Advance the stack
+        env:
+          GH_TOKEN: ${{ secrets.STACK_TOKEN || github.token }}
+          STACK_TOKEN_SET: ${{ secrets.STACK_TOKEN != '' }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '1' || '' }}
+          PRETEND_MERGED: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && inputs.pretend_merged || '' }}
+        run: python3 .github/stack/advance.py
