@@ -151,6 +151,8 @@ def set_counts(body, k, ran, new_tests, base_tools, tools):
 
 def advance(part, parts):
     k = part["k"]
+    if not DRY and os.environ.get("STACK_TOKEN_SET") != "true":
+        stop(f"Part {k} is next, but the STACK_TOKEN secret is not set, so this run cannot push or open a PR.")
     git("fetch", "-q", "upstream", "main")
     base = git("rev-parse", "upstream/main")
     for p in parts:
@@ -180,8 +182,6 @@ def advance(part, parts):
 
 
 def main():
-    if not DRY and os.environ.get("STACK_TOKEN_SET") != "true":
-        stop("The STACK_TOKEN secret is not set, so this run cannot push or open a PR.")
     if "upstream" not in git("remote").split():
         git("remote", "add", "upstream", f"https://github.com/{UPSTREAM}.git")
     git("fetch", "-q", "origin")
