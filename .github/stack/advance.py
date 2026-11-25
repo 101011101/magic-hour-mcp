@@ -1,6 +1,6 @@
 """Put the next part of the video production stack up for review when the part before it is merged upstream.
 
-Run by .github/workflows/stack-advance.yml (every hour, or by hand). One part per run:
+Run by .github/workflows/stack-advance.yml (every 30 minutes, or by hand). One part per run:
   1. Find the first part whose upstream PR is not merged. Open: wait. Closed without a merge: stop; a person decides.
   2. No PR yet: put the part's own commit (the tip of its fork branch) on upstream main.
   3. Run upstream's test steps on it; count tests and tools on upstream main and on the part.
