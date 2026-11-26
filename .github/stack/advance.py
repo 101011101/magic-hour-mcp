@@ -1,13 +1,16 @@
-"""Put the next part of the video production stack up for review when the part before it is merged upstream.
+"""Keep the video production stack moving upstream.
 
-Run by .github/workflows/stack-advance.yml (every 30 minutes, or by hand). One part per run:
-  1. Find the first part whose upstream PR is not merged. Open: wait. Closed without a merge: stop; a person decides.
-  2. No PR yet: put the part's own commit (the tip of its fork branch) on upstream main.
-  3. Run upstream's test steps on it; count tests and tools on upstream main and on the part.
-  4. Push the branch to the fork (only if it still has the old tip) and open the upstream PR with NN.md,
-     with the test and tool counts set to the measured numbers.
+Run by .github/workflows/stack-advance.yml (every 30 minutes, or by hand). Each run:
+  1. Find the first part whose upstream PR is not merged. A PR closed without a merge, or a part merged
+     before an earlier one: stop; a person decides.
+  2. That part has no PR yet: put the part's own commit (the tip of its fork branch) on upstream main,
+     run upstream's test steps, push the branch, and open the upstream PR with NN.md and the measured counts.
+  3. That part has an open PR, and its branch still carries a merged part's commit (upstream squash-merges),
+     or GitHub says it conflicts: put every open part's own commit again on upstream main, in order,
+     run upstream's test steps on the first and the last, push each branch, and point each PR's
+     "Review only this part's commit" link at the new commit.
 A step that fails stops the run with an error, and GitHub emails the repo owner.
-DRY_RUN=1: steps 1-3 only. PRETEND_MERGED="1 2": these parts count as merged; their commits go on the base first.
+DRY_RUN=1: nothing is pushed or opened. PRETEND_MERGED="1 2": these parts count as merged; their commits go on the base first.
 """
 import json
 import os
@@ -120,6 +123,7 @@ def counts(d):
 def test(d):
     """Upstream's CI steps (.github/workflows/test.yml) on the tree in d."""
     run("npm", "--prefix", "web", "ci", cwd=d)
+    run("npm", "--prefix", "web", "test", cwd=d)
     run("npm", "--prefix", "web", "run", "build", cwd=d)
     run(sys.executable, "-m", "pip", "install", "-q", "-e", ".", cwd=d)
     tests = run(sys.executable, "-m", "unittest", "discover", "-s", "tests", cwd=d, env=TEST_ENV, check=False)
@@ -153,11 +157,7 @@ def advance(part, parts):
     k = part["k"]
     if not DRY and os.environ.get("STACK_TOKEN_SET") != "true":
         stop(f"Part {k} is next, but the STACK_TOKEN secret is not set, so this run cannot push or open a PR.")
-    git("fetch", "-q", "upstream", "main")
-    base = git("rev-parse", "upstream/main")
-    for p in parts:
-        if p["k"] in PRETEND:
-            base = put_on(base, p)
+    base = base_with_pretend(parts)
     old = tip(part)
     new = put_on(base, part)
     say(f"Part {k}: {old[:7]} put on {base[:7]} as {new[:7]}.")
@@ -181,27 +181,90 @@ def advance(part, parts):
     say(f"Opened Part {k}: {url}")
 
 
+def base_with_pretend(parts):
+    git("fetch", "-q", "upstream", "main")
+    base = git("rev-parse", "upstream/main")
+    for p in parts:
+        if p["k"] in PRETEND:
+            base = put_on(base, p)
+    return base
+
+
+def carries_merged(part, merged):
+    """True if the part's branch still has the commit of a merged part (upstream squash-merged it)."""
+    msgs = git("log", "--format=%B%x00", f"upstream/main..{tip(part)}")
+    return any(int(k) in merged for k in re.findall(r"\bPart (\d+) of \d+", msgs))
+
+
+def conflicts(pr):
+    return run("gh", "pr", "view", str(pr["number"]), "-R", UPSTREAM, "--json", "mergeable", "-q", ".mergeable").stdout.strip() == "CONFLICTING"
+
+
+def rebase_open(open_parts, parts):
+    """Put each open part's own commit on upstream main again, in order; push each branch; fix each PR's commit link."""
+    if not DRY and os.environ.get("STACK_TOKEN_SET") != "true":
+        stop("Open parts need a rebase, but the STACK_TOKEN secret is not set, so this run cannot push.")
+    base = base_with_pretend(parts)
+    moved = []
+    for p in open_parts:
+        old = tip(p)
+        new = put_on(base, p)
+        moved.append((p, old, new))
+        base = new
+    say(f"Parts {open_parts[0]['k']} to {open_parts[-1]['k']} put on upstream main again.")
+    for p, _, new in {id(m): m for m in (moved[0], moved[-1])}.values():
+        ran = test(tree(new, f"part{p['k']}"))
+        say(f"Part {p['k']}: {ran} tests OK.")
+    if DRY:
+        say("Dry run: nothing pushed.")
+        return
+    for p, old, new in moved:
+        git("push", f"--force-with-lease=refs/heads/{p['branch']}:{old}", "origin", f"{new}:refs/heads/{p['branch']}")
+        n = str(p["pr"]["number"])
+        body = run("gh", "pr", "view", n, "-R", UPSTREAM, "--json", "body", "-q", ".body").stdout
+        fixed = re.sub(r"(/pull/\d+/commits/)[0-9a-f]{40}", lambda m: m.group(1) + new, body)
+        if fixed != body:
+            (WORK / "body.md").write_text(fixed)
+            run("gh", "pr", "edit", n, "-R", UPSTREAM, "--body-file", str(WORK / "body.md"))
+        say(f"Part {p['k']}: {old[:7]} -> {new[:7]}, pushed.")
+
+
 def main():
     if "upstream" not in git("remote").split():
         git("remote", "add", "upstream", f"https://github.com/{UPSTREAM}.git")
     git("fetch", "-q", "origin")
+    git("fetch", "-q", "upstream", "main")
     parts = load_parts()
+    merged, rest = set(), []
     for part in parts:
         k = part["k"]
         if k in PRETEND:
             say(f"Part {k}: counted as merged (dry run).")
+            merged.add(k)
             continue
-        pr = upstream_pr(part["branch"])
+        pr = part["pr"] = upstream_pr(part["branch"])
         if pr and pr["state"] == "MERGED":
+            if rest:
+                stop(f"Part {k} was merged before Part {rest[0]['k']}. A person must decide what comes next.")
+            merged.add(k)
             continue
-        if pr and pr["state"] == "OPEN":
-            say(f"Part {k} is open for review: {pr['url']}. Nothing to do.")
-            return
-        if pr:
+        if pr and pr["state"] != "OPEN":
             stop(f"Part {k} ({pr['url']}) was closed without a merge. A person must decide what comes next.")
-        advance(part, parts)
+        rest.append(part)
+    if not rest:
+        say(f"All {len(parts)} parts are merged.")
         return
-    say(f"All {len(parts)} parts are merged.")
+    first = rest[0]
+    if not first["pr"]:
+        advance(first, parts)
+        return
+    open_parts = [p for p in rest if p["pr"]]
+    if open_parts != rest[:len(open_parts)]:
+        stop("The open parts are not in one run from the first unmerged part. A person must decide what comes next.")
+    if carries_merged(first, merged) or conflicts(first["pr"]):
+        rebase_open(open_parts, parts)
+        return
+    say(f"Part {first['k']} is next for review: {first['pr']['url']}. {len(open_parts)} parts open. Nothing to do.")
 
 
 if __name__ == "__main__":
